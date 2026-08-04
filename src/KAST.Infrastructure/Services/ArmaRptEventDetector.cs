@@ -7,6 +7,8 @@ namespace KAST.Infrastructure.Services;
 
 public sealed partial class ArmaRptEventDetector : IArmaRptEventDetector
 {
+    private const int MaxTrackedMissionStarts = 128;
+    private static readonly TimeSpan MissionStartTimeout = TimeSpan.FromMinutes(10);
     private readonly ConcurrentDictionary<int, MissionStartState> _missionStarts = new();
 
     public IReadOnlyList<ServerRuntimeEvent> Detect(int serverInstanceId, string line, DateTime timestamp)
@@ -60,11 +62,20 @@ public sealed partial class ArmaRptEventDetector : IArmaRptEventDetector
         if (string.Equals(text, "Starting mission:", StringComparison.OrdinalIgnoreCase))
         {
             _missionStarts[serverInstanceId] = new MissionStartState(timestamp);
+            EvictExcessMissionStarts();
             return true;
         }
 
         if (!_missionStarts.TryGetValue(serverInstanceId, out var state))
             return false;
+
+        // A "Starting mission:" line that is never followed by a
+        // "Mission directory:" line must not leak an entry forever.
+        if (timestamp - state.Timestamp > MissionStartTimeout)
+        {
+            _missionStarts.TryRemove(serverInstanceId, out _);
+            return false;
+        }
 
         var fileMatch = MissionFileRegex().Match(text);
         if (fileMatch.Success)
@@ -116,20 +127,27 @@ public sealed partial class ArmaRptEventDetector : IArmaRptEventDetector
             return false;
         }
 
-        var gamePort = int.Parse(match.Groups["gamePort"].Value);
-        var queryPort = int.Parse(match.Groups["queryPort"].Value);
+        int? gamePort = TryParsePort(match.Groups["gamePort"].Value);
+        int? queryPort = TryParsePort(match.Groups["queryPort"].Value);
         runtimeEvent = new ServerRuntimeEvent(
             serverInstanceId,
             timestamp,
             ServerRuntimeEventSeverity.Info,
             ServerRuntimeEventKind.SteamInitialized,
             "Steam initialized",
-            $"Game port {gamePort}, query port {queryPort}.",
+            $"Game port {gamePort?.ToString() ?? "?"}, query port {queryPort?.ToString() ?? "?"}.",
             sourceLine,
             GamePort: gamePort,
             SteamQueryPort: queryPort);
         return true;
     }
+
+    /// <summary>
+    /// Parses a port from a log line without throwing: a malformed or
+    /// overflowing value (unbounded <c>\d+</c>) must not kill the tail session.
+    /// </summary>
+    private static int? TryParsePort(string value)
+        => int.TryParse(value, out var port) ? port : null;
 
     private static bool TryMatchAdmin(
         int serverInstanceId,
@@ -201,6 +219,18 @@ public sealed partial class ArmaRptEventDetector : IArmaRptEventDetector
 
     private static string FirstNonBlank(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
+
+    private void EvictExcessMissionStarts()
+    {
+        if (_missionStarts.Count <= MaxTrackedMissionStarts)
+            return;
+
+        // Drop the oldest tracked start so unmatched "Starting mission:" lines
+        // cannot grow the dictionary without bound.
+        var oldest = _missionStarts.MinBy(kv => kv.Value.Timestamp);
+        if (oldest.Key != default)
+            _missionStarts.TryRemove(oldest.Key, out _);
+    }
 
     private sealed class MissionStartState(DateTime timestamp)
     {

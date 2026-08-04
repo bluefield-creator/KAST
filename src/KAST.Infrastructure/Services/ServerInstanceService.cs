@@ -280,7 +280,12 @@ public class ServerInstanceService(
             // Callbacks for stdout/stderr lines and process exit
             void OnOutputLine(int pid, string line)
             {
-                _ = broadcaster.BroadcastLogEntryAsync(new LogEntryEvent(id, line, DateTime.UtcNow));
+                var broadcast = broadcaster.BroadcastLogEntryAsync(new LogEntryEvent(id, line, DateTime.UtcNow));
+                _ = broadcast.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        logger.LogDebug(t.Exception, "Failed to broadcast log entry for instance {InstanceId}", id);
+                }, TaskScheduler.Default);
             }
 
             void OnProcessExited(int pid, int exitCode)

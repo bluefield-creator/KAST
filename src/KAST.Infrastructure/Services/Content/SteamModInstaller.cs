@@ -4,6 +4,7 @@ using KAST.Core.Events;
 using KAST.Core.Interfaces;
 using KAST.Core.Models;
 using KAST.Infrastructure.Telemetry;
+using Microsoft.Extensions.Logging;
 
 namespace KAST.Infrastructure.Services.Content;
 
@@ -14,7 +15,8 @@ public class SteamModInstaller(
     ISteamService steam,
     IFileSystemService fs,
     IOutputSanitizer sanitizer,
-    IAppEventBroadcaster? broadcaster = null) : IContentInstaller
+    IAppEventBroadcaster? broadcaster = null,
+    ILogger<SteamModInstaller>? logger = null) : IContentInstaller
 {
     public ContentType Type => ContentType.SteamMod;
 
@@ -47,6 +49,7 @@ public class SteamModInstaller(
 
             var reporter = new ThrottledModProgressReporter(
                 broadcaster,
+                logger,
                 request.ModId,
                 request.WorkshopId,
                 request.ExpectedSizeBytes);
@@ -99,6 +102,7 @@ public class SteamModInstaller(
 
     private sealed class ThrottledModProgressReporter(
         IAppEventBroadcaster? broadcaster,
+        ILogger? logger,
         int modId,
         long workshopId,
         long expectedSizeBytes)
@@ -133,13 +137,20 @@ public class SteamModInstaller(
                 ? (long)(percent / 100.0 * expectedSizeBytes)
                 : file?.BytesDownloaded ?? 0;
             var files = file is null ? null : new[] { file };
-            _ = broadcaster.BroadcastDownloadProgressAsync(new ModDownloadProgressEvent(
+            // Best-effort telemetry: observe the broadcast so a failing hub
+            // cannot leave an unobserved task exception behind.
+            var broadcast = broadcaster.BroadcastDownloadProgressAsync(new ModDownloadProgressEvent(
                 modId,
                 workshopId,
                 percent,
                 bytesDownloaded,
                 expectedSizeBytes,
                 files));
+            _ = broadcast.ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                    logger?.LogDebug(t.Exception, "Failed to broadcast download progress for mod {ModId}", modId);
+            }, TaskScheduler.Default);
         }
     }
 

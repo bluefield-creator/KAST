@@ -6,11 +6,12 @@ using KAST.Core.Models;
 using KAST.Infrastructure.Data;
 using KAST.Infrastructure.Telemetry;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace KAST.Infrastructure.Services;
 
-public partial class ProcessManagerService(ILogger<ProcessManagerService> logger, KastDbContext db) : IProcessManagerService
+public partial class ProcessManagerService(ILogger<ProcessManagerService> logger, IServiceScopeFactory scopeFactory) : IProcessManagerService
 {
     public async Task<int> StartServerProcessAsync(string executablePath, string arguments,
         Action<int, string>? onOutputLine = null, Action<int, int>? onProcessExited = null,
@@ -215,6 +216,11 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
 
     public async Task<IReadOnlyList<RunningProcessInfo>> GetRunningServerProcessesAsync(CancellationToken ct = default)
     {
+        // This service is a singleton; the DbContext is scoped, so acquire a
+        // dedicated scope per call instead of capturing a captive context.
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<KastDbContext>();
+
         var managedPids = await db.ServerInstances
             .Where(s => s.ProcessId != null)
             .Select(s => new { s.Id, s.Name, s.ProcessId })

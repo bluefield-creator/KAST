@@ -261,7 +261,12 @@ public class SteamClientService : ISteamService, IDisposable
             _anonLoginLock.Release();
         }
 
-        using var reg = ct.Register(() => _loginTcs?.TrySetResult(false));
+        // Respect caller cancellation without touching shared login state: a stale
+        // registration from an earlier attempt must never complete a newer login's TCS.
+        var completed = await Task.WhenAny(loginTask, Task.Delay(Timeout.InfiniteTimeSpan, ct));
+        if (completed != loginTask)
+            return false;
+
         var result = await loginTask;
 
         // Clear finished task so a future reconnect can start a new attempt.
@@ -285,7 +290,8 @@ public class SteamClientService : ISteamService, IDisposable
             };
         }
 
-        _loginTcs = new TaskCompletionSource<bool>();
+        var loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _loginTcs = loginTcs;
         CurrentUsername = username;
         _pendingAccessToken = refreshToken;
         _currentRefreshToken = refreshToken;
@@ -293,8 +299,8 @@ public class SteamClientService : ISteamService, IDisposable
         StartCallbackLoop();
         _steamClient.Connect();
 
-        using var reg = ct.Register(() => _loginTcs.TrySetResult(false));
-        return await _loginTcs.Task;
+        using var reg = ct.Register(() => loginTcs.TrySetResult(false));
+        return await loginTcs.Task;
     }
 
     public async Task LogoutAsync()
@@ -311,7 +317,7 @@ public class SteamClientService : ISteamService, IDisposable
         AuthStateChanged?.Invoke();
 
         // Disconnect — auto-reconnect will fire and log on anonymously
-        _loginTcs = new TaskCompletionSource<bool>();
+        _loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _isReconnecting = true;
         _steamClient.Disconnect();
 
@@ -476,12 +482,15 @@ public class SteamClientService : ISteamService, IDisposable
             _currentRefreshToken = result.RefreshToken;
             SaveTokenCache(result.AccountName, result.RefreshToken);
 
-            _loginTcs = new TaskCompletionSource<bool>();
+            // Transition from anonymous → real account:
+            // Disconnect (auto-reconnect will fire → OnConnected → LogOn with token)
+            var loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _loginTcs = loginTcs;
             _isReconnecting = true;
             _steamClient.Disconnect();
 
-            using var reg = ct.Register(() => _loginTcs.TrySetResult(false));
-            var loggedIn = await _loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+            using var reg = ct.Register(() => loginTcs.TrySetResult(false));
+            var loggedIn = await loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
 
             _activeCredentialSession = null;
             _activeCredentialAuthenticator = null;
@@ -539,12 +548,13 @@ public class SteamClientService : ISteamService, IDisposable
 
             // Transition from anonymous → real account:
             // Disconnect (auto-reconnect will fire → OnConnected → LogOn with token)
-            _loginTcs = new TaskCompletionSource<bool>();
+            var loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _loginTcs = loginTcs;
             _isReconnecting = true;
             _steamClient.Disconnect();
 
-            using var reg = ct.Register(() => _loginTcs.TrySetResult(false));
-            var loggedIn = await _loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+            using var reg = ct.Register(() => loginTcs.TrySetResult(false));
+            var loggedIn = await loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
             _activeQrSession = null;
             activity?.SetTag("auth.logon_complete", loggedIn);
             return loggedIn;
@@ -697,7 +707,7 @@ public class SteamClientService : ISteamService, IDisposable
             // 2. Get CDN server pool + depot decryption key
             statusProgress?.Report("Preparing Steam CDN");
             var pool = await EnsureCdnPoolAsync(ct);
-            var depotKey = await GetDepotKeyAsync(depotId, appId);
+            var depotKey = await GetDepotKeyAsync(depotId, appId, ct);
 
             // 3-5. Get manifest request code + download manifest (automatic CDN fallback)
             statusProgress?.Report("Checking against Steam manifest");
@@ -1047,9 +1057,9 @@ public class SteamClientService : ISteamService, IDisposable
     /// Fetches the depot decryption key for <paramref name="depotId"/>.
     /// Returns <c>null</c> and logs a warning when the key is unavailable.
     /// </summary>
-    private async Task<byte[]?> GetDepotKeyAsync(uint depotId, uint appId)
+    private async Task<byte[]?> GetDepotKeyAsync(uint depotId, uint appId, CancellationToken ct = default)
     {
-        var result = await _steamApps.GetDepotDecryptionKey(depotId, appId);
+        var result = await _steamApps.GetDepotDecryptionKey(depotId, appId).ToTask().WaitAsync(ct);
         if (result.Result == EResult.OK)
             return result.DepotKey;
         _logger.LogWarning("Could not get depot key for {DepotId} (AppId {AppId}): {Result}",
@@ -1628,7 +1638,10 @@ public class SteamClientService : ISteamService, IDisposable
             // 1. Get product info to discover depots and their manifests
             logProgress?.Report("Fetching product info from Steam...");
             var picsRequest = new SteamApps.PICSRequest(appId);
-            var productInfo = await _steamApps.PICSGetProductInfo(new[] { picsRequest }, Enumerable.Empty<SteamApps.PICSRequest>());
+            var productInfo = await _steamApps
+                .PICSGetProductInfo(new[] { picsRequest }, Enumerable.Empty<SteamApps.PICSRequest>())
+                .ToTask()
+                .WaitAsync(ct);
             if (productInfo.Failed || !productInfo.Results?.Any() == true)
                 throw new InvalidOperationException($"Failed to get product info for AppId {appId}");
 
@@ -1673,10 +1686,12 @@ public class SteamClientService : ISteamService, IDisposable
                 logProgress?.Report($"Fetching manifest for depot {depotId}...");
 
                 // Get depot key
-                var depotKey = await GetDepotKeyAsync(depotId, appId);
+                var depotKey = await GetDepotKeyAsync(depotId, appId, ct);
 
                 // Download manifest (automatic CDN fallback; server lifecycle managed by helper)
-                var manifestRequestCode = await _steamContent.GetManifestRequestCode(depotId, appId, manifestId);
+                var manifestRequestCode = await _steamContent
+                    .GetManifestRequestCode(depotId, appId, manifestId)
+                    .WaitAsync(ct);
                 DepotManifest manifest;
                 using (var manifestActivity = KastActivitySources.Steam.StartActivity(
                     "kast.steam.depot.manifest", ActivityKind.Client))
@@ -1869,7 +1884,10 @@ public class SteamClientService : ISteamService, IDisposable
 
             // 1. Get the public-branch manifest for the server content depot
             var picsReq = new SteamApps.PICSRequest(BenchmarkAppId);
-            var productInfo = await _steamApps.PICSGetProductInfo(new[] { picsReq }, Enumerable.Empty<SteamApps.PICSRequest>());
+            var productInfo = await _steamApps
+                .PICSGetProductInfo(new[] { picsReq }, Enumerable.Empty<SteamApps.PICSRequest>())
+                .ToTask()
+                .WaitAsync(ct);
             var appInfo = productInfo.Results!.SelectMany(r => r.Apps).First(a => a.Key == BenchmarkAppId).Value;
             var depots = appInfo.KeyValues["depots"];
 
@@ -1879,10 +1897,12 @@ public class SteamClientService : ISteamService, IDisposable
             var manifestId = ulong.Parse(manifestIdStr!);
 
             // 2. Get depot key + manifest (with automatic CDN fallback)
-            var depotKey = await GetDepotKeyAsync(BenchmarkDepotId, BenchmarkAppId);
+            var depotKey = await GetDepotKeyAsync(BenchmarkDepotId, BenchmarkAppId, ct);
 
             var pool = await EnsureCdnPoolAsync(ct);
-            var reqCode = await _steamContent.GetManifestRequestCode(BenchmarkDepotId, BenchmarkAppId, manifestId);
+            var reqCode = await _steamContent
+                .GetManifestRequestCode(BenchmarkDepotId, BenchmarkAppId, manifestId)
+                .WaitAsync(ct);
             var manifest = await DownloadManifestWithFallbackAsync(
                 BenchmarkDepotId, manifestId, reqCode, depotKey, pool, benchActivity, ct);
 

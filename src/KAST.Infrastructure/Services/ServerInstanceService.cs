@@ -57,6 +57,8 @@ public class ServerInstanceService(
         db.ServerInstances.Add(instance);
         await db.SaveChangesAsync(ct);
 
+        await ReconcileHeadlessClientsAsync(instance.Id, instance.HeadlessClientCount, ct);
+
         activity?.SetTag("instance.id", instance.Id);
         return instance;
     }
@@ -104,7 +106,53 @@ public class ServerInstanceService(
                 .SetProperty(x => x.LastModified, instance.LastModified),
             ct);
 
+        await ReconcileHeadlessClientsAsync(instance.Id, instance.HeadlessClientCount, ct);
+
         return instance;
+    }
+
+    /// <summary>
+    /// Keeps <c>HeadlessClients</c> rows in sync with the scalar
+    /// <c>HeadlessClientCount</c>. The launch loop iterates the collection, so
+    /// the count alone would never actually launch any headless clients.
+    /// Running clients are never removed when the count is lowered.
+    /// </summary>
+    private async Task ReconcileHeadlessClientsAsync(int instanceId, int targetCount, CancellationToken ct)
+    {
+        targetCount = Math.Max(0, targetCount);
+
+        var existing = await db.HeadlessClients
+            .Where(h => h.ServerInstanceId == instanceId)
+            .OrderBy(h => h.Id)
+            .ToListAsync(ct);
+
+        var changed = false;
+
+        for (var i = existing.Count; i < targetCount; i++)
+        {
+            db.HeadlessClients.Add(new HeadlessClient { ServerInstanceId = instanceId });
+            changed = true;
+        }
+
+        if (existing.Count > targetCount)
+        {
+            var excess = existing.Skip(targetCount).ToList();
+            var running = excess.Where(h => h.ProcessId.HasValue).ToList();
+            if (running.Count > 0)
+                logger.LogWarning(
+                    "Cannot remove {Count} running headless client(s) from instance {InstanceId}; lower the count after they stop",
+                    running.Count, instanceId);
+
+            var removable = excess.Where(h => !h.ProcessId.HasValue).ToList();
+            if (removable.Count > 0)
+            {
+                db.HeadlessClients.RemoveRange(removable);
+                changed = true;
+            }
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
     }
 
     public async Task DeleteInstanceAsync(int id, bool deleteFiles = false, CancellationToken ct = default)

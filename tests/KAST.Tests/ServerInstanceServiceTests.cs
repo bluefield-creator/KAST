@@ -4,6 +4,7 @@ using KAST.Core.Interfaces;
 using KAST.Core.Models;
 using KAST.Infrastructure.Services;
 using KAST.Tests.Helpers;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -476,5 +477,121 @@ public class ServerInstanceServiceTests : IDisposable
 
         var link = _db.ServerInstanceMods.First();
         Assert.Equal(10, link.LoadOrder);
+    }
+
+    // ── Headless client reconciliation ──
+    // ExecuteUpdateAsync (used by UpdateInstanceAsync) is unsupported by the
+    // InMemory provider, so these tests run against in-memory SQLite.
+
+    private static (Infrastructure.Data.KastDbContext Db, Microsoft.Data.Sqlite.SqliteConnection Connection) CreateSqliteDb()
+    {
+        var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Infrastructure.Data.KastDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        var db = new Infrastructure.Data.KastDbContext(options);
+        db.Database.EnsureCreated();
+        return (db, connection);
+    }
+
+    private static ServerInstanceService CreateSut(Infrastructure.Data.KastDbContext db)
+        => new(db, Substitute.For<IProcessManagerService>(), Substitute.For<IAppEventBroadcaster>(),
+            Substitute.For<ILogger<ServerInstanceService>>(), new OutputSanitizer(),
+            Substitute.For<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(),
+            Substitute.For<IServerConsoleLogTailer>());
+
+    [Fact]
+    public async Task CreateInstance_WithHeadlessClientCount_CreatesRows()
+    {
+        var (db, connection) = CreateSqliteDb();
+        try
+        {
+            var sut = CreateSut(db);
+            var instance = new ServerInstance { Name = "HC Server", InstallPath = "/tmp/a3", HeadlessClientCount = 2 };
+
+            var created = await sut.CreateInstanceAsync(instance);
+
+            Assert.Equal(2, db.HeadlessClients.Count(h => h.ServerInstanceId == created.Id));
+        }
+        finally
+        {
+            db.Dispose();
+            connection.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateInstance_HeadlessClientCount_SyncsRows()
+    {
+        var (db, connection) = CreateSqliteDb();
+        try
+        {
+            var sut = CreateSut(db);
+            var instance = new ServerInstance { Name = "HC Server", InstallPath = "/tmp/a3", HeadlessClientCount = 3 };
+            await sut.CreateInstanceAsync(instance);
+
+            instance.HeadlessClientCount = 1;
+            await sut.UpdateInstanceAsync(instance);
+
+            Assert.Equal(1, db.HeadlessClients.Count(h => h.ServerInstanceId == instance.Id));
+        }
+        finally
+        {
+            db.Dispose();
+            connection.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateInstance_HeadlessClientCountIncreased_AddsRows()
+    {
+        var (db, connection) = CreateSqliteDb();
+        try
+        {
+            var sut = CreateSut(db);
+            var instance = new ServerInstance { Name = "HC Server", InstallPath = "/tmp/a3", HeadlessClientCount = 1 };
+            await sut.CreateInstanceAsync(instance);
+
+            instance.HeadlessClientCount = 3;
+            await sut.UpdateInstanceAsync(instance);
+
+            Assert.Equal(3, db.HeadlessClients.Count(h => h.ServerInstanceId == instance.Id));
+        }
+        finally
+        {
+            db.Dispose();
+            connection.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateInstance_LoweringCount_KeepsRunningHeadlessClients()
+    {
+        var (db, connection) = CreateSqliteDb();
+        try
+        {
+            var sut = CreateSut(db);
+            var instance = new ServerInstance { Name = "HC Server", InstallPath = "/tmp/a3", HeadlessClientCount = 2 };
+            await sut.CreateInstanceAsync(instance);
+
+            var running = db.HeadlessClients.First(h => h.ServerInstanceId == instance.Id);
+            running.ProcessId = 4242;
+            running.Status = ServerInstanceStatus.Running;
+            await db.SaveChangesAsync();
+
+            instance.HeadlessClientCount = 1;
+            await sut.UpdateInstanceAsync(instance);
+
+            // The running client cannot be removed; the stopped one is trimmed.
+            var remaining = db.HeadlessClients.Where(h => h.ServerInstanceId == instance.Id).ToList();
+            Assert.Single(remaining);
+            Assert.NotNull(remaining[0].ProcessId);
+        }
+        finally
+        {
+            db.Dispose();
+            connection.Dispose();
+        }
     }
 }

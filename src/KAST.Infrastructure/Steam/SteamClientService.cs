@@ -2102,24 +2102,11 @@ public class SteamClientService : ISteamService, IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            StopCallbackLoop();
-            _callbackCts?.Dispose();
-            _cdnPool?.Dispose();
-            _cdnClient.Dispose();
-            _steamClient.Disconnect();
-        }
-    }
-
-    ~SteamClientService()
-    {
-        Dispose(false);
+        // No unmanaged resources: no finalizer or Dispose(bool) needed.
+        StopCallbackLoop();
+        _callbackCts?.Dispose();
+        _cdnPool?.Dispose();
+        _cdnClient.Dispose();
+        _steamClient.Disconnect();
     }
 }

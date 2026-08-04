@@ -162,8 +162,17 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
         var broadcastProgress = new Progress<double>(async pct =>
         {
             progress?.Report(pct);
-            await broadcaster.BroadcastDownloadProgressAsync(
-                new ModDownloadProgressEvent(mod.Id, mod.WorkshopId, pct, (long)(pct / 100.0 * mod.ExpectedSizeBytes), mod.ExpectedSizeBytes));
+            // Progress<T> handlers are async void: any unhandled exception here
+            // would crash the process, so observe and log broadcast failures.
+            try
+            {
+                await broadcaster.BroadcastDownloadProgressAsync(
+                    new ModDownloadProgressEvent(mod.Id, mod.WorkshopId, pct, (long)(pct / 100.0 * mod.ExpectedSizeBytes), mod.ExpectedSizeBytes));
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to broadcast download progress for mod {ModId}", mod.Id);
+            }
         });
 
         try
@@ -219,8 +228,17 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
         var broadcastProgress = new Progress<double>(async pct =>
         {
             progress?.Report(pct);
-            await broadcaster.BroadcastDownloadProgressAsync(
-                new ModDownloadProgressEvent(mod.Id, mod.WorkshopId, pct, (long)(pct / 100.0 * mod.ExpectedSizeBytes), mod.ExpectedSizeBytes));
+            // Progress<T> handlers are async void: any unhandled exception here
+            // would crash the process, so observe and log broadcast failures.
+            try
+            {
+                await broadcaster.BroadcastDownloadProgressAsync(
+                    new ModDownloadProgressEvent(mod.Id, mod.WorkshopId, pct, (long)(pct / 100.0 * mod.ExpectedSizeBytes), mod.ExpectedSizeBytes));
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to broadcast download progress for mod {ModId}", mod.Id);
+            }
         });
 
         try

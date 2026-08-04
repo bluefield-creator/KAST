@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using KAST.Core.Interfaces;
@@ -54,15 +55,27 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             process.BeginErrorReadLine();
         }
 
-        // Monitor for exit and invoke callback
+        // Monitor for exit and invoke callback. The Process object is owned by
+        // the watcher — it disposes it once the process has exited.
         _ = Task.Run(async () =>
         {
-            await process.WaitForExitAsync(CancellationToken.None);
-            logger.LogInformation("Process {Pid} exited with code {Code}", pid, process.ExitCode);
-            onProcessExited?.Invoke(pid, process.ExitCode);
+            try
+            {
+                await process.WaitForExitAsync(CancellationToken.None);
+                logger.LogInformation("Process {Pid} exited with code {Code}", pid, process.ExitCode);
+                onProcessExited?.Invoke(pid, process.ExitCode);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to observe process {Pid}", pid);
+            }
+            finally
+            {
+                process.Dispose();
+            }
         }, CancellationToken.None);
 
-        return await Task.FromResult(pid);
+        return pid;
     }
 
     public async Task StopProcessAsync(int processId, CancellationToken ct = default)
@@ -87,29 +100,32 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             return;
         }
 
-        logger.LogInformation("Stopping process {Pid}", processId);
-
-        if (!process.HasExited)
+        using (process)
         {
-            try { process.CloseMainWindow(); } catch { /* best effort */ }
+            logger.LogInformation("Stopping process {Pid}", processId);
 
-            using var graceCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, graceCts.Token);
-            try
+            if (!process.HasExited)
             {
-                await process.WaitForExitAsync(linkedCts.Token);
-                return;
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                logger.LogInformation("Process {Pid} did not exit gracefully, force-killing", processId);
-            }
-        }
+                try { process.CloseMainWindow(); } catch { /* best effort */ }
 
-        if (!process.HasExited)
-        {
-            process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync(ct);
+                using var graceCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, graceCts.Token);
+                try
+                {
+                    await process.WaitForExitAsync(linkedCts.Token);
+                    return;
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    logger.LogInformation("Process {Pid} did not exit gracefully, force-killing", processId);
+                }
+            }
+
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(ct);
+            }
         }
     }
 
@@ -131,13 +147,16 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             return true;
         }
 
-        if (process.HasExited)
-            return true;
+        using (process)
+        {
+            if (process.HasExited)
+                return true;
 
-        logger.LogInformation("KillProcess: Force-killing process {Pid}", processId);
-        process.Kill(entireProcessTree: true);
-        await process.WaitForExitAsync(ct);
-        return process.HasExited;
+            logger.LogInformation("KillProcess: Force-killing process {Pid}", processId);
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(ct);
+            return process.HasExited;
+        }
     }
 
     internal static readonly string[] KnownServerProcessNames =
@@ -170,7 +189,7 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
     {
         try
         {
-            var process = Process.GetProcessById(processId);
+            using var process = Process.GetProcessById(processId);
             if (process.HasExited)
                 return null;
 
@@ -201,20 +220,31 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             .Select(s => new { s.Id, s.Name, s.ProcessId })
             .ToDictionaryAsync(s => s.ProcessId!.Value, s => (s.Id, s.Name), ct);
 
-        var result = new List<RunningProcessInfo>();
-
+        var processes = new List<Process>();
         foreach (var procName in KnownServerProcessNames)
         {
-            Process[] processes;
-            try { processes = Process.GetProcessesByName(procName); }
+            try { processes.AddRange(Process.GetProcessesByName(procName)); }
             catch { continue; }
+        }
 
-            foreach (var process in processes)
+        var results = new ConcurrentBag<RunningProcessInfo>();
+        var options = new ParallelOptions
+        {
+            CancellationToken = ct,
+            // Each sample includes a 500 ms CPU-delta wait; sample concurrently
+            // so N processes do not cost N × 500 ms serially.
+            MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount)
+        };
+
+        await Parallel.ForEachAsync(processes, options, async (process, token) =>
+        {
+            try
             {
-                try
-                {
-                    if (process.HasExited) continue;
+                if (process.HasExited)
+                    return;
 
+                using (process)
+                {
                     string? cmdLine = null;
                     try { cmdLine = GetProcessCommandLine(process); }
                     catch { }
@@ -223,19 +253,20 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
                     if (cmdLine != null)
                     {
                         var portMatch = PortRegex().Match(cmdLine);
-                        if (portMatch.Success) port = int.Parse(portMatch.Groups[1].Value);
+                        if (portMatch.Success && int.TryParse(portMatch.Groups[1].Value, out var parsedPort))
+                            port = parsedPort;
                     }
 
                     var isManaged = managedPids.TryGetValue(process.Id, out var link);
                     double cpuPercent = 0;
                     try
                     {
-                        var metrics = await GetProcessMetricsAsync(process.Id, ct);
+                        var metrics = await GetProcessMetricsAsync(process.Id, token);
                         if (metrics.HasValue) cpuPercent = metrics.Value.CpuPercent;
                     }
                     catch { }
 
-                    result.Add(new RunningProcessInfo(
+                    results.Add(new RunningProcessInfo(
                         process.Id,
                         process.ProcessName,
                         process.StartTime,
@@ -247,14 +278,14 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
                         isManaged ? link.Id : null,
                         isManaged ? link.Name : null));
                 }
-                catch
-                {
-                    // Process may have exited between enumeration and query
-                }
             }
-        }
+            catch
+            {
+                // Process may have exited between enumeration and query
+            }
+        });
 
-        return result;
+        return results.ToList();
     }
 
     private static string? GetProcessCommandLine(Process process)

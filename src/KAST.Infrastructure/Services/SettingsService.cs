@@ -25,7 +25,8 @@ public class SettingsService(KastDbContext db, IConfiguration configuration, IHo
                     || autoCheck,
                 SystemAuthEnabled = bool.TryParse(configuration["Auth:System:Enabled"], out var systemEnabled) && systemEnabled,
                 SystemAuthDomain = configuration["Auth:System:Domain"],
-                SystemAuthSource = configuration["Auth:System:Source"] ?? "Auto"
+                SystemAuthSource = configuration["Auth:System:Source"] ?? "Auto",
+                MissionDownloadBaseUrl = configuration["Kast:MissionDownloadBaseUrl"]
             };
             db.Settings.Add(settings);
             await db.SaveChangesAsync(ct);
@@ -45,7 +46,8 @@ public class SettingsService(KastDbContext db, IConfiguration configuration, IHo
             AutoUpdateCheckEnabled = settings.AutoUpdateCheckEnabled,
             SystemAuthEnabled = settings.SystemAuthEnabled,
             SystemAuthDomain = settings.SystemAuthDomain,
-            SystemAuthSource = settings.SystemAuthSource
+            SystemAuthSource = settings.SystemAuthSource,
+            MissionDownloadBaseUrl = settings.MissionDownloadBaseUrl
         };
 
         // Environment variable overrides (read-only, not persisted)
@@ -86,6 +88,9 @@ public class SettingsService(KastDbContext db, IConfiguration configuration, IHo
             existing.SystemAuthSource = string.IsNullOrWhiteSpace(settings.SystemAuthSource)
                 ? "Auto"
                 : settings.SystemAuthSource.Trim();
+            existing.MissionDownloadBaseUrl = string.IsNullOrWhiteSpace(settings.MissionDownloadBaseUrl)
+                ? null
+                : settings.MissionDownloadBaseUrl.Trim();
         }
         await db.SaveChangesAsync(ct);
     }

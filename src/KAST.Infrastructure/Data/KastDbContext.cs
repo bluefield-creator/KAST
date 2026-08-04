@@ -86,6 +86,14 @@ public class KastDbContext : DbContext
                 .WithMany(m => m.ServerInstances)
                 .HasForeignKey(e => e.SteamModId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.SteamModId);
+        });
+
+        modelBuilder.Entity<ServerInstance>(entity =>
+        {
+            entity.HasIndex(e => e.InstallPath);
+            entity.HasIndex(e => e.ProcessId);
         });
 
         modelBuilder.Entity<HeadlessClient>(entity =>
@@ -94,6 +102,8 @@ public class KastDbContext : DbContext
                 .WithMany(s => s.HeadlessClients)
                 .HasForeignKey(e => e.ServerInstanceId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.ServerInstanceId);
         });
 
         modelBuilder.Entity<SteamMod>(entity =>
@@ -205,6 +215,8 @@ public class KastDbContext : DbContext
                 .WithMany(t => t.MissionAssignments)
                 .HasForeignKey(e => e.MissionTagId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.MissionTagId);
         });
 
         // ── Campaigns ───────────────────────────────────────────────────────
@@ -232,6 +244,8 @@ public class KastDbContext : DbContext
                 .WithMany(m => m.CampaignMissions)
                 .HasForeignKey(e => e.MissionId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.MissionId);
         });
 
         // ── Sets ────────────────────────────────────────────────────────────
@@ -259,24 +273,9 @@ public class KastDbContext : DbContext
                 .WithMany(m => m.SetMissions)
                 .HasForeignKey(e => e.MissionId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.MissionId);
         });
-
-        // ── Concurrency tokens ──────────────────────────────────────────────
-        // In-memory databases do not support concurrency tokens, so only
-        // enable them for relational providers (SQLite in production).
-
-        if (Database.IsSqlite())
-        {
-            modelBuilder.Entity<ServerInstance>(entity =>
-            {
-                entity.Property(e => e.ConcurrencyStamp).IsConcurrencyToken();
-            });
-
-            modelBuilder.Entity<HeadlessClient>(entity =>
-            {
-                entity.Property(e => e.ConcurrencyStamp).IsConcurrencyToken();
-            });
-        }
 
         // ── Process history ──────────────────────────────────────────────────
 

@@ -31,6 +31,10 @@ public sealed class ModDownloadQueueService(
         });
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _activeByModId = new();
 
+    // Serializes the check-then-insert in QueueDownloadAsync so two concurrent
+    // requests cannot create duplicate DownloadTask rows for the same mod.
+    private static readonly SemaphoreSlim QueueGate = new(1, 1);
+
     public int ActiveCount => _activeByModId.Count;
 
     public bool IsActive(int modId)
@@ -47,37 +51,45 @@ public sealed class ModDownloadQueueService(
         if (mod is null || mod.Source != ModSource.SteamWorkshop)
             return null;
 
-        var existing = await db.DownloadTasks
-            .Where(t => t.ModId == modId &&
-                        (t.Status == DownloadStatus.Queued ||
-                         t.Status == DownloadStatus.Downloading ||
-                         t.Status == DownloadStatus.Validating))
-            .OrderByDescending(t => t.CreatedAt)
-            .FirstOrDefaultAsync(ct);
-        if (existing is not null)
-            return existing;
-
-        var settings = await settingsService.GetSettingsAsync(ct);
-        var destinationPath = ResolveDestinationPath(mod, settings.ModsDirectory, isUpdate);
-        var task = new DownloadTask
+        await QueueGate.WaitAsync(ct);
+        try
         {
-            ModId = mod.Id,
-            WorkshopId = mod.WorkshopId,
-            Name = mod.Name,
-            IsUpdate = isUpdate,
-            DestinationPath = destinationPath,
-            TotalBytes = mod.ExpectedSizeBytes,
-            Status = DownloadStatus.Queued,
-            MaxRetries = DefaultMaxRetries,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+            var existing = await db.DownloadTasks
+                .Where(t => t.ModId == modId &&
+                            (t.Status == DownloadStatus.Queued ||
+                             t.Status == DownloadStatus.Downloading ||
+                             t.Status == DownloadStatus.Validating))
+                .OrderByDescending(t => t.CreatedAt)
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null)
+                return existing;
 
-        db.DownloadTasks.Add(task);
-        await db.SaveChangesAsync(ct);
-        logger.LogInformation("Queued mod download {TaskId} for mod {ModId} ({WorkshopId})", task.Id, mod.Id, mod.WorkshopId);
-        SignalDispatcher();
-        return task;
+            var settings = await settingsService.GetSettingsAsync(ct);
+            var destinationPath = ResolveDestinationPath(mod, settings.ModsDirectory, isUpdate);
+            var task = new DownloadTask
+            {
+                ModId = mod.Id,
+                WorkshopId = mod.WorkshopId,
+                Name = mod.Name,
+                IsUpdate = isUpdate,
+                DestinationPath = destinationPath,
+                TotalBytes = mod.ExpectedSizeBytes,
+                Status = DownloadStatus.Queued,
+                MaxRetries = DefaultMaxRetries,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            db.DownloadTasks.Add(task);
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Queued mod download {TaskId} for mod {ModId} ({WorkshopId})", task.Id, mod.Id, mod.WorkshopId);
+            SignalDispatcher();
+            return task;
+        }
+        finally
+        {
+            QueueGate.Release();
+        }
     }
 
     public async Task<int> QueueAllOutdatedAsync(CancellationToken ct = default)

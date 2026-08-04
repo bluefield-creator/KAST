@@ -36,9 +36,13 @@ public class ApiKeyService(KastDbContext db) : IApiKeyService
             return false;
 
         var prefix = rawKey[..8];
-        var candidate = await db.ApiKeys
+        // Filter by prefix in SQL, then verify the hash in memory: VerifyKey uses
+        // PBKDF2 and base64 parsing that EF Core cannot translate to SQL.
+        var candidates = await db.ApiKeys
             .Where(k => k.KeyPrefix == prefix && k.IsActive)
-            .FirstOrDefaultAsync(k => VerifyKey(rawKey, k.KeyHash), ct);
+            .ToListAsync(ct);
+
+        var candidate = candidates.FirstOrDefault(k => VerifyKey(rawKey, k.KeyHash));
 
         if (candidate != null)
         {

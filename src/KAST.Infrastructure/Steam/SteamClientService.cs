@@ -113,6 +113,7 @@ public class SteamClientService : ISteamService, IDisposable
 
     // CDN state — a persistent pool that discards faulty servers and auto-refills
     private CdnServerPool? _cdnPool;
+    private readonly object _cdnPoolLock = new();
 
     // Token cache
     private static readonly string TokenCachePath = Path.Combine(
@@ -1087,6 +1088,12 @@ public class SteamClientService : ISteamService, IDisposable
             pool.ReturnServer(server, false);
             throw;
         }
+        catch (Exception ex) when (ex is TimeoutException or ObjectDisposedException)
+        {
+            // Pool acquisition timed out or the pool was disposed (disconnect).
+            // Not a faulty server — retrying cannot help, fail fast.
+            throw;
+        }
         catch (Exception ex)
         {
             lastEx = ex;
@@ -1512,6 +1519,12 @@ public class SteamClientService : ISteamService, IDisposable
                 pool.ReturnServer(server, false);
                 throw;
             }
+            catch (Exception ex) when (ex is TimeoutException or ObjectDisposedException)
+            {
+                // Pool acquisition timed out or the pool was disposed (disconnect).
+                // Not a faulty server — retrying cannot help, fail fast.
+                throw;
+            }
             catch (Exception ex)
             {
                 lastEx = ex;
@@ -1796,13 +1809,35 @@ public class SteamClientService : ISteamService, IDisposable
 
     private Task<CdnServerPool> EnsureCdnPoolAsync(CancellationToken ct = default)
     {
-        // If a pool already exists and is healthy, return it immediately
-        if (_cdnPool is not null)
-            return Task.FromResult(_cdnPool);
+        // Double-checked locking: concurrent downloaders can race here, and
+        // OnDisconnected may dispose the pool while one of them creates it.
+        var pool = _cdnPool;
+        if (pool is not null)
+            return Task.FromResult(pool);
 
-        _cdnPool = new CdnServerPool(_steamClient, _steamContent, _logger, _sanitizer);
-        _logger.LogInformation("CDN server pool created");
-        return Task.FromResult(_cdnPool);
+        lock (_cdnPoolLock)
+        {
+            if (_cdnPool is not null)
+                return Task.FromResult(_cdnPool);
+
+            _cdnPool = new CdnServerPool(_steamClient, _steamContent, _logger, _sanitizer);
+            _logger.LogInformation("CDN server pool created");
+            return Task.FromResult(_cdnPool);
+        }
+    }
+
+    /// <summary>
+    /// Disposes and clears the CDN pool. Synchronized with
+    /// <see cref="EnsureCdnPoolAsync"/> so a concurrent pool creation is never
+    /// silently orphaned (its monitor task and blocking collection would leak).
+    /// </summary>
+    private void ResetCdnPool()
+    {
+        lock (_cdnPoolLock)
+        {
+            _cdnPool?.Dispose();
+            _cdnPool = null;
+        }
     }
 
     // ───── Download Benchmark ─────
@@ -2005,8 +2040,7 @@ public class SteamClientService : ISteamService, IDisposable
         _isConnected = false;
         // Dispose and recreate the pool so it re-discovers CDN servers after reconnect.
         // ReturnServer(faulty=true) calls during the disconnect may have already drained it.
-        _cdnPool?.Dispose();
-        _cdnPool = null;
+        ResetCdnPool();
 
         if (_isReconnecting)
         {

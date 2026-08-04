@@ -26,6 +26,7 @@ namespace KAST.Infrastructure.Steam;
 internal sealed class CdnServerPool : IDisposable
 {
     private const int MinimumPoolSize = 10;
+    private const int AcquisitionTimeoutMs = 10_000;
 
     private readonly SteamClient _steamClient;
     private readonly SteamContent _steamContent;
@@ -70,7 +71,8 @@ internal sealed class CdnServerPool : IDisposable
     /// <summary>
     /// Retrieves a server from the pool.
     /// Prefers proven-good servers from the current session.
-    /// Blocks until a server becomes available or <paramref name="ct"/> is cancelled.
+    /// Blocks until a server becomes available, the acquisition times out, or
+    /// <paramref name="ct"/> is cancelled.
     /// </summary>
     public Server GetServer(CancellationToken ct)
     {
@@ -82,8 +84,12 @@ internal sealed class CdnServerPool : IDisposable
         if (_available.Count < MinimumPoolSize)
             _refillNeeded.Set();
 
-        // Block until the monitor delivers a fresh server
-        return _available.Take(ct);
+        // Bounded wait: when Steam is unreachable (disconnect, rate limiting)
+        // nothing will arrive — surface a clean timeout instead of hanging.
+        if (!_available.TryTake(out var server, AcquisitionTimeoutMs, ct))
+            throw new TimeoutException("No CDN server available within the acquisition timeout.");
+
+        return server;
     }
 
     /// <summary>

@@ -13,7 +13,32 @@ public class MissionService(
     IMissionHashService hashService,
     ILogger<MissionService> logger) : IMissionService
 {
+    private const int MaxInstanceLocks = 64;
     private static readonly ConcurrentDictionary<int, SemaphoreSlim> InstanceLocks = new();
+
+    private static SemaphoreSlim GetInstanceLock(int instanceId)
+    {
+        lock (InstanceLocks)
+        {
+            return InstanceLocks.GetOrAdd(instanceId, _ => new SemaphoreSlim(1, 1));
+        }
+    }
+
+    private static void ReleaseInstanceLock(int instanceId, SemaphoreSlim gate)
+    {
+        gate.Release();
+
+        // Keep the lock cache bounded: once it outgrows its cap, evict idle
+        // entries. Removal is reference-checked and serialized with acquisition,
+        // so a gate another caller is about to use is never evicted.
+        lock (InstanceLocks)
+        {
+            if (InstanceLocks.Count <= MaxInstanceLocks || gate.CurrentCount != 1)
+                return;
+
+            InstanceLocks.TryRemove(new KeyValuePair<int, SemaphoreSlim>(instanceId, gate));
+        }
+    }
 
     public async Task<IReadOnlyList<Mission>> GetMissionsForInstanceAsync(int instanceId, CancellationToken ct = default)
     {
@@ -40,7 +65,7 @@ public class MissionService(
         var instance = await serverInstanceService.GetInstanceByIdAsync(instanceId, ct)
             ?? throw new InvalidOperationException($"Server instance {instanceId} not found");
 
-        var gate = InstanceLocks.GetOrAdd(instanceId, _ => new SemaphoreSlim(1, 1));
+        var gate = GetInstanceLock(instanceId);
         await gate.WaitAsync(ct);
         try
         {
@@ -112,7 +137,7 @@ public class MissionService(
         }
         finally
         {
-            gate.Release();
+            ReleaseInstanceLock(instanceId, gate);
         }
     }
 
@@ -138,7 +163,7 @@ public class MissionService(
             .FirstOrDefaultAsync(m => m.Id == id, ct);
         if (mission == null) return;
 
-        var gate = InstanceLocks.GetOrAdd(mission.ServerInstanceId, _ => new SemaphoreSlim(1, 1));
+        var gate = GetInstanceLock(mission.ServerInstanceId);
         await gate.WaitAsync(ct);
         try
         {
@@ -153,7 +178,7 @@ public class MissionService(
         }
         finally
         {
-            gate.Release();
+            ReleaseInstanceLock(mission.ServerInstanceId, gate);
         }
     }
 
@@ -503,7 +528,7 @@ public class MissionService(
         if (instance == null)
             return;
 
-        var gate = InstanceLocks.GetOrAdd(instanceId, _ => new SemaphoreSlim(1, 1));
+        var gate = GetInstanceLock(instanceId);
         await gate.WaitAsync(ct);
         try
         {
@@ -560,7 +585,7 @@ public class MissionService(
         }
         finally
         {
-            gate.Release();
+            ReleaseInstanceLock(instanceId, gate);
         }
     }
 

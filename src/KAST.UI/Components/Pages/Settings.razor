@@ -987,8 +987,10 @@
             _ => _activePanelIndex
         };
 
+        // Defer the network-bound update check so the first render is not
+        // blocked on an HTTP call; CheckForUpdate handles its own errors.
         if (_autoUpdateCheckEnabled)
-            await CheckForUpdate(showSnackbar: false);
+            _ = InvokeAsync(() => CheckForUpdate(showSnackbar: false));
     }
 
     private void OnAuthStateChanged() => InvokeAsync(StateHasChanged);

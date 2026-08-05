@@ -15,8 +15,8 @@ public class ServerInstance
     public int MaxRestartAttempts { get; set; } = 3;
 
     // Scheduling
-    public string? AutoStartTime { get; set; }  // "HH:mm" format
-    public string? AutoStopTime { get; set; }    // "HH:mm" format
+    public TimeOnly? AutoStartTime { get; set; }
+    public TimeOnly? AutoStopTime { get; set; }
     public bool ScheduleEnabled { get; set; }
 
     // Arma 3 config files (raw text stored in DB)

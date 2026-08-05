@@ -1,4 +1,3 @@
-using System.Globalization;
 using KAST.Core.Enums;
 using KAST.Core.Interfaces;
 using KAST.Infrastructure.Data;
@@ -45,13 +44,12 @@ public class SchedulingBackgroundService(
             .Where(s => s.ScheduleEnabled)
             .ToListAsync(ct);
 
-        var now = DateTime.Now;
-        var currentTime = now.ToString("HH:mm");
+        var now = TimeOnly.FromDateTime(DateTime.Now);
 
         foreach (var instance in scheduledInstances)
         {
-            if (!string.IsNullOrEmpty(instance.AutoStartTime)
-                && IsTimeMatch(currentTime, instance.AutoStartTime)
+            if (instance.AutoStartTime is { } startTime
+                && now == startTime
                 && instance.Status == ServerInstanceStatus.Stopped)
             {
                 logger.LogInformation(
@@ -63,8 +61,8 @@ public class SchedulingBackgroundService(
                 { logger.LogError(ex, "Schedule: failed to start server {Name}", instance.Name); }
             }
 
-            if (string.IsNullOrEmpty(instance.AutoStopTime)
-                || !IsTimeMatch(currentTime, instance.AutoStopTime)
+            if (instance.AutoStopTime is not { } stopTime
+                || now != stopTime
                 || instance.Status != ServerInstanceStatus.Running) continue;
 
             logger.LogInformation(
@@ -74,15 +72,5 @@ public class SchedulingBackgroundService(
             catch (Exception ex)
             { logger.LogError(ex, "Schedule: failed to stop server {Name}", instance.Name); }
         }
-    }
-
-    private static bool IsTimeMatch(string currentTime, string scheduledTime)
-    {
-        if (!TimeOnly.TryParseExact(scheduledTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var scheduled))
-            return false;
-        if (!TimeOnly.TryParseExact(currentTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var current))
-            return false;
-
-        return current == scheduled;
     }
 }

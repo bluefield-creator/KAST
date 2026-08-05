@@ -46,10 +46,10 @@
     @if (Instance.ScheduleEnabled)
     {
         <MudItem xs="6">
-            <MudTextField @bind-Value="Instance.AutoStartTime" Label="Auto-Start (HH:mm)" Placeholder="08:00" />
+            <MudTimePicker @bind-Time="AutoStartTimeSpan" Label="Auto-Start" />
         </MudItem>
         <MudItem xs="6">
-            <MudTextField @bind-Value="Instance.AutoStopTime" Label="Auto-Stop (HH:mm)" Placeholder="23:00" />
+            <MudTimePicker @bind-Time="AutoStopTimeSpan" Label="Auto-Stop" />
         </MudItem>
     }
 </MudGrid>
@@ -105,5 +105,18 @@
     {
         get => Instance.RestartPolicy.ToString();
         set => Instance.RestartPolicy = Enum.Parse<RestartPolicy>(value);
+    }
+
+    // MudTimePicker binds TimeSpan?; map to/from the TimeOnly? model values.
+    private TimeSpan? AutoStartTimeSpan
+    {
+        get => Instance.AutoStartTime?.ToTimeSpan();
+        set => Instance.AutoStartTime = value is null ? null : TimeOnly.FromTimeSpan(value.Value);
+    }
+
+    private TimeSpan? AutoStopTimeSpan
+    {
+        get => Instance.AutoStopTime?.ToTimeSpan();
+        set => Instance.AutoStopTime = value is null ? null : TimeOnly.FromTimeSpan(value.Value);
     }
 }

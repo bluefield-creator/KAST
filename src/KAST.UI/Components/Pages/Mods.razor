@@ -1600,16 +1600,31 @@ else
 
     // ── Helpers ──────────────────────────────────────────────────────────────
     private static bool CanDownloadOrUpdate(SteamMod mod) => mod.Source == ModSource.SteamWorkshop;
-    private void CancelModDownload(int modId)
+
+    private async Task CancelModDownload(int modId)
     {
-        if (DownloadManager.Cancel(modId))
-            Snackbar.Add("Download cancellation requested", Severity.Info);
+        try
+        {
+            if (await DownloadManager.CancelAsync(modId))
+                Snackbar.Add("Download cancellation requested", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Cancel failed: {ex.Message}", Severity.Error);
+        }
     }
 
-    private void CancelAllDownloads()
+    private async Task CancelAllDownloads()
     {
-        DownloadManager.CancelAll();
-        Snackbar.Add("Download cancellations requested", Severity.Info);
+        try
+        {
+            await DownloadManager.CancelAllAsync();
+            Snackbar.Add("Download cancellations requested", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Cancel failed: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task CheckSingleModUpdate(SteamMod mod)

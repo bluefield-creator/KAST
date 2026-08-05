@@ -47,12 +47,24 @@ public class ModDownloadManagerTests
     }
 
     [Fact]
-    public void Cancel_DelegatesToDownloadQueue()
+    public async Task CancelAsync_DelegatesToDownloadQueue()
     {
         var queue = Substitute.For<IModDownloadQueueService>();
         queue.CancelAsync(3, Arg.Any<CancellationToken>()).Returns(true);
         var manager = new ModDownloadManager(queue);
 
-        Assert.True(manager.Cancel(3));
+        Assert.True(await manager.CancelAsync(3));
+        await queue.Received(1).CancelAsync(3, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CancelAllAsync_DelegatesToDownloadQueue()
+    {
+        var queue = Substitute.For<IModDownloadQueueService>();
+        queue.CancelAllAsync(Arg.Any<CancellationToken>()).Returns(2);
+        var manager = new ModDownloadManager(queue);
+
+        Assert.Equal(2, await manager.CancelAllAsync());
+        await queue.Received(1).CancelAllAsync(Arg.Any<CancellationToken>());
     }
 }

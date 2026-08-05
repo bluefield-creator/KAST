@@ -156,7 +156,7 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
 
         mod.Status = ModStatus.Downloading;
         await db.SaveChangesAsync(CancellationToken.None);
-        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status.ToString()));
+        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status));
 
         // Wrap the user's progress to also broadcast over SignalR
         var broadcastProgress = new Progress<double>(async pct =>
@@ -206,7 +206,7 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
         finally
         {
             await db.SaveChangesAsync(CancellationToken.None);
-            await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status.ToString()));
+            await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status));
         }
     }
 
@@ -223,7 +223,7 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
 
         mod.Status = ModStatus.Updating;
         await db.SaveChangesAsync(CancellationToken.None);
-        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status.ToString()));
+        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status));
 
         var broadcastProgress = new Progress<double>(async pct =>
         {
@@ -273,7 +273,7 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
         finally
         {
             await db.SaveChangesAsync(CancellationToken.None);
-            await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status.ToString()));
+            await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status));
         }
     }
 

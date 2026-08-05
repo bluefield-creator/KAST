@@ -359,7 +359,7 @@ public sealed class ModDownloadQueueService(
             mod.Status = task.IsUpdate ? ModStatus.Updating : ModStatus.Downloading;
             await db.SaveChangesAsync(ct);
             await scope.ServiceProvider.GetRequiredService<IAppEventBroadcaster>()
-                .BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status.ToString()));
+                .BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status));
         }
 
         Exception? observedError = null;
@@ -531,7 +531,7 @@ public sealed class ModDownloadQueueService(
         }
 
         await modService.UpdateModAsync(mod, CancellationToken.None);
-        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status.ToString()));
+        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status));
     }
 
     private static async Task FailModInstallAsync(IServiceProvider sp, int modId, Exception ex)
@@ -548,7 +548,7 @@ public sealed class ModDownloadQueueService(
             : ModStatus.Error;
 
         await modService.UpdateModAsync(mod, CancellationToken.None);
-        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status.ToString()));
+        await broadcaster.BroadcastModStatusChangedAsync(new ModStatusChangedEvent(mod.Id, mod.Status));
     }
 
     private static void ApplyStateToTask(DownloadTask task, ContentInstallState state)

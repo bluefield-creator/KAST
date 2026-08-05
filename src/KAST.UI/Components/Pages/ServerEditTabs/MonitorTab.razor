@@ -4,7 +4,6 @@
 @inject KAST.UI.Services.ServerConsoleStore ConsoleStore
 @inject KAST.UI.Services.ServerRuntimeEventStore RuntimeEventStore
 @inject KastInternalUrlProvider InternalUrls
-@inject InternalHubTokenService InternalHubToken
 @inject ILogger<MonitorTab> Logger
 @inject ISnackbar Snackbar
 
@@ -216,8 +215,7 @@
         try
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(InternalUrls.GetMonitoringHubUri(), options =>
-                    options.Headers.Add(InternalHubAuthenticationDefaults.HeaderName, InternalHubToken.Token))
+                .WithUrl(InternalUrls.GetMonitoringHubUri())
                 .WithAutomaticReconnect()
                 .Build();
 
@@ -228,11 +226,22 @@
                 return InvokeAsync(StateHasChanged);
             };
 
-            _hubConnection.Reconnected += _ =>
+            _hubConnection.Reconnected += async _ =>
             {
                 _monitoringConnected = true;
                 _monitoringError = null;
-                return InvokeAsync(StateHasChanged);
+                try
+                {
+                    // SignalR groups are connection-scoped: without this the
+                    // console, runtime events and metrics silently stop after
+                    // any automatic reconnect until the page is reloaded.
+                    await _hubConnection.InvokeAsync("SubscribeToInstance", Instance.Id);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to re-subscribe to instance {InstanceId} after reconnect", Instance.Id);
+                }
+                await InvokeAsync(StateHasChanged);
             };
 
             _hubConnection.Closed += error =>
@@ -246,36 +255,62 @@
 
             _hubConnection.On<LogEntryEvent>("LogEntry", entry =>
             {
-                if (entry.ServerInstanceId != Instance.Id) return;
-                _consoleLines.Add(new ConsoleEntry(entry.Timestamp, entry.Line, ClassifyLine(entry.Line)));
-                while (_consoleLines.Count > 1000) _consoleLines.RemoveAt(0);
-                if (_followConsole) _scrollConsole = true;
-
-                var now = DateTime.UtcNow;
-                if ((now - _lastConsoleRender).TotalMilliseconds >= ConsoleRenderThrottleMs)
+                try
                 {
-                    _lastConsoleRender = now;
-                    InvokeAsync(StateHasChanged);
+                    if (entry.ServerInstanceId != Instance.Id) return;
+                    // Marshal state mutation to the circuit thread — the hub
+                    // delivers on a background thread.
+                    InvokeAsync(() =>
+                    {
+                        _consoleLines.Add(new ConsoleEntry(entry.Timestamp, entry.Line, ClassifyLine(entry.Line)));
+                        while (_consoleLines.Count > 1000) _consoleLines.RemoveAt(0);
+                        if (_followConsole) _scrollConsole = true;
+
+                        var now = DateTime.UtcNow;
+                        if ((now - _lastConsoleRender).TotalMilliseconds >= ConsoleRenderThrottleMs)
+                        {
+                            _lastConsoleRender = now;
+                            StateHasChanged();
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to handle console log entry for instance {InstanceId}", Instance.Id);
                 }
             });
 
             _hubConnection.On<ServerRuntimeEvent>("ServerRuntimeEvent", runtimeEvent =>
             {
-                if (runtimeEvent.ServerInstanceId != Instance.Id) return;
-                InvokeAsync(() =>
+                try
                 {
-                    AddRuntimeEvent(runtimeEvent, showSnackbar: true);
-                    StateHasChanged();
-                });
+                    if (runtimeEvent.ServerInstanceId != Instance.Id) return;
+                    InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            AddRuntimeEvent(runtimeEvent, showSnackbar: true);
+                            StateHasChanged();
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogWarning(ex, "Failed to handle runtime event for instance {InstanceId}", Instance.Id);
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to handle runtime event for instance {InstanceId}", Instance.Id);
+                }
             });
 
             _hubConnection.On<ServerStatusChangedEvent>("ServerStatusChanged", async evt =>
             {
-                if (evt.ServerInstanceId != Instance.Id) return;
-                if (Enum.TryParse<ServerInstanceStatus>(evt.NewStatus, out var status))
+                try
                 {
-                    Instance.Status = status;
-                    if (status is ServerInstanceStatus.Stopped or ServerInstanceStatus.Crashed)
+                    if (evt.ServerInstanceId != Instance.Id) return;
+                    Instance.Status = evt.NewStatus;
+                    if (evt.NewStatus is ServerInstanceStatus.Stopped or ServerInstanceStatus.Crashed)
                     {
                         Instance.ProcessId = null;
                         Instance.StartedAt = null;
@@ -286,15 +321,26 @@
                     await OnStatusChanged.InvokeAsync();
                     await InvokeAsync(StateHasChanged);
                 }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to handle server status event for instance {InstanceId}", Instance.Id);
+                }
             });
 
             _hubConnection.On<InstanceMetricsUpdatedEvent>("InstanceMetricsUpdated", async evt =>
             {
-                if (evt.ServerInstanceId != Instance.Id) return;
-                _monitorCpu = evt.CpuPercent;
-                _monitorMemory = evt.MemoryBytes;
-                _monitorPlayerCount = evt.PlayerCount;
-                await InvokeAsync(StateHasChanged);
+                try
+                {
+                    if (evt.ServerInstanceId != Instance.Id) return;
+                    _monitorCpu = evt.CpuPercent;
+                    _monitorMemory = evt.MemoryBytes;
+                    _monitorPlayerCount = evt.PlayerCount;
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to handle metrics event for instance {InstanceId}", Instance.Id);
+                }
             });
 
             await _hubConnection.StartAsync();

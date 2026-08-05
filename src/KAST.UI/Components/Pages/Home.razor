@@ -382,12 +382,12 @@ else
         var name = mod?.Name ?? $"Mod #{e.ModId}";
         var (icon, color, verb) = e.NewStatus switch
         {
-            "Installed" => (Icons.Material.Filled.CloudDownload, Color.Info, "installed"),
-            "Updating" => (Icons.Material.Filled.SystemUpdateAlt, Color.Warning, "updating"),
-            "Downloading" => (Icons.Material.Filled.CloudDownload, Color.Info, "downloading"),
-            "UpdateAvailable" => (Icons.Material.Filled.SystemUpdateAlt, Color.Warning, "has update available"),
-            "Error" => (Icons.Material.Filled.Error, Color.Error, "encountered an error"),
-            _ => (Icons.Material.Filled.Info, Color.Default, e.NewStatus.ToLowerInvariant())
+            ModStatus.Installed => (Icons.Material.Filled.CloudDownload, Color.Info, "installed"),
+            ModStatus.Updating => (Icons.Material.Filled.SystemUpdateAlt, Color.Warning, "updating"),
+            ModStatus.Downloading => (Icons.Material.Filled.CloudDownload, Color.Info, "downloading"),
+            ModStatus.UpdateAvailable => (Icons.Material.Filled.SystemUpdateAlt, Color.Warning, "has update available"),
+            ModStatus.Error => (Icons.Material.Filled.Error, Color.Error, "encountered an error"),
+            _ => (Icons.Material.Filled.Info, Color.Default, e.NewStatus.ToString().ToLowerInvariant())
         };
         AddActivityEvent(icon, color, $"Mod {name} {verb}");
         InvokeAsync(StateHasChanged);
@@ -399,14 +399,14 @@ else
         var name = instance?.Name ?? $"Server #{e.ServerInstanceId}";
         var (icon, color, verb) = e.NewStatus switch
         {
-            "Running" => (Icons.Material.Filled.PlayCircle, Color.Success, "started"),
-            "Crashed" => (Icons.Material.Filled.Error, Color.Error, "crashed"),
-            "Stopped" => (Icons.Material.Filled.StopCircle, Color.Default, "stopped"),
-            "Starting" => (Icons.Material.Filled.PlayArrow, Color.Warning, "starting"),
-            "Stopping" => (Icons.Material.Filled.StopCircle, Color.Warning, "stopping"),
-            "Restarting" => (Icons.Material.Filled.Refresh, Color.Warning, "restarting"),
-            "Downloading" => (Icons.Material.Filled.CloudDownload, Color.Info, "downloading"),
-            _ => (Icons.Material.Filled.Info, Color.Default, e.NewStatus.ToLowerInvariant())
+            ServerInstanceStatus.Running => (Icons.Material.Filled.PlayCircle, Color.Success, "started"),
+            ServerInstanceStatus.Crashed => (Icons.Material.Filled.Error, Color.Error, "crashed"),
+            ServerInstanceStatus.Stopped => (Icons.Material.Filled.StopCircle, Color.Default, "stopped"),
+            ServerInstanceStatus.Starting => (Icons.Material.Filled.PlayArrow, Color.Warning, "starting"),
+            ServerInstanceStatus.Stopping => (Icons.Material.Filled.StopCircle, Color.Warning, "stopping"),
+            ServerInstanceStatus.Restarting => (Icons.Material.Filled.Refresh, Color.Warning, "restarting"),
+            ServerInstanceStatus.Downloading => (Icons.Material.Filled.CloudDownload, Color.Info, "downloading"),
+            _ => (Icons.Material.Filled.Info, Color.Default, e.NewStatus.ToString().ToLowerInvariant())
         };
         AddActivityEvent(icon, color, $"Server {name} {verb}");
         InvokeAsync(StateHasChanged);

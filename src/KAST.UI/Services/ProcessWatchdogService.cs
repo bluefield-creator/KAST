@@ -64,7 +64,7 @@ public class ProcessWatchdogService(
             instance.StartedAt = null;
             await db.SaveChangesAsync(ct);
             await broadcaster.BroadcastServerStatusChangedAsync(
-                new ServerStatusChangedEvent(instance.Id, instance.Status.ToString()));
+                new ServerStatusChangedEvent(instance.Id, instance.Status));
 
             switch (instance.RestartPolicy)
             {

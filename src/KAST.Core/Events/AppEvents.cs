@@ -1,3 +1,4 @@
+using KAST.Core.Enums;
 using KAST.Core.Models;
 
 namespace KAST.Core.Events;
@@ -9,8 +10,8 @@ public record ModDownloadProgressEvent(
     long BytesDownloaded,
     long TotalBytes,
     IReadOnlyList<DownloadFileProgress>? Files = null);
-public record ModStatusChangedEvent(int ModId, string NewStatus);
-public record ServerStatusChangedEvent(int ServerInstanceId, string NewStatus);
+public record ModStatusChangedEvent(int ModId, ModStatus NewStatus);
+public record ServerStatusChangedEvent(int ServerInstanceId, ServerInstanceStatus NewStatus);
 public record HostMetricsUpdatedEvent(double CpuPercent, double MemoryPercent);
 public record InstanceMetricsUpdatedEvent(int ServerInstanceId, double CpuPercent, long MemoryBytes, int PlayerCount);
 public record LogEntryEvent(int ServerInstanceId, string Line, DateTime Timestamp);

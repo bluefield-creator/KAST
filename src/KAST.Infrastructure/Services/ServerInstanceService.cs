@@ -313,7 +313,7 @@ public class ServerInstanceService(
 
         instance.Status = ServerInstanceStatus.Starting;
         await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status.ToString()));
+        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
 
         try
         {
@@ -359,7 +359,7 @@ public class ServerInstanceService(
 
                         var newStatus = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
                         await broadcaster.BroadcastServerStatusChangedAsync(
-                            new ServerStatusChangedEvent(id, newStatus.ToString()));
+                            new ServerStatusChangedEvent(id, newStatus));
                         await broadcaster.BroadcastLogEntryAsync(
                             new LogEntryEvent(id, $"Process exited with code {exitCode}", DateTime.UtcNow));
                         if (consoleLogTailer is not null)
@@ -425,7 +425,7 @@ public class ServerInstanceService(
         finally
         {
             await db.SaveChangesAsync(ct);
-            await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status.ToString()));
+            await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
         }
     }
 
@@ -446,7 +446,7 @@ public class ServerInstanceService(
 
         instance.Status = ServerInstanceStatus.Stopping;
         await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status.ToString()));
+        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
 
         var stopFailures = new List<Exception>();
 
@@ -510,7 +510,7 @@ public class ServerInstanceService(
         }
 
         await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status.ToString()));
+        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
 
         if (stopFailures.Count > 0)
             throw new InvalidOperationException(
@@ -530,7 +530,7 @@ public class ServerInstanceService(
 
         instance.Status = ServerInstanceStatus.Restarting;
         await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status.ToString()));
+        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
 
         try
         {

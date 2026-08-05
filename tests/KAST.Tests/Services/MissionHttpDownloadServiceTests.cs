@@ -34,6 +34,19 @@ public class MissionHttpDownloadServiceTests : IDisposable
 
     private async Task<Mission> SeedMission(int instanceId, string fileName, uint hash, string? physicalPath = null, bool writeFile = true)
     {
+        // Downloads are gated per instance; seed an instance with the flag on.
+        if (!_db.ServerInstances.Any(s => s.Id == instanceId))
+        {
+            _db.ServerInstances.Add(new ServerInstance
+            {
+                Id = instanceId,
+                Name = $"Instance {instanceId}",
+                InstallPath = "/tmp/a3",
+                HttpDownloadsEnabled = true
+            });
+            await _db.SaveChangesAsync();
+        }
+
         var path = physicalPath ?? Path.GetTempFileName();
         if (writeFile)
             await File.WriteAllBytesAsync(path, new byte[] { 0x00, 0x50, 0x42, 0x4F });
@@ -91,6 +104,15 @@ public class MissionHttpDownloadServiceTests : IDisposable
     [Fact]
     public async Task GetDownload_NullHash_LazyComputesAndStores()
     {
+        _db.ServerInstances.Add(new ServerInstance
+        {
+            Id = 1,
+            Name = "Instance 1",
+            InstallPath = "/tmp/a3",
+            HttpDownloadsEnabled = true
+        });
+        await _db.SaveChangesAsync();
+
         var path = Path.GetTempFileName();
         await File.WriteAllBytesAsync(path, new byte[] { 0x00, 0x50, 0x42, 0x4F });
         var mission = new Mission
@@ -126,5 +148,19 @@ public class MissionHttpDownloadServiceTests : IDisposable
     {
         var result = await _sut.GetDownloadAsync(999, "nonexistent.pbo");
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetDownload_InstanceWithoutHttpDownloads_ReturnsNull()
+    {
+        var mission = await SeedMission(7, "gated.pbo", 77u);
+
+        _db.ServerInstances.First(s => s.Id == 7).HttpDownloadsEnabled = false;
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.GetDownloadAsync(7, "gated.pbo");
+
+        Assert.Null(result);
+        File.Delete(mission.PhysicalPath);
     }
 }

@@ -53,12 +53,18 @@ public class SignalREventBroadcaster(
 
     public Task BroadcastServerRuntimeEventAsync(ServerRuntimeEvent runtimeEvent)
     {
+        // Every field rendered in the UI originates from game-client-controlled
+        // RPT text — sanitize all of them, not just a subset.
         var safeRuntimeEvent = runtimeEvent with
         {
+            Title = sanitizer.Sanitize(runtimeEvent.Title),
             Message = sanitizer.Sanitize(runtimeEvent.Message),
             SourceLine = runtimeEvent.SourceLine is null ? null : sanitizer.Sanitize(runtimeEvent.SourceLine),
             MissionFile = runtimeEvent.MissionFile is null ? null : sanitizer.Sanitize(runtimeEvent.MissionFile),
+            MissionWorld = runtimeEvent.MissionWorld is null ? null : sanitizer.Sanitize(runtimeEvent.MissionWorld),
             MissionDirectory = runtimeEvent.MissionDirectory is null ? null : sanitizer.Sanitize(runtimeEvent.MissionDirectory),
+            PlayerName = runtimeEvent.PlayerName is null ? null : sanitizer.Sanitize(runtimeEvent.PlayerName),
+            PlayerUid = runtimeEvent.PlayerUid is null ? null : sanitizer.Sanitize(runtimeEvent.PlayerUid),
             PlayerIp = runtimeEvent.PlayerIp is null ? null : sanitizer.Sanitize(runtimeEvent.PlayerIp)
         };
         runtimeEventStore.Add(safeRuntimeEvent);

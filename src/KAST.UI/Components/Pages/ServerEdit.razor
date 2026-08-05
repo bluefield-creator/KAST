@@ -8,7 +8,7 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@inject IServiceScopeFactory ScopeFactory
+@inject IServerInstanceService ServerService
 @implements IDisposable
 
 <PageTitle>KAST -- @(_isNew ? "New Server" : _instance.Name)</PageTitle>
@@ -374,26 +374,14 @@
         return WithServerService(s => s.GetCommandLine(_instance));
     }
 
-    private async Task<TResult> WithServerServiceAsync<TResult>(Func<IServerInstanceService, Task<TResult>> action)
-    {
-        using var scope = ScopeFactory.CreateScope();
-        var serverService = scope.ServiceProvider.GetRequiredService<IServerInstanceService>();
-        return await action(serverService);
-    }
+    private Task<TResult> WithServerServiceAsync<TResult>(Func<IServerInstanceService, Task<TResult>> action)
+        => action(ServerService);
 
-    private async Task WithServerServiceAsync(Func<IServerInstanceService, Task> action)
-    {
-        using var scope = ScopeFactory.CreateScope();
-        var serverService = scope.ServiceProvider.GetRequiredService<IServerInstanceService>();
-        await action(serverService);
-    }
+    private Task WithServerServiceAsync(Func<IServerInstanceService, Task> action)
+        => action(ServerService);
 
     private TResult WithServerService<TResult>(Func<IServerInstanceService, TResult> action)
-    {
-        using var scope = ScopeFactory.CreateScope();
-        var serverService = scope.ServiceProvider.GetRequiredService<IServerInstanceService>();
-        return action(serverService);
-    }
+        => action(ServerService);
 
     private async ValueTask OnLocationChanging(LocationChangingContext context)
     {

@@ -31,6 +31,14 @@ public class ServerInstanceService(
             .OrderBy(s => s.Name)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<ServerInstance>> GetLightInstancesAsync(CancellationToken ct = default)
+        => await db.ServerInstances
+            .AsNoTracking()
+            .Where(s => s.Status != ServerInstanceStatus.Stopped)
+            .OrderBy(s => s.Name)
+            .Select(s => new ServerInstance { Id = s.Id, Name = s.Name, Status = s.Status, Port = s.Port })
+            .ToListAsync(ct);
+
     public async Task<ServerInstance?> GetInstanceByIdAsync(int id, CancellationToken ct = default)
         => await db.ServerInstances
             .Include(s => s.Mods).ThenInclude(m => m.SteamMod)

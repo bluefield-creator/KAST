@@ -6,6 +6,12 @@ public interface IServerInstanceService
 {
     Task<IReadOnlyList<ServerInstance>> GetAllInstancesAsync(CancellationToken ct = default);
     Task<ServerInstance?> GetInstanceByIdAsync(int id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lightweight identity/status projection for monitoring snapshots — avoids
+    /// loading the mod and headless-client graphs on every metrics tick.
+    /// </summary>
+    Task<IReadOnlyList<ServerInstance>> GetLightInstancesAsync(CancellationToken ct = default);
     Task<ServerInstance> CreateInstanceAsync(ServerInstance instance, CancellationToken ct = default);
     Task<ServerInstance> UpdateInstanceAsync(ServerInstance instance, CancellationToken ct = default);
     Task DeleteInstanceAsync(int id, bool deleteFiles = false, CancellationToken ct = default);

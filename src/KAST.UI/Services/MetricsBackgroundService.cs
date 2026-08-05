@@ -43,9 +43,7 @@ public class MetricsBackgroundService(
                 try
                 {
                     host = await monitoring.GetHostMetricsAsync(stoppingToken);
-                    instances = (await serverInstances.GetAllInstancesAsync(stoppingToken))
-                        .Where(s => s.Status != ServerInstanceStatus.Stopped)
-                        .ToList();
+                    instances = await serverInstances.GetLightInstancesAsync(stoppingToken);
                     instanceMetrics = await monitoring.GetAllInstanceMetricsAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

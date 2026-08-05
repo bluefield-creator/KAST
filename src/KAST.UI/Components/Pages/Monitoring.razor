@@ -198,12 +198,14 @@ else
 
     private void HandleDataChanged()
     {
-        _extProcesses.Clear();
-        _extProcesses.AddRange(State.ExternalProcesses);
-        InvokeAsync(async () =>
+        // State.OnDataChanged fires from a background snapshot thread — marshal
+        // all collection mutation to the circuit thread.
+        InvokeAsync(() =>
         {
+            _extProcesses.Clear();
+            _extProcesses.AddRange(State.ExternalProcesses);
             StateHasChanged();
-            if (_chartsInitialized) await UpdateChartsAsync();
+            if (_chartsInitialized) _ = UpdateChartsAsync();
         });
     }
 

@@ -786,7 +786,7 @@ else
     private string _activeModFilter = "all";
     private DateTime _lastProgressUiRefresh = DateTime.MinValue;
     private DateTime _lastQueueSnapshotModRefresh = DateTime.MinValue;
-    private bool _progressRefreshQueued;
+    private Timer? _progressRenderTimer;
     private bool _isDisposed;
     private CancellationTokenSource? _queuePollCts;
 
@@ -848,6 +848,7 @@ else
     public async ValueTask DisposeAsync()
     {
         _isDisposed = true;
+        _progressRenderTimer?.Dispose();
         _queuePollCts?.Cancel();
         _queuePollCts?.Dispose();
         Broadcaster.OnModDownloadProgress -= HandleDownloadProgress;
@@ -926,36 +927,44 @@ else
     // ── In-process event handlers ─────────────────────────────────────────────
     private void HandleDownloadProgress(ModDownloadProgressEvent evt)
     {
-        _taskProgress[evt.ModId] = evt.ProgressPercent;
-        if (!_taskIds.Contains(evt.ModId))
-            _taskIds.Insert(0, evt.ModId);
+        // The broadcaster raises this from a background thread; marshal every
+        // state mutation to the circuit thread before touching shared fields.
+        InvokeAsync(() =>
+        {
+            if (_isDisposed)
+                return;
 
-        // Compute download speed on every event
-        if (_downloadBytesPrev.TryGetValue(evt.ModId, out var prevBytes) &&
-            _downloadTsPrev.TryGetValue(evt.ModId, out var prevTs))
-        {
-            var deltaBytes = evt.BytesDownloaded - prevBytes;
-            var deltaSec = (DateTime.UtcNow - prevTs).TotalSeconds;
-            if (deltaSec > 0.1 && deltaBytes > 0)
-                _downloadSpeed[evt.ModId] = deltaBytes / deltaSec;
-        }
-        _downloadBytesPrev[evt.ModId] = evt.BytesDownloaded;
-        _downloadTsPrev[evt.ModId] = DateTime.UtcNow;
-        if (evt.Files is { Count: > 0 })
-        {
-            if (!_fileProgressByMod.TryGetValue(evt.ModId, out var files))
+            _taskProgress[evt.ModId] = evt.ProgressPercent;
+            if (!_taskIds.Contains(evt.ModId))
+                _taskIds.Insert(0, evt.ModId);
+
+            // Compute download speed on every event
+            if (_downloadBytesPrev.TryGetValue(evt.ModId, out var prevBytes) &&
+                _downloadTsPrev.TryGetValue(evt.ModId, out var prevTs))
             {
-                files = new Dictionary<string, DownloadFileProgress>(StringComparer.OrdinalIgnoreCase);
-                _fileProgressByMod[evt.ModId] = files;
+                var deltaBytes = evt.BytesDownloaded - prevBytes;
+                var deltaSec = (DateTime.UtcNow - prevTs).TotalSeconds;
+                if (deltaSec > 0.1 && deltaBytes > 0)
+                    _downloadSpeed[evt.ModId] = deltaBytes / deltaSec;
+            }
+            _downloadBytesPrev[evt.ModId] = evt.BytesDownloaded;
+            _downloadTsPrev[evt.ModId] = DateTime.UtcNow;
+            if (evt.Files is { Count: > 0 })
+            {
+                if (!_fileProgressByMod.TryGetValue(evt.ModId, out var files))
+                {
+                    files = new Dictionary<string, DownloadFileProgress>(StringComparer.OrdinalIgnoreCase);
+                    _fileProgressByMod[evt.ModId] = files;
+                }
+
+                foreach (var file in evt.Files)
+                    files[file.FileName] = file;
+
+                _expandedDownloadModIds.Add(evt.ModId);
             }
 
-            foreach (var file in evt.Files)
-                files[file.FileName] = file;
-
-            _expandedDownloadModIds.Add(evt.ModId);
-        }
-
-        RequestProgressRender();
+            RequestProgressRender();
+        });
     }
 
     private void HandleStatusChanged(ModStatusChangedEvent _)
@@ -1099,20 +1108,15 @@ else
             return;
         }
 
-        if (_progressRefreshQueued)
-            return;
-
-        _progressRefreshQueued = true;
-        _ = Task.Run(async () =>
+        // Debounce bursty progress events: schedule at most one render 100 ms
+        // out, then re-arm. The timer is component-owned and disposed with it.
+        _progressRenderTimer ??= new Timer(_ =>
         {
-            await Task.Delay(100);
-            if (_isDisposed)
-                return;
-
-            _progressRefreshQueued = false;
             _lastProgressUiRefresh = DateTime.UtcNow;
-            await InvokeAsync(StateHasChanged);
+            if (!_isDisposed)
+                _ = InvokeAsync(StateHasChanged);
         });
+        _progressRenderTimer.Change(100, Timeout.Infinite);
     }
 
     private double GetModProgress(int modId)

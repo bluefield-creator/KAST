@@ -1,9 +1,8 @@
-﻿@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.SignalR.Client
 @inject NavigationManager Nav
 @inject KastInternalUrlProvider InternalUrls
-@inject InternalHubTokenService InternalHubToken
 @inject ILogger<NavMenu> Logger
-@inject IServiceScopeFactory ScopeFactory
+@inject IServerInstanceService ServerService
 @implements IAsyncDisposable
 
 <MudNavMenu>
@@ -68,8 +67,7 @@
         try
         {
             _hub = new HubConnectionBuilder()
-                .WithUrl(InternalUrls.GetMonitoringHubUri(), options =>
-                    options.Headers.Add(InternalHubAuthenticationDefaults.HeaderName, InternalHubToken.Token))
+                .WithUrl(InternalUrls.GetMonitoringHubUri())
                 .WithAutomaticReconnect()
                 .Build();
 
@@ -116,15 +114,22 @@
 
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        await RefreshAsync();
-        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await RefreshAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            // An unhandled exception in an async-void handler would terminate
+            // the Blazor circuit — log and continue instead.
+            Logger.LogWarning(ex, "Failed to refresh navigation state after location change");
+        }
     }
 
     private async Task RefreshAsync()
     {
-        using var scope = ScopeFactory.CreateScope();
-        var serverService = scope.ServiceProvider.GetRequiredService<IServerInstanceService>();
-        _servers = await serverService.GetAllInstancesAsync();
+        _servers = await ServerService.GetAllInstancesAsync();
     }
 
     public async ValueTask DisposeAsync()

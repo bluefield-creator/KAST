@@ -1,3 +1,49 @@
+# Changelog
+
+## [Unreleased]
+
+### Bug Fixes
+- Restore mission download url round-trip
+- Verify api keys after prefix lookup
+- Guard progress broadcasts against async void
+- Observe broadcast task failures
+- Correct dispose pattern and drop finalizer
+- Stabilize cdn pool lifecycle and waits
+- Harden login state, timeouts and parallelism
+- Dispose processes and parallelize sampling
+- Prune instance lock cache
+- Dedupe concurrent queue requests
+- Parse log fields defensively
+- Index hot columns and drop dead concurrency tokens
+- Stop singleton process manager capturing scoped db
+- Sync headless client rows from count
+- Type status events with domain enums
+- Sanitize all runtime event fields
+- Evict completed install states
+- Gate mission downloads and rate limit
+- Make download actions async
+- Marshal progress updates to circuit thread
+- Harden hub auth, handlers and injection
+- Guard event handlers against circuit crashes
+- Reset restart counter on manual start
+- Harden endpoint validation and status codes
+- Defer update check off first render
+- Rate limit login endpoint
+- Avoid deadlock disposing queue registration
+
+### Documentation
+- Update badges and links to bluefield-creator/KAST
+- Refactor README for CASTER branding and updated feature list
+- Correct HTTP mission downloads description
+
+### Performance
+- Fetch light snapshot for monitoring
+
+### Refactoring
+- Use TimeOnly for schedule times
+- Dedupe install entry points
+- Inject services instead of manual scopes
+
 ## [1.2.0] - 2026-06-20
 ### Bug Fixes
 - Register IProcessManagerService in API test DI containers

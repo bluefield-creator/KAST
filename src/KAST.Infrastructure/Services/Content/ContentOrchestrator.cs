@@ -117,6 +117,8 @@ public class ContentOrchestrator(
         int maxParallelModDownloads = 1)
     {
         var key = ContentProgressTracker.ModKey(modId);
+        var (request, state) = PrepareModInstall(modId, type, destinationPath, workshopId, sourcePath,
+            expectedSizeBytes, maxParallelDownloads, maxParallelModDownloads);
 
         using var activity = KastActivitySources.Content.StartActivity(
             "kast.content.queued", ActivityKind.Internal);
@@ -133,52 +135,19 @@ public class ContentOrchestrator(
             return existing.State;
         }
 
-        var installer = _installers[type];
-        var request = new ContentInstallRequest
-        {
-            Type = type,
-            DestinationPath = destinationPath,
-            ModId = modId,
-            WorkshopId = workshopId,
-            ExpectedSizeBytes = expectedSizeBytes,
-            SourcePath = sourcePath,
-            MaxParallelDownloads = maxParallelDownloads,
-            MaxParallelModDownloads = maxParallelModDownloads
-        };
-
-        var steps = installer.PlanSteps(request);
-        var state = new ContentInstallState
-        {
-            Key = key,
-            Type = type,
-            Label = $"Mod {modId}",
-            Steps = steps.ToList()
-        };
-        state.IsDownloading = true;
-        state.AddLog($"Queued install for mod {modId}.");
-
         var cts = new CancellationTokenSource();
-        var operation = new ActiveInstall(cts, state);
-        try
-        {
-            if (!_active.TryAdd(key, operation))
-            {
-                cts.Dispose();
-                activity?.SetTag("content.queued", false);
-                activity?.AddEvent(new ActivityEvent("install.already_running"));
-                return _active.TryGetValue(key, out existing) ? existing.State : tracker.Get(key) ?? state;
-            }
-        }
-        catch
+        if (!_active.TryAdd(key, new ActiveInstall(cts, state)))
         {
             cts.Dispose();
-            throw;
+            activity?.SetTag("content.queued", false);
+            activity?.AddEvent(new ActivityEvent("install.already_running"));
+            return _active.TryGetValue(key, out existing) ? existing.State : tracker.Get(key) ?? state;
         }
 
         tracker.Set(state);
 
         activity?.SetTag("content.queued", true);
-        activity?.SetTag("content.steps", steps.Count);
+        activity?.SetTag("content.steps", state.Steps.Count);
 
         _ = Task.Run(() => RunAsync(key, request, state, cts.Token, onStarted, onComplete, onError));
         return state;
@@ -195,6 +164,8 @@ public class ContentOrchestrator(
         CancellationToken ct = default)
     {
         var key = ContentProgressTracker.ModKey(modId);
+        var (request, state) = PrepareModInstall(modId, type, destinationPath, workshopId, sourcePath,
+            expectedSizeBytes, maxParallelDownloads, maxParallelModDownloads);
 
         using var activity = KastActivitySources.Content.StartActivity(
             "kast.content.queued", ActivityKind.Internal);
@@ -211,6 +182,27 @@ public class ContentOrchestrator(
             return existing.State;
         }
 
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (!_active.TryAdd(key, new ActiveInstall(linkedCts, state)))
+        {
+            activity?.SetTag("content.queued", false);
+            activity?.AddEvent(new ActivityEvent("install.already_running"));
+            return _active.TryGetValue(key, out existing) ? existing.State : tracker.Get(key) ?? state;
+        }
+
+        tracker.Set(state);
+
+        activity?.SetTag("content.queued", true);
+        activity?.SetTag("content.steps", state.Steps.Count);
+
+        await RunAsync(key, request, state, linkedCts.Token, onStarted, onComplete, onError);
+        return state;
+    }
+
+    private (ContentInstallRequest Request, ContentInstallState State) PrepareModInstall(
+        int modId, ContentType type, string destinationPath, long workshopId, string? sourcePath,
+        long expectedSizeBytes, int maxParallelDownloads, int maxParallelModDownloads)
+    {
         var installer = _installers[type];
         var request = new ContentInstallRequest
         {
@@ -227,7 +219,7 @@ public class ContentOrchestrator(
         var steps = installer.PlanSteps(request);
         var state = new ContentInstallState
         {
-            Key = key,
+            Key = ContentProgressTracker.ModKey(modId),
             Type = type,
             Label = $"Mod {modId}",
             Steps = steps.ToList()
@@ -235,18 +227,7 @@ public class ContentOrchestrator(
         state.IsDownloading = true;
         state.AddLog($"Queued install for mod {modId}.");
 
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var operation = new ActiveInstall(linkedCts, state);
-        if (!_active.TryAdd(key, operation))
-            return _active.TryGetValue(key, out existing) ? existing.State : tracker.Get(key) ?? state;
-
-        tracker.Set(state);
-
-        activity?.SetTag("content.queued", true);
-        activity?.SetTag("content.steps", steps.Count);
-
-        await RunAsync(key, request, state, linkedCts.Token, onStarted, onComplete, onError);
-        return state;
+        return (request, state);
     }
 
     // ── Cancel ───────────────────────────────────────────────────────────────
@@ -357,15 +338,9 @@ public class ContentOrchestrator(
             : "Steam content slot";
         state.AddLog($"Queued for {slotName}...");
         using var lease = await WaitForSteamContentTurnAsync(request, state.Key, ct);
-        try
-        {
-            state.AddLog($"{slotName} acquired.");
-            await HandleStartedCallbackAsync(onStarted, state);
-            await installer.InstallAsync(request, state, ct);
-        }
-        finally
-        {
-        }
+        state.AddLog($"{slotName} acquired.");
+        await HandleStartedCallbackAsync(onStarted, state);
+        await installer.InstallAsync(request, state, ct);
     }
 
     private async Task<IDisposable> WaitForSteamContentTurnAsync(ContentInstallRequest request, string key, CancellationToken ct)

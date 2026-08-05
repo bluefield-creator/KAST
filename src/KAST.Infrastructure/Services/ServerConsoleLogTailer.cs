@@ -47,6 +47,14 @@ public sealed class ServerConsoleLogTailer(
         await session.StopAsync();
     }
 
+    /// <summary>
+    /// Current read position of the follow loop for an instance, or
+    /// <c>null</c> when not following. Exposed for tests so they can gate on
+    /// the tailer having established its position instead of sleeping.
+    /// </summary>
+    internal long? GetFollowPosition(int serverInstanceId)
+        => _sessions.TryGetValue(serverInstanceId, out var session) ? session.Position : null;
+
     private async Task FollowAsync(TailSession session)
     {
         try

@@ -40,7 +40,9 @@ public class ServerConsoleLogTailerTests : IDisposable
         var rpt = CreateRpt(instance, "old line\r\n");
 
         _sut.StartFollowing(instance, DateTime.UtcNow, replayExistingContent: false);
-        await Task.Delay(250);
+        // Wait until the tailer has established its end-of-file position so the
+        // append below cannot race the initial seek (deterministic gate).
+        await WaitForAsync(() => _sut.GetFollowPosition(instance.Id) == new FileInfo(rpt).Length);
         await File.AppendAllTextAsync(rpt, "new line\r\n");
 
         await WaitForAsync(() => _broadcaster.Logs.Count == 1);
@@ -54,7 +56,8 @@ public class ServerConsoleLogTailerTests : IDisposable
         var rpt = CreateRpt(instance, "partial");
 
         _sut.StartFollowing(instance, File.GetLastWriteTimeUtc(rpt), replayExistingContent: true);
-        await Task.Delay(250);
+        // Deterministic gate: the tailer has read the whole partial line.
+        await WaitForAsync(() => _sut.GetFollowPosition(instance.Id) == new FileInfo(rpt).Length);
         Assert.Empty(_broadcaster.Logs);
 
         await File.AppendAllTextAsync(rpt, " line\r\n");
@@ -69,7 +72,6 @@ public class ServerConsoleLogTailerTests : IDisposable
         var instance = CreateInstance();
 
         _sut.StartFollowing(instance, DateTime.UtcNow, replayExistingContent: true);
-        await Task.Delay(250);
         CreateRpt(instance, "delayed line\r\n");
 
         await WaitForAsync(() => _broadcaster.Logs.Count == 1);
@@ -85,7 +87,6 @@ public class ServerConsoleLogTailerTests : IDisposable
         _sut.StartFollowing(instance, DateTime.UtcNow.AddSeconds(-1), replayExistingContent: true);
         await WaitForAsync(() => _broadcaster.Logs.Count == 1);
 
-        await Task.Delay(50);
         CreateRpt(instance, "second file\r\n", "arma3server_x64_2026-06-06_19-01-00.rpt");
 
         await WaitForAsync(() => _broadcaster.Logs.Count == 2);

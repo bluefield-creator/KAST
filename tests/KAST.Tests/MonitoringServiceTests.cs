@@ -18,10 +18,17 @@ public class MonitoringServiceTests : IDisposable
             new ServerInstance { Name = "B", ProcessId = 1002, Status = ServerInstanceStatus.Running },
             new ServerInstance { Name = "C", ProcessId = 1003, Status = ServerInstanceStatus.Running });
         await _db.SaveChangesAsync();
-        var processManager = new DelayedProcessManager();
+        var processManager = new GatedProcessManager();
         var sut = new MonitoringService(processManager, _db);
 
-        var metrics = await sut.GetAllInstanceMetricsAsync();
+        var metricsTask = sut.GetAllInstanceMetricsAsync();
+
+        // Deterministic gate: all samples must have entered before any may
+        // complete — overlap is guaranteed, not timing-dependent.
+        await WaitUntilAsync(() => processManager.Entered == 3);
+        processManager.ReleaseAll();
+
+        var metrics = await metricsTask;
 
         Assert.Equal(3, metrics.Count);
         Assert.True(processManager.MaxConcurrentCalls > 1);
@@ -29,19 +36,36 @@ public class MonitoringServiceTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private sealed class DelayedProcessManager : IProcessManagerService
+    private static async Task WaitUntilAsync(Func<bool> condition)
     {
-        private int _activeCalls;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!condition())
+        {
+            if (cts.IsCancellationRequested)
+                throw new TimeoutException("Condition was not met.");
 
+            await Task.Delay(25);
+        }
+    }
+
+    private sealed class GatedProcessManager : IProcessManagerService
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _activeCalls;
+        private int _entered;
+
+        public int Entered => _entered;
         public int MaxConcurrentCalls { get; private set; }
 
         public async Task<(double CpuPercent, long MemoryBytes)?> GetProcessMetricsAsync(int processId, CancellationToken ct = default)
         {
             var active = Interlocked.Increment(ref _activeCalls);
+            Interlocked.Increment(ref _entered);
             MaxConcurrentCalls = Math.Max(MaxConcurrentCalls, active);
             try
             {
-                await Task.Delay(100, ct);
+                // Block until the test releases all samples.
+                await _release.Task.WaitAsync(ct);
                 return (processId / 100.0, processId);
             }
             finally
@@ -49,6 +73,8 @@ public class MonitoringServiceTests : IDisposable
                 Interlocked.Decrement(ref _activeCalls);
             }
         }
+
+        public void ReleaseAll() => _release.TrySetResult();
 
         public Task<int> StartServerProcessAsync(string executablePath, string arguments, Action<int, string>? onOutputLine = null,
             Action<int, int>? onProcessExited = null, CancellationToken ct = default)

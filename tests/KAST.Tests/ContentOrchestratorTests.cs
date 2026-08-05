@@ -207,11 +207,13 @@ public class ContentOrchestratorTests
     {
         var provider = BuildServiceProvider();
 
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var installers = new[]
         {
             new FakeInstaller(ContentType.SteamMod, async (_, state, ct) =>
             {
                 state.BeginStep(0);
+                started.TrySetResult();
                 await Task.Delay(TimeSpan.FromSeconds(10), ct);
                 state.CompleteStep(0);
             })
@@ -221,7 +223,9 @@ public class ContentOrchestratorTests
         var key = ContentProgressTracker.ModKey(22);
         var state = orchestrator.StartModInstall(22, ContentType.SteamMod, "/tmp/mod22");
 
-        await Task.Delay(50);
+        // Cancel only after the install has actually started — gated, so the
+        // assertion cannot race the installer callback.
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         orchestrator.Cancel(key);
 
         await WaitForAsync(() => state.ErrorMessage is not null);

@@ -124,7 +124,7 @@ public class KastApiModsEndpointsTests
 
         var response = await app.Client.PostAsync($"/api/mods/{modId}/download", content: null);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
         await modService.DidNotReceive().UpdateModAsync(Arg.Any<SteamMod>(), Arg.Any<CancellationToken>());
         await broadcaster.DidNotReceive().BroadcastModStatusChangedAsync(Arg.Any<ModStatusChangedEvent>());
@@ -182,7 +182,7 @@ public class KastApiModsEndpointsTests
 
         var response = await app.Client.PostAsync($"/api/mods/{modId}/update", content: null);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
         await modService.DidNotReceive().UpdateModAsync(Arg.Any<SteamMod>(), Arg.Any<CancellationToken>());
         await broadcaster.DidNotReceive().BroadcastModStatusChangedAsync(Arg.Any<ModStatusChangedEvent>());

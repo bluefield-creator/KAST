@@ -12,9 +12,9 @@ public static class AccountEndpoints
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/auth/setup", async (HttpContext http, IUserAccountService accounts, IConfiguration configuration, CancellationToken ct)
-            => await SetupAsync(http, accounts, configuration, ct)).DisableAntiforgery();
+            => await SetupAsync(http, accounts, configuration, ct)).DisableAntiforgery().RequireRateLimiting("login");
         endpoints.MapPost("/auth/login", async (HttpContext http, IUserAccountService accounts, ISettingsService settings, IConfiguration configuration, CancellationToken ct)
-            => await LoginAsync(http, accounts, settings, configuration, ct)).DisableAntiforgery();
+            => await LoginAsync(http, accounts, settings, configuration, ct)).DisableAntiforgery().RequireRateLimiting("login");
         endpoints.MapGet("/auth/oidc/login", (HttpContext http, IConfiguration configuration)
             => OidcLogin(http, configuration));
         endpoints.MapGet("/auth/oidc/signed-out", () => Results.Redirect("/login"));

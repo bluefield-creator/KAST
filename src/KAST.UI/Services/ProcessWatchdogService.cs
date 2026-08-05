@@ -40,7 +40,7 @@ public class ProcessWatchdogService(
         logger.LogInformation("Process watchdog service stopped");
     }
 
-    private async Task CheckRunningInstancesAsync(CancellationToken ct)
+    internal async Task CheckRunningInstancesAsync(CancellationToken ct)
     {
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<KastDbContext>();
@@ -50,6 +50,15 @@ public class ProcessWatchdogService(
         var runningInstances = await db.ServerInstances
             .Where(s => s.Status == ServerInstanceStatus.Running && s.ProcessId != null)
             .ToListAsync(ct);
+
+        // A manual start (or any other path to Running) resets the crash budget:
+        // a stale counter must not refuse the next restart after the user has
+        // already brought the server back up by hand.
+        foreach (var instance in runningInstances)
+        {
+            if (_restartAttempts.Remove(instance.Id))
+                logger.LogInformation("Server {Name}: cleared restart attempt counter (instance running)", instance.Name);
+        }
 
         foreach (var instance in runningInstances.Where(instance => !processManager.IsProcessRunning(instance.ProcessId!.Value)))
         {
@@ -85,7 +94,9 @@ public class ProcessWatchdogService(
 
         // ── 2. Re-attach log tailers for alive instances ──
 
-        foreach (var instance in runningInstances.Where(instance => processManager.IsProcessRunning(instance.ProcessId!.Value)))
+        // Section 1 nulls ProcessId on crashed instances; re-filter safely.
+        foreach (var instance in runningInstances.Where(instance =>
+                     instance.ProcessId is { } pid && processManager.IsProcessRunning(pid)))
         {
             consoleLogTailer.StartFollowing(
                 instance,

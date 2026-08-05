@@ -64,26 +64,38 @@ public static class KastApiEndpoints
 
         g.MapPost("/{id:int}/start", async (int id, IServerInstanceService svc, CancellationToken ct) =>
         {
+            if (await svc.GetInstanceByIdAsync(id, ct) is null)
+                return Results.NotFound();
             await svc.StartInstanceAsync(id, ct);
-            return Results.Ok();
+            return Results.Accepted();
         });
 
         g.MapPost("/{id:int}/stop", async (int id, IServerInstanceService svc, CancellationToken ct) =>
         {
+            if (await svc.GetInstanceByIdAsync(id, ct) is null)
+                return Results.NotFound();
             await svc.StopInstanceAsync(id, ct);
-            return Results.Ok();
+            return Results.Accepted();
         });
 
         g.MapPost("/{id:int}/restart", async (int id, IServerInstanceService svc, CancellationToken ct) =>
         {
+            if (await svc.GetInstanceByIdAsync(id, ct) is null)
+                return Results.NotFound();
             await svc.RestartInstanceAsync(id, ct);
-            return Results.Ok();
+            return Results.Accepted();
         });
 
-        g.MapPost("/{id:int}/mods/{modId:int}", async (int id, int modId, [FromQuery] int loadOrder, IServerInstanceService svc, CancellationToken ct) =>
+        g.MapPost("/{id:int}/mods/{modId:int}", async (int id, int modId, [FromQuery] int loadOrder,
+            IServerInstanceService svc, IModService modService, CancellationToken ct) =>
         {
+            if (await svc.GetInstanceByIdAsync(id, ct) is null)
+                return Results.NotFound();
+            if (await modService.GetModByIdAsync(modId, ct) is null)
+                return Results.NotFound();
+
             await svc.AddModToInstanceAsync(id, modId, loadOrder, ct: ct);
-            return Results.Ok();
+            return Results.NoContent();
         });
 
         g.MapDelete("/{id:int}/mods/{modId:int}", async (int id, int modId, IServerInstanceService svc, CancellationToken ct) =>
@@ -132,9 +144,8 @@ public static class KastApiEndpoints
             var mod = await modService.GetModByIdAsync(id, ct);
             if (mod is null) return Results.NotFound();
 
-            await downloadManager.StartDownloadAsync(id, isUpdate: false, ct);
-
-            return Results.Ok();
+            var queued = await downloadManager.StartDownloadAsync(id, isUpdate: false, ct);
+            return queued ? Results.Accepted() : Results.BadRequest("Mod is not a Steam Workshop mod");
         });
 
         g.MapPost("/{id:int}/update", async (int id, IModService modService,
@@ -143,9 +154,8 @@ public static class KastApiEndpoints
             var mod = await modService.GetModByIdAsync(id, ct);
             if (mod is null) return Results.NotFound();
 
-            await downloadManager.StartDownloadAsync(id, isUpdate: true, ct);
-
-            return Results.Ok();
+            var queued = await downloadManager.StartDownloadAsync(id, isUpdate: true, ct);
+            return queued ? Results.Accepted() : Results.BadRequest("Mod is not a Steam Workshop mod");
         });
 
         g.MapPost("/check-updates", async (IModService svc, CancellationToken ct) =>
@@ -218,7 +228,12 @@ public static class KastApiEndpoints
         {
             List<int>? tagIdList = null;
             if (!string.IsNullOrWhiteSpace(tags))
-                tagIdList = tags.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+            {
+                var parts = tags.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                if (!parts.All(p => int.TryParse(p, out _)))
+                    return Results.BadRequest("Invalid tag id in 'tags' query parameter");
+                tagIdList = parts.Select(int.Parse).ToList();
+            }
 
             var missions = await svc.SearchMissionsAsync(instanceId, search, tagIdList, map, ct);
             return Results.Ok(missions);

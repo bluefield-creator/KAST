@@ -1,7 +1,4 @@
-# Changelog
-
-## [Unreleased]
-
+## [1.2.1] - 2026-08-05
 ### Bug Fixes
 - Restore mission download url round-trip
 - Verify api keys after prefix lookup
@@ -14,8 +11,8 @@
 - Prune instance lock cache
 - Dedupe concurrent queue requests
 - Parse log fields defensively
-- Index hot columns and drop dead concurrency tokens
 - Stop singleton process manager capturing scoped db
+- Index hot columns and drop dead concurrency tokens
 - Sync headless client rows from count
 - Type status events with domain enums
 - Sanitize all runtime event fields
@@ -25,9 +22,9 @@
 - Marshal progress updates to circuit thread
 - Harden hub auth, handlers and injection
 - Guard event handlers against circuit crashes
+- Defer update check off first render
 - Reset restart counter on manual start
 - Harden endpoint validation and status codes
-- Defer update check off first render
 - Rate limit login endpoint
 - Avoid deadlock disposing queue registration
 
@@ -35,6 +32,11 @@
 - Update badges and links to bluefield-creator/KAST
 - Refactor README for CASTER branding and updated feature list
 - Correct HTTP mission downloads description
+
+### Maintenance
+- Update changelog for v1.2.0 [skip ci]
+- Update changelog [skip ci]
+- Allow manual release dispatch
 
 ### Performance
 - Fetch light snapshot for monitoring

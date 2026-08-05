@@ -1153,28 +1153,37 @@
         _qrCodeBase64 = null; _challengeUrl = null; _qrSession = null; _qrPolling = false;
         StateHasChanged();
 
-        var session = await SteamService.BeginQrLoginAsync();
-        if (!string.IsNullOrEmpty(session.ErrorMessage))
+        try
+        {
+            var session = await SteamService.BeginQrLoginAsync();
+            if (!string.IsNullOrEmpty(session.ErrorMessage))
+            {
+                _loggingIn = false;
+                Snackbar.Add($"QR error: {OutputSanitizer.Sanitize(session.ErrorMessage)}", Severity.Error);
+                StateHasChanged();
+                return;
+            }
+
+            _challengeUrl = session.ChallengeUrl;
+            _qrCodeBase64 = GenerateQrCodeBase64(session.ChallengeUrl);
+            _qrSession = session;
+            _qrPolling = true;
+            _loggingIn = false;
+
+            session.ChallengeUrlChanged = newUrl =>
+                InvokeAsync(() => { _challengeUrl = newUrl; _qrCodeBase64 = GenerateQrCodeBase64(newUrl); StateHasChanged(); });
+
+            StateHasChanged();
+            _qrCts?.Cancel();
+            _qrCts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+            _ = PollQrAsync(_qrCts.Token);
+        }
+        catch (Exception ex)
         {
             _loggingIn = false;
-            Snackbar.Add($"QR error: {OutputSanitizer.Sanitize(session.ErrorMessage)}", Severity.Error);
-            StateHasChanged();
-            return;
+            _qrPolling = false;
+            Snackbar.Add($"QR login failed: {ex.Message}", Severity.Error);
         }
-
-        _challengeUrl = session.ChallengeUrl;
-        _qrCodeBase64 = GenerateQrCodeBase64(session.ChallengeUrl);
-        _qrSession = session;
-        _qrPolling = true;
-        _loggingIn = false;
-
-        session.ChallengeUrlChanged = newUrl =>
-            InvokeAsync(() => { _challengeUrl = newUrl; _qrCodeBase64 = GenerateQrCodeBase64(newUrl); StateHasChanged(); });
-
-        StateHasChanged();
-        _qrCts?.Cancel();
-        _qrCts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        _ = PollQrAsync(_qrCts.Token);
     }
 
     private async Task StartCredentialLogin()
@@ -1468,13 +1477,20 @@
 
     private async Task SaveUpdateSettings()
     {
-        var settings = await SettingsService.GetSettingsAsync();
-        settings.UpdateChannelId = _updateChannelId;
-        settings.AutoUpdateCheckEnabled = _autoUpdateCheckEnabled;
-        await SettingsService.UpdateSettingsAsync(settings);
-        _downloadResult = null;
-        _confirmApplyUpdate = false;
-        Snackbar.Add("Update settings saved", Severity.Success);
+        try
+        {
+            var settings = await SettingsService.GetSettingsAsync();
+            settings.UpdateChannelId = _updateChannelId;
+            settings.AutoUpdateCheckEnabled = _autoUpdateCheckEnabled;
+            await SettingsService.UpdateSettingsAsync(settings);
+            _downloadResult = null;
+            _confirmApplyUpdate = false;
+            Snackbar.Add("Update settings saved", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save update settings: {ex.Message}", Severity.Error);
+        }
     }
 
     private bool CanChangeService =>
@@ -1760,18 +1776,32 @@
     private async Task CreateApiKey()
     {
         if (string.IsNullOrWhiteSpace(_newKeyName)) return;
-        var (key, raw) = await ApiKeyService.CreateApiKeyAsync(_newKeyName.Trim());
-        _newRawKey = raw;
-        _ = key;
-        _newKeyName = "";
-        _apiKeys = await ApiKeyService.GetAllKeysAsync();
+        try
+        {
+            var (key, raw) = await ApiKeyService.CreateApiKeyAsync(_newKeyName.Trim());
+            _newRawKey = raw;
+            _ = key;
+            _newKeyName = "";
+            _apiKeys = await ApiKeyService.GetAllKeysAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to create API key: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task RevokeKey(int id)
     {
-        await ApiKeyService.RevokeKeyAsync(id);
-        _apiKeys = await ApiKeyService.GetAllKeysAsync();
-        Snackbar.Add("API key revoked", Severity.Success);
+        try
+        {
+            await ApiKeyService.RevokeKeyAsync(id);
+            _apiKeys = await ApiKeyService.GetAllKeysAsync();
+            Snackbar.Add("API key revoked", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to revoke API key: {ex.Message}", Severity.Error);
+        }
     }
 
     public void Dispose()

@@ -13,7 +13,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using System.Threading.RateLimiting;
 using System.Data.Common;
 using System.Security.Claims;
 using System.Text.Json;
@@ -46,6 +48,36 @@ builder.Services.AddSingleton<ICrashReportService, CrashReportService>();
 // ── Health checks ────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<KastDbContext>("database");
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// The mission-download endpoint is unauthenticated (Arma clients cannot
+// authenticate), so it gets its own generous per-IP cap.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("mission-download", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    // Credential endpoints: no lockout mechanism exists, so a per-IP cap is
+    // the brute-force protection.
+    options.AddPolicy("login", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
 
 // ── Database ─────────────────────────────────────────────────────────────────
 var connectionString = ResolveSqliteConnectionString(
@@ -479,6 +511,7 @@ app.UseAntiforgery();
 app.UseAuthentication();
 app.UseKastAccountGate();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // ── Health checks ─────────────────────────────────────────────────────────────
 app.MapHealthChecks("/health");

@@ -372,6 +372,10 @@ public class ContentOrchestrator(
             entry.Ready.TrySetCanceled();
             TryStartNextSteamQueueEntryLocked();
         }
+
+        // Dispose outside the lock: CancellationTokenRegistration.Dispose blocks
+        // while a cancel callback is in flight, and this callback needs the lock.
+        entry.Cancellation.Dispose();
     }
 
     private void CompleteSteamQueueEntry(SteamQueueEntry entry)
@@ -383,9 +387,12 @@ public class ContentOrchestrator(
             else if (entry.Type == ContentType.Server)
                 _steamServerInstallActive = false;
 
-            entry.Cancellation.Dispose();
             TryStartNextSteamQueueEntryLocked();
         }
+
+        // Same rule as CancelSteamQueueEntry: never dispose a registration while
+        // holding the lock its callback needs.
+        entry.Cancellation.Dispose();
     }
 
     private void TryStartNextSteamQueueEntryLocked()
@@ -396,7 +403,7 @@ public class ContentOrchestrator(
             if (next.Cancelled)
             {
                 _steamQueue.Dequeue();
-                next.Cancellation.Dispose();
+                // Registration is disposed by CancelSteamQueueEntry after its lock.
                 continue;
             }
 

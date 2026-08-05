@@ -10,21 +10,17 @@ namespace KAST.Infrastructure.Services.Content;
 /// </summary>
 public class ContentProgressTracker
 {
+    /// <summary>
+    /// Terminal states are kept visible for this long (so the UI can show the
+    /// final result) and then evicted — the store must not grow without bound.
+    /// </summary>
+    private static readonly TimeSpan CompletedStateTtl = TimeSpan.FromHours(1);
+
     private readonly ConcurrentDictionary<string, ContentInstallState> _states = new();
+    private readonly ConcurrentDictionary<string, DateTime> _completedAt = new();
 
     public static string ServerKey(int instanceId) => $"server:{instanceId}";
     public static string ModKey(int modId) => $"mod:{modId}";
-
-    public ContentInstallState GetOrCreate(string key, ContentType type, string label, IReadOnlyList<ContentStep> steps)
-    {
-        return _states.GetOrAdd(key, _ => new ContentInstallState
-        {
-            Key = key,
-            Type = type,
-            Label = label,
-            Steps = steps.ToList()
-        });
-    }
 
     public ContentInstallState Create(string key, ContentType type, string label, IReadOnlyList<ContentStep> steps)
     {
@@ -36,20 +32,56 @@ public class ContentProgressTracker
             Steps = steps.ToList()
         };
         _states[key] = state;
+        _completedAt.TryRemove(key, out _);
         return state;
     }
 
     public void Set(ContentInstallState state)
     {
         _states[state.Key] = state;
+
+        if (IsTerminal(state))
+            _completedAt[state.Key] = DateTime.UtcNow;
+        else
+            _completedAt.TryRemove(state.Key, out _);
+
+        PruneCompleted();
     }
 
     public ContentInstallState? Get(string key)
-        => _states.TryGetValue(key, out var s) ? s : null;
+    {
+        if (!_states.TryGetValue(key, out var state))
+            return null;
 
-    public bool Remove(string key)
-        => _states.TryRemove(key, out _);
+        // Record the completion moment once so TTL eviction has a stable basis.
+        if (IsTerminal(state))
+            _completedAt.TryAdd(key, DateTime.UtcNow);
+
+        PruneCompleted();
+
+        // The state may have been evicted above — do not hand out a stale entry.
+        return _states.TryGetValue(key, out var current) ? current : null;
+    }
 
     public IReadOnlyList<ContentInstallState> GetAll()
-        => _states.Values.ToList();
+    {
+        PruneCompleted();
+        return _states.Values.ToList();
+    }
+
+    private static bool IsTerminal(ContentInstallState state)
+        => state.IsComplete || state.ErrorMessage is not null;
+
+    private void PruneCompleted()
+    {
+        var cutoff = DateTime.UtcNow - CompletedStateTtl;
+        foreach (var (key, completedAt) in _completedAt)
+        {
+            if (completedAt >= cutoff)
+                continue;
+
+            _completedAt.TryRemove(key, out _);
+            _states.TryRemove(key, out _);
+        }
+    }
 }

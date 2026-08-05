@@ -14,16 +14,16 @@ public class ContentProgressTrackerTests
     }
 
     [Fact]
-    public void GetOrCreate_SameKey_ReturnsSameStateInstance()
+    public void Get_ReturnsExistingState_ForSameKey()
     {
         var tracker = new ContentProgressTracker();
         var steps = new[] { new ContentStep { Name = "s1" } };
 
-        var first = tracker.GetOrCreate("mod:1", ContentType.SteamMod, "Mod 1", steps);
-        var second = tracker.GetOrCreate("mod:1", ContentType.SteamMod, "Ignored", new[] { new ContentStep { Name = "s2" } });
+        var first = tracker.Create("mod:1", ContentType.SteamMod, "Mod 1", steps);
+        var second = tracker.Get("mod:1");
 
         Assert.Same(first, second);
-        Assert.Equal("Mod 1", second.Label);
+        Assert.Equal("Mod 1", second!.Label);
         Assert.Single(second.Steps);
         Assert.Equal("s1", second.Steps[0].Name);
     }
@@ -45,16 +45,34 @@ public class ContentProgressTrackerTests
     }
 
     [Fact]
-    public void Remove_DeletesState_AndGetAllReflectsCurrentSnapshot()
+    public void GetAll_ReflectsCurrentSnapshot()
     {
         var tracker = new ContentProgressTracker();
         tracker.Create("mod:1", ContentType.SteamMod, "M1", new[] { new ContentStep { Name = "x" } });
         tracker.Create("server:1", ContentType.Server, "S1", new[] { new ContentStep { Name = "y" } });
 
         Assert.Equal(2, tracker.GetAll().Count);
-        Assert.True(tracker.Remove("mod:1"));
-        Assert.False(tracker.Remove("missing"));
+        Assert.Equal(2, tracker.GetAll().Count); // stable across reads
+    }
+
+    [Fact]
+    public void CompletedStates_AreEvictedAfterTtl()
+    {
+        var tracker = new ContentProgressTracker();
+        var state = tracker.Create("mod:1", ContentType.SteamMod, "M1", new[] { new ContentStep { Name = "x" } });
+        state.IsComplete = true;
+
+        // Terminal states stay visible for the TTL window...
+        Assert.NotNull(tracker.Get("mod:1"));
+
+        // ...and are evicted once the completion time ages past it. Simulate
+        // the aging by rewriting the completion timestamp via reflection.
+        var completedAt = tracker.GetType().GetField("_completedAt",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var map = (System.Collections.Concurrent.ConcurrentDictionary<string, DateTime>)completedAt!.GetValue(tracker)!;
+        map["mod:1"] = DateTime.UtcNow - TimeSpan.FromHours(2);
+
         Assert.Null(tracker.Get("mod:1"));
-        Assert.Single(tracker.GetAll());
+        Assert.Empty(tracker.GetAll());
     }
 }

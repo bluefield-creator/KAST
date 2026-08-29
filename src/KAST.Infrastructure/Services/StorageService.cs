@@ -208,7 +208,7 @@ public sealed class StorageService(
 
             var name = Path.GetFileName(directory);
             var identity = NormalizeName(name);
-            var fingerprint = CalculateDirectoryFingerprint(directory);
+            var fingerprint = await CalculateDirectoryFingerprintAsync(directory, ct);
             var size = GetDirectorySize(directory);
             var status = StorageCandidateStatus.New;
             ServerInstance? match = null;
@@ -216,7 +216,7 @@ public sealed class StorageService(
             if (existingByName.TryGetValue(identity, out match))
             {
                 var existingFingerprint = Directory.Exists(match.InstallPath)
-                    ? CalculateDirectoryFingerprint(match.InstallPath)
+                    ? await CalculateDirectoryFingerprintAsync(match.InstallPath, ct)
                     : "";
                 status = string.Equals(existingFingerprint, fingerprint, StringComparison.Ordinal)
                     ? StorageCandidateStatus.IdenticalDuplicate
@@ -265,7 +265,7 @@ public sealed class StorageService(
                 ? existingByWorkshopId.TryGetValue(workshopId, out var named) ? named.Name : folderName
                 : folderName;
             var identity = workshopId > 0 ? $"workshop:{workshopId}" : NormalizeName(name);
-            var fingerprint = CalculateDirectoryFingerprint(directory);
+            var fingerprint = await CalculateDirectoryFingerprintAsync(directory, ct);
             var size = GetDirectorySize(directory);
             var status = StorageCandidateStatus.New;
             SteamMod? match = null;
@@ -274,7 +274,7 @@ public sealed class StorageService(
                 workshopId == 0 && existingByName.TryGetValue(NormalizeName(name), out match))
             {
                 var existingFingerprint = Directory.Exists(match.LocalPath)
-                    ? CalculateDirectoryFingerprint(match.LocalPath)
+                    ? await CalculateDirectoryFingerprintAsync(match.LocalPath, ct)
                     : "";
                 status = string.Equals(existingFingerprint, fingerprint, StringComparison.Ordinal)
                     ? StorageCandidateStatus.IdenticalDuplicate
@@ -321,14 +321,35 @@ public sealed class StorageService(
             return false;
         }
 
-        var sourceFingerprint = CalculateDirectoryFingerprint(source);
-        await CopyDirectoryAsync(source, destination, ct);
-        var destinationFingerprint = CalculateDirectoryFingerprint(destination);
-        if (string.Equals(sourceFingerprint, destinationFingerprint, StringComparison.Ordinal))
-            return true;
+        var sourceFingerprint = await CalculateDirectoryFingerprintAsync(source, ct);
+        try
+        {
+            await CopyDirectoryAsync(source, destination, ct);
+            var destinationFingerprint = await CalculateDirectoryFingerprintAsync(destination, ct);
+            if (string.Equals(sourceFingerprint, destinationFingerprint, StringComparison.Ordinal))
+                return true;
+        }
+        catch
+        {
+            TryDeleteDirectory(destination);
+            throw;
+        }
 
+        // Never leave a partially copied destination behind
+        TryDeleteDirectory(destination);
         skipped.Add($"{label}: copy verification failed.");
         return false;
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch (IOException) { /* best effort */ }
+        catch (UnauthorizedAccessException) { /* best effort */ }
     }
 
     private static async Task CopyDirectoryAsync(string source, string destination, CancellationToken ct)
@@ -400,34 +421,36 @@ public sealed class StorageService(
             ? path
             : path + Path.DirectorySeparatorChar;
 
-    private static string CalculateDirectoryFingerprint(string path)
+    private static async Task<string> CalculateDirectoryFingerprintAsync(string path, CancellationToken ct)
     {
         if (!Directory.Exists(path))
             return "";
 
-        using var sha = SHA256.Create();
+        var separator = new byte[] { 0 };
+        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
                      .OrderBy(file => Path.GetRelativePath(path, file), StringComparer.OrdinalIgnoreCase))
         {
+            ct.ThrowIfCancellationRequested();
+
             var relative = Path.GetRelativePath(path, file).Replace('\\', '/');
-            var header = Encoding.UTF8.GetBytes(relative);
-            sha.TransformBlock(header, 0, header.Length, null, 0);
-            sha.TransformBlock([0], 0, 1, null, 0);
+            sha.AppendData(Encoding.UTF8.GetBytes(relative));
+            sha.AppendData(separator);
 
-            var length = BitConverter.GetBytes(new FileInfo(file).Length);
-            sha.TransformBlock(length, 0, length.Length, null, 0);
-            sha.TransformBlock([0], 0, 1, null, 0);
+            sha.AppendData(BitConverter.GetBytes(new FileInfo(file).Length));
+            sha.AppendData(separator);
 
-            using var stream = File.OpenRead(file);
+            await using var stream = new FileStream(
+                file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                bufferSize: 81920, FileOptions.SequentialScan | FileOptions.Asynchronous);
             var buffer = new byte[81920];
             int read;
-            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
-                sha.TransformBlock(buffer, 0, read, null, 0);
+            while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+                sha.AppendData(buffer.AsSpan(0, read));
 
-            sha.TransformBlock([0], 0, 1, null, 0);
+            sha.AppendData(separator);
         }
 
-        sha.TransformFinalBlock([], 0, 0);
-        return Convert.ToHexString(sha.Hash ?? []);
+        return Convert.ToHexString(sha.GetHashAndReset());
     }
 }

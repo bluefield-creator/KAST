@@ -5,6 +5,14 @@ namespace KAST.Infrastructure.Data;
 
 public class KastDbContext : DbContext
 {
+    /// <summary>
+    /// Serializes SQLite writes within this process to avoid SQLITE_BUSY churn
+    /// under WAL. Deliberately process-global (not per connection string):
+    /// production uses a single database, and cross-process contention is
+    /// handled by the busy_timeout pragma, not this lock. The sync
+    /// <see cref="SaveChanges(bool)"/> path blocks the calling thread — rare,
+    /// and acceptable for the few sync call sites that remain.
+    /// </summary>
     private static readonly SemaphoreSlim SqliteWriteLock = new(1, 1);
 
     public KastDbContext(DbContextOptions<KastDbContext> options) : base(options)

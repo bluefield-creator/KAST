@@ -7,18 +7,45 @@ namespace KAST.Tests;
 
 public class UserAccountServiceTests
 {
+    [Theory]
+    [InlineData("short")]                 // far below minimum
+    [InlineData("elevencharss")]          // 12 chars but single character class
+    [InlineData("password12345")]         // 13 chars, only two classes
+    public async Task CreateAdmin_WeakPassword_IsRejected(string password)
+    {
+        using var db = DbHelper.CreateInMemoryDb();
+        var sut = new UserAccountService(db, BuildConfig());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.CreateInitialAdminAsync("admin", password));
+    }
+
+    [Theory]
+    [InlineData("Compliant-Pw12")]              // 14 chars, 4 classes
+    [InlineData("averylongpassphraseisfine")]   // 16+ chars, one class
+    public async Task CreateAdmin_StrongPassword_IsAccepted(string password)
+    {
+        using var db = DbHelper.CreateInMemoryDb();
+        var sut = new UserAccountService(db, BuildConfig());
+
+        var user = await sut.CreateInitialAdminAsync("admin", password);
+
+        Assert.NotNull(await sut.ValidateCredentialsAsync("admin", password));
+        Assert.NotEmpty(user.PasswordHash);
+    }
+
     [Fact]
     public async Task CreateInitialAdmin_PersistsUserAndHash()
     {
         using var db = DbHelper.CreateInMemoryDb();
         var sut = new UserAccountService(db, BuildConfig());
 
-        var user = await sut.CreateInitialAdminAsync("admin", "secret");
+        var user = await sut.CreateInitialAdminAsync("admin", "Sup3r-Secret-Pw!");
 
         Assert.True(user.Id > 0);
         Assert.Equal("admin", user.Username);
         Assert.Equal("ADMIN", user.NormalizedUsername);
-        Assert.DoesNotContain("secret", user.PasswordHash);
+        Assert.DoesNotContain("Sup3r-Secret-Pw!", user.PasswordHash);
         Assert.True(await sut.HasAnyUsersAsync());
     }
 
@@ -28,10 +55,10 @@ public class UserAccountServiceTests
         using var db = DbHelper.CreateInMemoryDb();
         var sut = new UserAccountService(db, BuildConfig());
 
-        await sut.CreateInitialAdminAsync("admin", "secret");
+        await sut.CreateInitialAdminAsync("admin", "Sup3r-Secret-Pw!");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sut.CreateAdminAsync("ADMIN", "other-secret"));
+            () => sut.CreateAdminAsync("ADMIN", "Other-Secret-Pw1!"));
     }
 
     [Fact]
@@ -39,10 +66,10 @@ public class UserAccountServiceTests
     {
         using var db = DbHelper.CreateInMemoryDb();
         var sut = new UserAccountService(db, BuildConfig());
-        await sut.CreateInitialAdminAsync("admin", "secret");
+        await sut.CreateInitialAdminAsync("admin", "Sup3r-Secret-Pw!");
 
         var invalid = await sut.ValidateCredentialsAsync("admin", "wrong");
-        var valid = await sut.ValidateCredentialsAsync("admin", "secret");
+        var valid = await sut.ValidateCredentialsAsync("admin", "Sup3r-Secret-Pw!");
 
         Assert.Null(invalid);
         Assert.NotNull(valid);
@@ -76,7 +103,7 @@ public class UserAccountServiceTests
     {
         using var db = DbHelper.CreateInMemoryDb();
         var sut = new UserAccountService(db, BuildConfig());
-        await sut.CreateInitialAdminAsync("local-admin", "secret");
+        await sut.CreateInitialAdminAsync("local-admin", "Sup3r-Secret-Pw!");
 
         var user = await sut.ProvisionOidcAdminAsync(new OidcProvisioningRequest(
             "https://auth.example.test",
@@ -137,7 +164,9 @@ public class UserAccountServiceTests
             ["KAST Admins"]));
 
         Assert.Equal(first.Id, second.Id);
-        Assert.Equal("New Name", second.Username);
+        // A later login must not rename the account from the IdP display name —
+        // that would discard any rename made locally in KAST.
+        Assert.Equal("Old Name", second.Username);
         Assert.Single(db.Users);
     }
 
@@ -196,6 +225,10 @@ public class UserAccountServiceTests
         provider.Add("linux-admin", "system-secret", account);
         var sut = new UserAccountService(db, BuildConfig(), provider);
 
+        // Seeding is SettingsService's job; provide the row this test toggles.
+        db.Settings.Add(new KAST.Core.Models.KastSettings());
+        await db.SaveChangesAsync();
+
         await sut.AllowSystemAccountAsync(account);
         Assert.Null(await sut.ValidateSystemCredentialsAsync("linux-admin", "system-secret"));
 
@@ -213,13 +246,13 @@ public class UserAccountServiceTests
     {
         using var db = DbHelper.CreateInMemoryDb();
         var sut = new UserAccountService(db, BuildConfig());
-        var user = await sut.CreateInitialAdminAsync("admin", "secret");
+        var user = await sut.CreateInitialAdminAsync("admin", "Sup3r-Secret-Pw!");
 
-        var updated = await sut.UpdateProfileAsync(user.Id, "root", "new-secret");
+        var updated = await sut.UpdateProfileAsync(user.Id, "root", "New-Secret-Pw123!");
 
         Assert.Equal("root", updated.Username);
-        Assert.Null(await sut.ValidateCredentialsAsync("root", "secret"));
-        Assert.NotNull(await sut.ValidateCredentialsAsync("root", "new-secret"));
+        Assert.Null(await sut.ValidateCredentialsAsync("root", "Sup3r-Secret-Pw!"));
+        Assert.NotNull(await sut.ValidateCredentialsAsync("root", "New-Secret-Pw123!"));
     }
 
     [Fact]
@@ -233,7 +266,7 @@ public class UserAccountServiceTests
             var sut = new UserAccountService(db, BuildConfig(Path.Join(tempRoot, "kast.db")));
 
             await using var image = new MemoryStream([1, 2, 3]);
-            var user = await sut.CreateInitialAdminAsync("admin", "secret", image, "avatar.png", image.Length);
+            var user = await sut.CreateInitialAdminAsync("admin", "Sup3r-Secret-Pw!", image, "avatar.png", image.Length);
 
             Assert.False(string.IsNullOrWhiteSpace(user.AvatarFileName));
             var avatarPath = await sut.GetAvatarPathAsync(user.AvatarFileName!);
@@ -241,7 +274,7 @@ public class UserAccountServiceTests
 
             await using var invalid = new MemoryStream([1, 2, 3]);
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => sut.CreateAdminAsync("other", "secret", invalid, "avatar.gif", invalid.Length));
+                () => sut.CreateAdminAsync("other", "Sup3r-Secret-Pw!", invalid, "avatar.gif", invalid.Length));
         }
         finally
         {

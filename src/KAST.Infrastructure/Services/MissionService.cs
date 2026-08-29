@@ -26,13 +26,15 @@ public class MissionService(
 
     private static void ReleaseInstanceLock(int instanceId, SemaphoreSlim gate)
     {
-        gate.Release();
-
         // Keep the lock cache bounded: once it outgrows its cap, evict idle
-        // entries. Removal is reference-checked and serialized with acquisition,
-        // so a gate another caller is about to use is never evicted.
+        // entries. The Release itself happens inside the same lock that guards
+        // acquisition — releasing first opened a window where a waiter obtained
+        // this gate, we evicted it, and a third caller created a second gate for
+        // the same instance, breaking mutual exclusion.
         lock (InstanceLocks)
         {
+            gate.Release();
+
             if (InstanceLocks.Count <= MaxInstanceLocks || gate.CurrentCount != 1)
                 return;
 
@@ -42,6 +44,8 @@ public class MissionService(
 
     public async Task<IReadOnlyList<Mission>> GetMissionsForInstanceAsync(int instanceId, CancellationToken ct = default)
     {
+        // Deliberate side effect: listing missions reconciles DB rows against the
+        // mpmissions directory (may hash new PBOs and rename/delete duplicates).
         await ReconcileMissionFilesAsync(instanceId, ct);
 
         return await db.Missions
@@ -100,11 +104,15 @@ public class MissionService(
             }
 
             var fileInfo = new FileInfo(targetPath);
-            var mission = await db.Missions
+            // Match case-insensitively in memory (consistent with reconcile) —
+            // SQL lower() bypassed the (ServerInstanceId, FileName) index and was
+            // culture-sensitive.
+            var instanceMissions = await db.Missions
                 .Include(m => m.TagAssignments)
-                .FirstOrDefaultAsync(
-                    m => m.ServerInstanceId == instanceId && m.FileName.ToLower() == safeName.ToLower(),
-                    ct);
+                .Where(m => m.ServerInstanceId == instanceId)
+                .ToListAsync(ct);
+            var mission = instanceMissions.FirstOrDefault(
+                m => string.Equals(m.FileName, safeName, StringComparison.OrdinalIgnoreCase));
 
             if (mission == null)
             {
@@ -169,8 +177,18 @@ public class MissionService(
         {
             if (!string.IsNullOrEmpty(mission.PhysicalPath) && File.Exists(mission.PhysicalPath))
             {
-                File.Delete(mission.PhysicalPath);
-                logger.LogInformation("Deleted mission file: {Path}", mission.PhysicalPath);
+                // Best effort: a running server can hold the .pbo open on Windows.
+                // The DB row is removed regardless; an orphaned file is picked up
+                // by the next reconcile pass once the lock is released.
+                try
+                {
+                    File.Delete(mission.PhysicalPath);
+                    logger.LogInformation("Deleted mission file: {Path}", mission.PhysicalPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogWarning(ex, "Mission file is in use and could not be deleted; removing DB row only");
+                }
             }
 
             db.Missions.Remove(mission);

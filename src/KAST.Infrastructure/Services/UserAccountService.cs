@@ -13,7 +13,8 @@ public class UserAccountService(
     KastDbContext db,
     IConfiguration configuration,
     ISystemAccountProvider? systemAccounts = null,
-    ISettingsService? settingsService = null) : IUserAccountService
+    ISettingsService? settingsService = null,
+    Microsoft.Extensions.Hosting.IHostEnvironment? hostEnvironment = null) : IUserAccountService
 {
     private const int MaxAvatarBytes = 2 * 1024 * 1024;
     private const string DefaultOidcDisplayName = "OpenID Connect";
@@ -123,8 +124,8 @@ public class UserAccountService(
 
         if (existing is not null)
         {
-            existing.Username = await GetUniqueUsernameAsync(displayName, existing.Id, ct);
-            existing.NormalizedUsername = NormalizeUsername(existing.Username);
+            // Keep the local username: renaming on every login from the IdP display
+            // name silently discarded any rename made in KAST.
             existing.AuthSource = KastUser.OidcAuthSource;
             existing.ExternalProvider = providerName;
             existing.LastLoginAt = DateTime.UtcNow;
@@ -226,7 +227,15 @@ public class UserAccountService(
                  u.AuthSource == KastUser.LocalAuthSource &&
                  u.IsActive,
             ct);
-        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash) || !VerifyPassword(password, user.PasswordHash))
+        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash))
+        {
+            // Burn the same PBKDF2 cost as a real verification so response time
+            // does not reveal whether the username exists.
+            VerifyPassword(password, DummyPasswordHash);
+            return null;
+        }
+
+        if (!VerifyPassword(password, user.PasswordHash))
             return null;
 
         user.LastLoginAt = DateTime.UtcNow;
@@ -332,16 +341,20 @@ public class UserAccountService(
 
     private string GetAvatarDirectory()
     {
+        // Relative paths resolve against the content root, not the CWD — the CWD
+        // differs between a console launch and a Windows-service launch.
+        var root = hostEnvironment?.ContentRootPath ?? AppContext.BaseDirectory;
+
         var configured = configuration["Kast:AvatarDirectory"];
         if (!string.IsNullOrWhiteSpace(configured))
-            return configured;
+            return Path.IsPathFullyQualified(configured) ? configured : Path.GetFullPath(configured, root);
 
         var connectionString = configuration.GetConnectionString("Default") ?? string.Empty;
         var dbPath = ExtractSqliteDataSource(connectionString);
         var dbDirectory = string.IsNullOrWhiteSpace(dbPath) ? null : Path.GetDirectoryName(dbPath);
 
         return string.IsNullOrWhiteSpace(dbDirectory)
-            ? Path.GetFullPath("./avatars")
+            ? Path.GetFullPath("avatars", root)
             : Path.Join(dbDirectory, "avatars");
     }
 
@@ -421,11 +434,11 @@ public class UserAccountService(
         if (settingsService is not null)
             return await settingsService.GetSettingsAsync(ct);
 
+        // Fallback for tests that construct the service without ISettingsService.
+        // Deliberately read-only: seeding belongs to SettingsService alone, so two
+        // code paths can never race to insert (or drift apart in) the settings row.
         var settings = await db.Settings.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
-        if (settings is not null)
-            return settings;
-
-        settings = new KastSettings
+        return settings ?? new KastSettings
         {
             ModsDirectory = configuration["Kast:ModsDirectory"] ?? "./mods",
             ServersDirectory = configuration["Kast:ServersDirectory"] ?? "./servers",
@@ -433,9 +446,6 @@ public class UserAccountService(
             UpdateChannelId = configuration["Kast:UpdateChannelId"] ?? "stable",
             AutoUpdateCheckEnabled = !bool.TryParse(configuration["Kast:AutoUpdateCheckEnabled"], out var autoCheck) || autoCheck
         };
-        db.Settings.Add(settings);
-        await db.SaveChangesAsync(ct);
-        return settings;
     }
 
     private static void ValidateSystemAccount(SystemAccount account)
@@ -463,10 +473,30 @@ public class UserAccountService(
     {
         if (string.IsNullOrWhiteSpace(password))
             throw new InvalidOperationException("Password is required.");
+
+        // Applied only when setting a password (create/change), never on login.
+        if (password.Length >= 16)
+            return;
+
+        if (password.Length < 12)
+            throw new InvalidOperationException("Password must be at least 12 characters (16+ if it does not mix character types).");
+
+        var classes = 0;
+        if (password.Any(char.IsLower)) classes++;
+        if (password.Any(char.IsUpper)) classes++;
+        if (password.Any(char.IsDigit)) classes++;
+        if (password.Any(c => !char.IsLetterOrDigit(c))) classes++;
+
+        if (classes < 3)
+            throw new InvalidOperationException("Password must contain at least three of: lowercase, uppercase, digits, symbols (or be 16+ characters).");
     }
 
     private static string NormalizeUsername(string username)
         => username.Trim().ToUpperInvariant();
+
+    // A syntactically valid hash of a random password, used to equalize timing
+    // when the username does not exist.
+    private static readonly string DummyPasswordHash = HashPassword(Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)));
 
     private static string HashPassword(string password)
     {

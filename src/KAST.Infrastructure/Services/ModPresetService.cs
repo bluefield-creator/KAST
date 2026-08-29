@@ -70,10 +70,13 @@ public class ModPresetService(
         db.ModPresets.Add(preset);
         await db.SaveChangesAsync(ct);
 
-        // Parse the HTML to extract workshop IDs and names
+        // Parse the HTML to extract workshop IDs and names. A match timeout keeps
+        // a hostile or malformed launcher export from pinning the request thread
+        // in catastrophic backtracking.
         var matches = System.Text.RegularExpressions.Regex.Matches(rawHtml,
             @"<tr\s+data-type=""ModContainer"">(.*?)</tr>",
-            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+            TimeSpan.FromSeconds(2));
 
         foreach (var rowHtml in matches
                      .Cast<System.Text.RegularExpressions.Match>()
@@ -81,7 +84,8 @@ public class ModPresetService(
         {
             var idMatch = System.Text.RegularExpressions.Regex.Match(rowHtml,
                 @"[?&]id=(\d+)",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+                TimeSpan.FromSeconds(2));
 
             if (!idMatch.Success || !long.TryParse(idMatch.Groups[1].Value, out var workshopId))
                 continue;
@@ -129,14 +133,14 @@ public class ModPresetService(
             .FirstOrDefaultAsync(p => p.Id == presetId, ct)
             ?? throw new InvalidOperationException($"Preset {presetId} not found");
 
-        // Remove all existing mod assignments for this instance
+        // Diff against the current assignments instead of remove-all + re-add:
+        // deleting and inserting the same (ServerInstanceId, SteamModId) composite
+        // key in one SaveChanges is an EF statement-ordering hazard.
         var existingMods = await db.ServerInstanceMods
             .Where(m => m.ServerInstanceId == instanceId)
-            .ToListAsync(ct);
+            .ToDictionaryAsync(m => m.SteamModId, ct);
 
-        db.ServerInstanceMods.RemoveRange(existingMods);
-
-        // Apply preset entries
+        var applied = new HashSet<int>();
         foreach (var entry in preset.Entries.OrderBy(e => e.LoadOrder))
         {
             // Verify the mod still exists
@@ -147,15 +151,27 @@ public class ModPresetService(
                 continue;
             }
 
-            db.ServerInstanceMods.Add(new ServerInstanceMod
+            applied.Add(entry.SteamModId);
+            if (existingMods.TryGetValue(entry.SteamModId, out var current))
             {
-                ServerInstanceId = instanceId,
-                SteamModId = entry.SteamModId,
-                IsClientSide = entry.IsClientSide,
-                IsServerSide = entry.IsServerSide,
-                LoadOrder = entry.LoadOrder
-            });
+                current.IsClientSide = entry.IsClientSide;
+                current.IsServerSide = entry.IsServerSide;
+                current.LoadOrder = entry.LoadOrder;
+            }
+            else
+            {
+                db.ServerInstanceMods.Add(new ServerInstanceMod
+                {
+                    ServerInstanceId = instanceId,
+                    SteamModId = entry.SteamModId,
+                    IsClientSide = entry.IsClientSide,
+                    IsServerSide = entry.IsServerSide,
+                    LoadOrder = entry.LoadOrder
+                });
+            }
         }
+
+        db.ServerInstanceMods.RemoveRange(existingMods.Values.Where(m => !applied.Contains(m.SteamModId)));
 
         preset.LastAppliedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);

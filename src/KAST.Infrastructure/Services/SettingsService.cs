@@ -9,8 +9,32 @@ namespace KAST.Infrastructure.Services;
 
 public class SettingsService(KastDbContext db, IConfiguration configuration, IHostEnvironment? hostEnvironment = null) : ISettingsService
 {
+    // Single-flights first-run seeding: two concurrent requests both observing an
+    // empty table would each insert a settings row.
+    private static readonly SemaphoreSlim SeedLock = new(1, 1);
+
     public async Task<KastSettings> GetSettingsAsync(CancellationToken ct = default)
     {
+        var settings = await db.Settings.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
+        if (settings == null)
+        {
+            await SeedLock.WaitAsync(ct);
+            try
+            {
+                settings = await SeedSettingsLockedAsync(ct);
+            }
+            finally
+            {
+                SeedLock.Release();
+            }
+        }
+
+        return BuildEffectiveSettings(settings);
+    }
+
+    private async Task<KastSettings> SeedSettingsLockedAsync(CancellationToken ct)
+    {
+        // Re-check inside the lock — another caller may have just seeded
         var settings = await db.Settings.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
         if (settings == null)
         {
@@ -32,6 +56,11 @@ public class SettingsService(KastDbContext db, IConfiguration configuration, IHo
             await db.SaveChangesAsync(ct);
         }
 
+        return settings;
+    }
+
+    private KastSettings BuildEffectiveSettings(KastSettings settings)
+    {
         var effective = new KastSettings
         {
             Id = settings.Id,

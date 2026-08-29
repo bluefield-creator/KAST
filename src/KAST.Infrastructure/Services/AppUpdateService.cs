@@ -173,48 +173,91 @@ public partial class AppUpdateService : IAppUpdateService
 
         progress?.Report(new(AppUpdateStage.Preparing, null, "Preparing update download..."));
 
+        // Take one consistent snapshot of the release for both the archive and its
+        // checksum — the dev/nightly channels use a moving tag, and a republish
+        // between download and verify would otherwise fail the checksum spuriously.
+        var release = await FetchReleaseAsync(check.Channel, ct);
+        var rawAsset = release?.Assets.FirstOrDefault(a =>
+            a.Name.Equals(check.Asset.Name, StringComparison.OrdinalIgnoreCase));
+        if (release is null || rawAsset is null)
+            return new(false, "The release changed while preparing the download. Check for updates again.", null, null, false);
+
+        var downloadAsset = ToAsset(rawAsset);
+
         var updateId = $"{check.Channel.Id}-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
         var updatesRoot = Path.Combine(AppContext.BaseDirectory, "updates");
         var updateRoot = Path.Combine(updatesRoot, updateId);
-        var downloadPath = Path.Combine(updateRoot, check.Asset.Name);
+        var downloadPath = Path.Combine(updateRoot, downloadAsset.Name);
         var extractPath = Path.Combine(updateRoot, "extracted");
 
         Directory.CreateDirectory(updateRoot);
         Directory.CreateDirectory(extractPath);
 
-        progress?.Report(new(AppUpdateStage.Downloading, 0, $"Downloading {check.Asset.Name}..."));
-        await DownloadFileAsync(check.Asset.DownloadUrl, downloadPath, check.Asset.SizeBytes, progress, ct);
-
-        progress?.Report(new(AppUpdateStage.Verifying, null, "Verifying downloaded archive..."));
-        var checksumVerified = await TryVerifyChecksumAsync(check.Channel, check.Asset, downloadPath, ct);
-        if (!checksumVerified)
+        try
         {
-            return new(
-                false,
-                "Update checksum asset was not found. The update was downloaded but will not be staged.",
-                null,
-                null,
-                false);
+            progress?.Report(new(AppUpdateStage.Downloading, 0, $"Downloading {downloadAsset.Name}..."));
+            await DownloadFileAsync(downloadAsset.DownloadUrl, downloadPath, downloadAsset.SizeBytes, progress, ct);
+
+            progress?.Report(new(AppUpdateStage.Verifying, null, "Verifying downloaded archive..."));
+            var checksumVerified = await TryVerifyChecksumAsync(check.Channel, downloadAsset, downloadPath, ct, release);
+            if (!checksumVerified)
+            {
+                TryDeleteDirectory(updateRoot);
+                return new(
+                    false,
+                    "Update checksum asset was not found. The update was downloaded but will not be staged.",
+                    null,
+                    null,
+                    false);
+            }
+
+            progress?.Report(new(AppUpdateStage.Extracting, null, "Extracting update archive..."));
+            ExtractArchive(downloadPath, extractPath);
+
+            var markerPath = Path.Combine(updateRoot, "staged.txt");
+            await File.WriteAllTextAsync(markerPath, check.Channel.Id, ct);
+
+            progress?.Report(new(AppUpdateStage.Staged, 100, "Update staged."));
+            return new(true, "Update downloaded and verified.", updateId, extractPath, checksumVerified);
         }
+        catch
+        {
+            // Never leave a half-downloaded/half-extracted staging directory behind
+            TryDeleteDirectory(updateRoot);
+            throw;
+        }
+    }
 
-        progress?.Report(new(AppUpdateStage.Extracting, null, "Extracting update archive..."));
-        ExtractArchive(downloadPath, extractPath);
-
-        var markerPath = Path.Combine(updateRoot, "staged.txt");
-        await File.WriteAllTextAsync(markerPath, check.Channel.Id, ct);
-
-        progress?.Report(new(AppUpdateStage.Staged, 100, "Update staged."));
-        return new(true, "Update downloaded and verified.", updateId, extractPath, checksumVerified);
+    private void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not clean up update staging directory");
+        }
     }
 
     public async Task<AppUpdateApplyResult> ApplyStagedUpdateAsync(string stagedUpdateId, CancellationToken ct = default)
     {
         if (isDocker())
             return new AppUpdateApplyResult(false, "Docker deployments are notify-only.");
-        if (string.IsNullOrWhiteSpace(stagedUpdateId) || stagedUpdateId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        // GetInvalidFileNameChars is not a traversal defence: on Linux it contains
+        // only NUL and '/', so ".." passes. Require a plain file name plus an
+        // explicit containment check on the combined path.
+        if (string.IsNullOrWhiteSpace(stagedUpdateId)
+            || stagedUpdateId != Path.GetFileName(stagedUpdateId)
+            || stagedUpdateId is "." or "..")
             return new AppUpdateApplyResult(false, "Invalid staged update id.");
 
-        var updateRoot = Path.Combine(AppContext.BaseDirectory, "updates", stagedUpdateId);
+        var updatesRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "updates"));
+        var updateRoot = Path.GetFullPath(Path.Combine(updatesRoot, stagedUpdateId));
+        if (!updateRoot.StartsWith(updatesRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return new AppUpdateApplyResult(false, "Invalid staged update id.");
+
         var extractPath = Path.Combine(updateRoot, "extracted");
         if (!Directory.Exists(extractPath))
             return new AppUpdateApplyResult(false, "Staged update files were not found.");
@@ -439,6 +482,8 @@ public partial class AppUpdateService : IAppUpdateService
 
         var buffer = new byte[1024 * 128];
         long downloaded = 0;
+        var lastReport = System.Diagnostics.Stopwatch.StartNew();
+        double lastPercent = -1;
         while (true)
         {
             var read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
@@ -449,8 +494,14 @@ public partial class AppUpdateService : IAppUpdateService
             downloaded += read;
             if (totalBytes > 0)
             {
+                // Throttle: one UI update per 100 ms or 1% — not one per 128 KB chunk
                 var percent = Math.Round(downloaded * 100d / totalBytes, 1);
-                progress?.Report(new(AppUpdateStage.Downloading, percent, $"Downloaded {FormatBytes(downloaded)} of {FormatBytes(totalBytes)}"));
+                if (lastReport.ElapsedMilliseconds >= 100 || percent - lastPercent >= 1 || downloaded == totalBytes)
+                {
+                    progress?.Report(new(AppUpdateStage.Downloading, percent, $"Downloaded {FormatBytes(downloaded)} of {FormatBytes(totalBytes)}"));
+                    lastReport.Restart();
+                    lastPercent = percent;
+                }
             }
         }
     }
@@ -459,9 +510,13 @@ public partial class AppUpdateService : IAppUpdateService
         AppUpdateChannel channel,
         AppUpdateAsset asset,
         string archivePath,
-        CancellationToken ct)
+        CancellationToken ct,
+        GitHubRelease? release = null)
     {
-        var release = await FetchReleaseAsync(channel, ct);
+        // Reuse the release the caller already fetched when available. The dev and
+        // nightly channels use a moving tag, so re-fetching after the download can
+        // return a *different* release whose checksum never matches the archive.
+        release ??= await FetchReleaseAsync(channel, ct);
         var checksumAsset = release?.Assets.FirstOrDefault(a =>
             a.Name.Equals(asset.Name + ".sha256", StringComparison.OrdinalIgnoreCase) ||
             a.Name.Equals(Path.GetFileNameWithoutExtension(asset.Name) + ".sha256", StringComparison.OrdinalIgnoreCase));
@@ -550,14 +605,18 @@ if errorlevel 1 (
 """
             : string.Empty;
 
+        // Quote the assignments (protects spaces, '&' and '^') and double '%'
+        // (still expanded inside quotes) so paths cannot break out of the script.
+        static string EscapeCmd(string value) => value.Replace("%", "%%");
+
         return $$"""
 @echo off
 setlocal
-set PID={{pid}}
-set SRC={{sourcePath}}
-set DEST={{destinationPath}}
-set BACKUP={{backupPath}}
-set EXE={{processPath}}
+set "PID={{pid}}"
+set "SRC={{EscapeCmd(sourcePath)}}"
+set "DEST={{EscapeCmd(destinationPath)}}"
+set "BACKUP={{EscapeCmd(backupPath)}}"
+set "EXE={{EscapeCmd(processPath)}}"
 {{serviceStopBlock}}:wait_pid
 tasklist /FI "PID eq %PID%" | find "%PID%" >nul
 if not errorlevel 1 (

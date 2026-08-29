@@ -47,7 +47,7 @@ public class AccountAuthEndpointTests
         using var setupContent = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["username"] = "admin",
-            ["password"] = "secret"
+            ["password"] = "Sup3r-Secret-Pw!"
         });
         var setup = await app.Client.PostAsync("/auth/setup", setupContent);
         app.UseCookieFrom(setup);
@@ -64,7 +64,7 @@ public class AccountAuthEndpointTests
     public async Task Login_WithInvalidAndValidCredentials_BehavesCorrectly()
     {
         await using var app = await AuthApp.CreateAsync();
-        await app.CreateUserAsync("admin", "secret");
+        await app.CreateUserAsync("admin", "Sup3r-Secret-Pw!");
 
         using var invalidContent = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -77,7 +77,7 @@ public class AccountAuthEndpointTests
         using var validContent = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["username"] = "admin",
-            ["password"] = "secret",
+            ["password"] = "Sup3r-Secret-Pw!",
             ["returnUrl"] = "/"
         });
         var valid = await app.Client.PostAsync("/auth/login", validContent);
@@ -93,7 +93,7 @@ public class AccountAuthEndpointTests
     public async Task Api_RequiresAuthentication()
     {
         await using var app = await AuthApp.CreateAsync();
-        await app.CreateUserAsync("admin", "secret");
+        await app.CreateUserAsync("admin", "Sup3r-Secret-Pw!");
 
         var response = await app.Client.GetAsync("/api/mods/");
 
@@ -104,12 +104,12 @@ public class AccountAuthEndpointTests
     public async Task Logout_ClearsAuthenticatedAccess()
     {
         await using var app = await AuthApp.CreateAsync();
-        await app.CreateUserAsync("admin", "secret");
+        await app.CreateUserAsync("admin", "Sup3r-Secret-Pw!");
 
         using var loginContent = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["username"] = "admin",
-            ["password"] = "secret"
+            ["password"] = "Sup3r-Secret-Pw!"
         });
         var login = await app.Client.PostAsync("/auth/login", loginContent);
         app.UseCookieFrom(login);
@@ -128,12 +128,12 @@ public class AccountAuthEndpointTests
     public async Task StaleCookie_WhenUserNoLongerExists_IsRejected()
     {
         await using var app = await AuthApp.CreateAsync();
-        await app.CreateUserAsync("admin", "secret");
+        await app.CreateUserAsync("admin", "Sup3r-Secret-Pw!");
 
         using var loginContent = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["username"] = "admin",
-            ["password"] = "secret"
+            ["password"] = "Sup3r-Secret-Pw!"
         });
         var login = await app.Client.PostAsync("/auth/login", loginContent);
         app.UseCookieFrom(login);
@@ -162,7 +162,7 @@ public class AccountAuthEndpointTests
         using var loginContent = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["username"] = "admin",
-            ["password"] = "secret",
+            ["password"] = "Sup3r-Secret-Pw!",
             ["returnUrl"] = "/settings"
         });
         var response = await app.Client.PostAsync("/auth/login", loginContent);
@@ -213,7 +213,7 @@ public class AccountAuthEndpointTests
     {
         var provider = BuildSystemProvider();
         await using var app = await AuthApp.CreateAsync(systemProvider: provider);
-        await app.CreateUserAsync("admin", "secret");
+        await app.CreateUserAsync("admin", "Sup3r-Secret-Pw!");
         await app.AllowSystemUserAsync(SystemAccount);
 
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
@@ -234,7 +234,7 @@ public class AccountAuthEndpointTests
         await using var app = await AuthApp.CreateAsync(
             systemProvider: provider,
             appSettings: new KastSettings { ModsDirectory = "/tmp/kast-mods", SystemAuthEnabled = true });
-        await app.CreateUserAsync("admin", "secret");
+        await app.CreateUserAsync("admin", "Sup3r-Secret-Pw!");
 
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -254,7 +254,7 @@ public class AccountAuthEndpointTests
         await using var app = await AuthApp.CreateAsync(
             systemProvider: provider,
             appSettings: new KastSettings { ModsDirectory = "/tmp/kast-mods", SystemAuthEnabled = true });
-        await app.CreateUserAsync("admin", "secret");
+        await app.CreateUserAsync("admin", "Sup3r-Secret-Pw!");
         await app.AllowSystemUserAsync(SystemAccount);
 
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>

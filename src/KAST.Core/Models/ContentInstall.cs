@@ -68,10 +68,18 @@ public class ContentInstallState
     public required string Label { get; init; }
     public List<ContentStep> Steps { get; init; } = [];
 
-    public bool IsDownloading { get; set; }
-    public bool IsComplete { get; set; }
-    public string? ErrorMessage { get; set; }
-    public string? StatusMessage { get; private set; }
+    // Written by install worker threads and read concurrently by Blazor
+    // components and the download queue — volatile backing keeps the flag
+    // reads from being stale across threads.
+    private volatile bool _isDownloading;
+    private volatile bool _isComplete;
+    private volatile string? _errorMessage;
+    private volatile string? _statusMessage;
+
+    public bool IsDownloading { get => _isDownloading; set => _isDownloading = value; }
+    public bool IsComplete { get => _isComplete; set => _isComplete = value; }
+    public string? ErrorMessage { get => _errorMessage; set => _errorMessage = value; }
+    public string? StatusMessage { get => _statusMessage; private set => _statusMessage = value; }
 
     /// <summary>For workshop mod installs: the manifest ID used during the download. Set by SteamModInstaller.</summary>
     public ulong InstalledManifestId { get; set; }

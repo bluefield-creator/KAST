@@ -707,8 +707,27 @@ public class ServerInstanceService(
             if (instance.ArmaProfileContent != null)
             {
                 var profileName = $"server_{instance.Id}";
-                var path = Path.Join(configDir, $"{profileName}.Arma3Profile");
-                File.WriteAllText(path, instance.ArmaProfileContent);
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    // Read via the "Arma 3 - Other Profiles" symlink as <configDir>/<name>.Arma3Profile
+                    var path = Path.Join(configDir, $"{profileName}.Arma3Profile");
+                    File.WriteAllText(path, instance.ArmaProfileContent);
+                }
+                else
+                {
+                    // With -profiles=<configDir> -name=<name> the server reads
+                    // <configDir>\Users\<name>\<name>.Arma3Profile, not the profiles root.
+                    var profileDir = Path.Join(configDir, "Users", profileName);
+                    Directory.CreateDirectory(profileDir);
+                    File.WriteAllText(Path.Join(profileDir, $"{profileName}.Arma3Profile"), instance.ArmaProfileContent);
+
+                    var stalePath = Path.Join(configDir, $"{profileName}.Arma3Profile");
+                    if (File.Exists(stalePath))
+                    {
+                        try { File.Delete(stalePath); }
+                        catch (IOException) { /* best effort; the server ignores this location anyway */ }
+                    }
+                }
             }
         }
         catch (IOException ex)

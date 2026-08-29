@@ -4,6 +4,7 @@
 @inject KAST.UI.Services.ServerConsoleStore ConsoleStore
 @inject KAST.UI.Services.ServerRuntimeEventStore RuntimeEventStore
 @inject KastInternalUrlProvider InternalUrls
+@inject KAST.UI.Services.InternalHubTokenService HubToken
 @inject ILogger<MonitorTab> Logger
 @inject ISnackbar Snackbar
 
@@ -215,7 +216,8 @@
         try
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(InternalUrls.GetMonitoringHubUri())
+                .WithUrl(InternalUrls.GetMonitoringHubUri(), options =>
+                    options.Headers.Add(KAST.UI.Services.InternalHubAuthenticationDefaults.HeaderName, HubToken.Token))
                 .WithAutomaticReconnect()
                 .Build();
 

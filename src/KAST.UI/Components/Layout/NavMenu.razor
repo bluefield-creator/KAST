@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.SignalR.Client
 @inject NavigationManager Nav
 @inject KastInternalUrlProvider InternalUrls
+@inject KAST.UI.Services.InternalHubTokenService HubToken
 @inject ILogger<NavMenu> Logger
 @inject IServerInstanceService ServerService
 @implements IAsyncDisposable
@@ -67,7 +68,8 @@
         try
         {
             _hub = new HubConnectionBuilder()
-                .WithUrl(InternalUrls.GetMonitoringHubUri())
+                .WithUrl(InternalUrls.GetMonitoringHubUri(), options =>
+                    options.Headers.Add(KAST.UI.Services.InternalHubAuthenticationDefaults.HeaderName, HubToken.Token))
                 .WithAutomaticReconnect()
                 .Build();
 

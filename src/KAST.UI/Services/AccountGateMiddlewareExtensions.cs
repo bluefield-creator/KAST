@@ -63,6 +63,7 @@ public static class AccountGateMiddlewareExtensions
             path.StartsWithSegments("/auth") ||
             path.StartsWithSegments("/health") ||
             path.StartsWithSegments("/alive") ||
+            path.StartsWithSegments("/ready") ||
             path.StartsWithSegments("/_blazor") ||
             path.StartsWithSegments("/_framework") ||
             path.StartsWithSegments("/_content"))

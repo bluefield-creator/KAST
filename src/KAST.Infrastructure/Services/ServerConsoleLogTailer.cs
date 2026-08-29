@@ -36,7 +36,7 @@ public sealed class ServerConsoleLogTailer(
             return;
         }
 
-        session.Task = Task.Run(() => FollowAsync(session));
+        session.SetTask(Task.Run(() => FollowAsync(session)));
     }
 
     public async Task StopFollowingAsync(int serverInstanceId)
@@ -103,18 +103,26 @@ public sealed class ServerConsoleLogTailer(
         if (latest.Length <= session.Position)
             return;
 
-        byte[] bytes;
-        await using (var stream = new FileStream(
-                         latest.FullName,
-                         FileMode.Open,
-                         FileAccess.Read,
-                         FileShare.ReadWrite | FileShare.Delete,
-                         bufferSize: 8192,
-                         FileOptions.SequentialScan | FileOptions.Asynchronous))
+        // Drain in bounded blocks: a first attach to a multi-hundred-MB RPT (or a
+        // growth burst) used to allocate the whole delta as one LOH array.
+        const int MaxDrainBlock = 1024 * 1024;
+
+        await using var stream = new FileStream(
+            latest.FullName,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            bufferSize: 8192,
+            FileOptions.SequentialScan | FileOptions.Asynchronous);
+
+        stream.Seek(session.Position, SeekOrigin.Begin);
+
+        while (stream.Position < stream.Length)
         {
-            stream.Seek(session.Position, SeekOrigin.Begin);
-            var length = checked((int)Math.Min(stream.Length - session.Position, int.MaxValue));
-            bytes = new byte[length];
+            ct.ThrowIfCancellationRequested();
+
+            var length = (int)Math.Min(stream.Length - stream.Position, MaxDrainBlock);
+            var bytes = new byte[length];
             var offset = 0;
             while (offset < bytes.Length)
             {
@@ -128,24 +136,24 @@ public sealed class ServerConsoleLogTailer(
                 Array.Resize(ref bytes, offset);
 
             session.Position = stream.Position;
-        }
 
-        if (bytes.Length == 0)
-            return;
+            if (bytes.Length == 0)
+                return;
 
-        var text = session.PendingText + Encoding.UTF8.GetString(bytes);
-        var lines = SplitCompleteLines(text, out var pending);
-        session.PendingText = pending;
+            var text = session.PendingText + Encoding.UTF8.GetString(bytes);
+            var lines = SplitCompleteLines(text, out var pending);
+            session.PendingText = pending;
 
-        foreach (var line in lines)
-        {
-            if (line.Length == 0)
-                continue;
+            foreach (var line in lines)
+            {
+                if (line.Length == 0)
+                    continue;
 
-            var timestamp = DateTime.UtcNow;
-            await broadcaster.BroadcastLogEntryAsync(new LogEntryEvent(session.InstanceId, line, timestamp));
-            foreach (var runtimeEvent in eventDetector.Detect(session.InstanceId, line, timestamp))
-                await broadcaster.BroadcastServerRuntimeEventAsync(runtimeEvent);
+                var timestamp = DateTime.UtcNow;
+                await broadcaster.BroadcastLogEntryAsync(new LogEntryEvent(session.InstanceId, line, timestamp));
+                foreach (var runtimeEvent in eventDetector.Detect(session.InstanceId, line, timestamp))
+                    await broadcaster.BroadcastServerRuntimeEventAsync(runtimeEvent);
+            }
         }
     }
 
@@ -212,11 +220,35 @@ public sealed class ServerConsoleLogTailer(
         public long Position { get; set; }
         public string PendingText { get; set; } = "";
         public CancellationToken Token => _cts.Token;
-        public Task? Task { get; set; }
+        public Task? Task { get; private set; }
+
+        private readonly TaskCompletionSource _taskAssigned = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _disposed;
+
+        public void SetTask(Task task)
+        {
+            Task = task;
+            _taskAssigned.TrySetResult();
+        }
 
         public async Task StopAsync()
         {
-            await _cts.CancelAsync();
+            try
+            {
+                await _cts.CancelAsync();
+            }
+            catch (ObjectDisposedException)
+            {
+                // FollowAsync's finally disposed the session concurrently —
+                // the loop is already winding down.
+            }
+
+            // StartFollowing assigns Task right after making the session visible;
+            // wait for that assignment so Stop reliably observes loop completion.
+            await System.Threading.Tasks.Task.WhenAny(
+                _taskAssigned.Task,
+                System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(1)));
+
             if (Task is not null)
             {
                 try { await Task; }
@@ -224,6 +256,12 @@ public sealed class ServerConsoleLogTailer(
             }
         }
 
-        public void Dispose() => _cts.Dispose();
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+                return;
+
+            _cts.Dispose();
+        }
     }
 }

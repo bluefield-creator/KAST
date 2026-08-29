@@ -238,6 +238,7 @@
                     // console, runtime events and metrics silently stop after
                     // any automatic reconnect until the page is reloaded.
                     await _hubConnection.InvokeAsync("SubscribeToInstance", Instance.Id);
+                    await _hubConnection.InvokeAsync("SubscribeToServerStatus");
                 }
                 catch (Exception ex)
                 {
@@ -349,6 +350,7 @@
             _monitoringConnected = true;
             _monitoringError = null;
             await _hubConnection.InvokeAsync("SubscribeToInstance", Instance.Id);
+            await _hubConnection.InvokeAsync("SubscribeToServerStatus");
         }
         catch (InvalidOperationException ex)
         {

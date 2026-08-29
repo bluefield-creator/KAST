@@ -15,7 +15,7 @@ public class MonitoringService(IProcessManagerService processManager, Data.KastD
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             await ReadLinuxCpuAsync(metrics, ct);
-            ReadLinuxMemory(metrics);
+            await ReadLinuxMemoryAsync(metrics, ct);
             ReadLinuxDisk(metrics);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -74,15 +74,10 @@ public class MonitoringService(IProcessManagerService processManager, Data.KastD
         await Task.Delay(500, ct);
         var stat2 = await File.ReadAllTextAsync("/proc/stat", ct);
 
-        static long[] ParseCpuLine(string statContent)
-        {
-            var line = statContent.Split('\n')[0]; // "cpu  ..."
-            return line.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Skip(1).Select(long.Parse).ToArray();
-        }
-
         var v1 = ParseCpuLine(stat1);
         var v2 = ParseCpuLine(stat2);
+        if (v1.Length < 5 || v2.Length < 5)
+            return; // malformed /proc/stat — leave CPU at 0 rather than throwing
 
         var idle1 = v1[3] + v1[4];
         var idle2 = v2[3] + v2[4];
@@ -95,9 +90,18 @@ public class MonitoringService(IProcessManagerService processManager, Data.KastD
         metrics.CpuUsagePercent = totalDiff == 0 ? 0 : (1.0 - (double)idleDiff / totalDiff) * 100;
     }
 
-    private static void ReadLinuxMemory(HostMetrics metrics)
+    internal static long[] ParseCpuLine(string statContent)
     {
-        var memInfo = File.ReadAllLines("/proc/meminfo");
+        var line = statContent.Split('\n')[0]; // "cpu  ..."
+        return line.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Skip(1)
+            .Select(v => long.TryParse(v, out var parsed) ? parsed : 0)
+            .ToArray();
+    }
+
+    private static async Task ReadLinuxMemoryAsync(HostMetrics metrics, CancellationToken ct)
+    {
+        var memInfo = await File.ReadAllLinesAsync("/proc/meminfo", ct);
         long total = 0, available = 0;
 
         foreach (var line in memInfo)
@@ -115,7 +119,7 @@ public class MonitoringService(IProcessManagerService processManager, Data.KastD
         static long ParseKb(string line)
         {
             var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return parts.Length >= 2 ? long.Parse(parts[1]) : 0;
+            return parts.Length >= 2 && long.TryParse(parts[1], out var kb) ? kb : 0;
         }
     }
 
@@ -129,23 +133,78 @@ public class MonitoringService(IProcessManagerService processManager, Data.KastD
 
     private static async Task ReadWindowsMetricsAsync(HostMetrics metrics, CancellationToken ct)
     {
-        // CPU via simple Process timing (cross-platform fallback)
-        var cpuCounter = Process.GetCurrentProcess();
-        var start = cpuCounter.TotalProcessorTime;
-        await Task.Delay(500, ct);
-        var end = cpuCounter.TotalProcessorTime;
-        metrics.CpuUsagePercent = (end - start).TotalMilliseconds / (500.0 * Environment.ProcessorCount) * 100;
+        // Host CPU via GetSystemTimes delta — the previous implementation measured
+        // KAST's own process time and reported it as host CPU.
+        if (WindowsHostApi.TryGetSystemTimes(out var idle1, out var kernel1, out var user1))
+        {
+            await Task.Delay(500, ct);
+            if (WindowsHostApi.TryGetSystemTimes(out var idle2, out var kernel2, out var user2))
+            {
+                var idleDiff = idle2 - idle1;
+                var totalDiff = (kernel2 - kernel1) + (user2 - user1); // kernel includes idle
+                metrics.CpuUsagePercent = totalDiff == 0 ? 0 : (1.0 - (double)idleDiff / totalDiff) * 100;
+            }
+        }
 
-        // Memory
-        var gcInfo = GC.GetGCMemoryInfo();
-        metrics.TotalMemoryBytes = gcInfo.TotalAvailableMemoryBytes;
-        metrics.UsedMemoryBytes = metrics.TotalMemoryBytes - gcInfo.TotalAvailableMemoryBytes + Process.GetCurrentProcess().WorkingSet64;
-        metrics.MemoryUsagePercent = metrics.TotalMemoryBytes == 0 ? 0 : (double)metrics.UsedMemoryBytes / metrics.TotalMemoryBytes * 100;
+        // Host memory via GlobalMemoryStatusEx — GC.GetGCMemoryInfo only knows
+        // about this process's view of memory.
+        if (WindowsHostApi.TryGetMemoryStatus(out var totalBytes, out var availableBytes))
+        {
+            metrics.TotalMemoryBytes = (long)totalBytes;
+            metrics.UsedMemoryBytes = (long)(totalBytes - availableBytes);
+            metrics.MemoryUsagePercent = totalBytes == 0 ? 0 : (double)metrics.UsedMemoryBytes / metrics.TotalMemoryBytes * 100;
+        }
 
         // Disk
         var drive = new DriveInfo(Path.GetPathRoot(Environment.CurrentDirectory) ?? "C:\\");
         metrics.TotalDiskBytes = drive.TotalSize;
         metrics.UsedDiskBytes = drive.TotalSize - drive.AvailableFreeSpace;
         metrics.DiskUsagePercent = drive.TotalSize == 0 ? 0 : (double)metrics.UsedDiskBytes / drive.TotalSize * 100;
+    }
+
+    private static class WindowsHostApi
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MemoryStatusEx
+        {
+            public uint Length;
+            public uint MemoryLoad;
+            public ulong TotalPhys;
+            public ulong AvailPhys;
+            public ulong TotalPageFile;
+            public ulong AvailPageFile;
+            public ulong TotalVirtual;
+            public ulong AvailVirtual;
+            public ulong AvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetSystemTimes(out long idleTime, out long kernelTime, out long userTime);
+
+        public static bool TryGetMemoryStatus(out ulong totalBytes, out ulong availableBytes)
+        {
+            totalBytes = 0;
+            availableBytes = 0;
+
+            if (!OperatingSystem.IsWindows())
+                return false;
+
+            var status = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };
+            if (!GlobalMemoryStatusEx(ref status))
+                return false;
+
+            totalBytes = status.TotalPhys;
+            availableBytes = status.AvailPhys;
+            return true;
+        }
+
+        public static bool TryGetSystemTimes(out long idle, out long kernel, out long user)
+        {
+            idle = kernel = user = 0;
+            return OperatingSystem.IsWindows() && GetSystemTimes(out idle, out kernel, out user);
+        }
     }
 }

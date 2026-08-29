@@ -79,10 +79,12 @@
                 return InvokeAsync(StateHasChanged);
             };
 
-            _hub.Reconnected += _ =>
+            _hub.Reconnected += async _ =>
             {
                 _monitoringUnavailable = false;
-                return InvokeAsync(StateHasChanged);
+                // Group membership is per-connection; re-join after a reconnect
+                await _hub.InvokeAsync("SubscribeToServerStatus");
+                await InvokeAsync(StateHasChanged);
             };
 
             _hub.Closed += error =>
@@ -100,6 +102,7 @@
             });
 
             await _hub.StartAsync();
+            await _hub.InvokeAsync("SubscribeToServerStatus");
             _monitoringUnavailable = false;
         }
         catch (Exception ex)

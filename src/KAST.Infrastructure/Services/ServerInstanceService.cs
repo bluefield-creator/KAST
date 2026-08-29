@@ -21,8 +21,15 @@ public class ServerInstanceService(
     IOutputSanitizer sanitizer,
     IServiceScopeFactory scopeFactory,
     IServerConsoleLogTailer? consoleLogTailer = null,
-    IHostEnvironment? hostEnvironment = null) : IServerInstanceService
+    IHostEnvironment? hostEnvironment = null,
+    IServerConfigService? serverConfigService = null) : IServerInstanceService
 {
+    // The service is scoped, so the per-instance start gate must be static.
+    // It serializes concurrent StartInstanceAsync calls (user click racing the
+    // scheduler) that would otherwise both pass the status check and launch two
+    // processes on the same port.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, SemaphoreSlim> StartLocks = new();
+
     public async Task<IReadOnlyList<ServerInstance>> GetAllInstancesAsync(CancellationToken ct = default)
         => await db.ServerInstances
             .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
@@ -292,6 +299,20 @@ public class ServerInstanceService(
 
     public async Task StartInstanceAsync(int id, CancellationToken ct = default)
     {
+        var startLock = StartLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        await startLock.WaitAsync(ct);
+        try
+        {
+            await StartInstanceCoreAsync(id, ct);
+        }
+        finally
+        {
+            startLock.Release();
+        }
+    }
+
+    private async Task StartInstanceCoreAsync(int id, CancellationToken ct)
+    {
         var instance = await db.ServerInstances
             .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
             .Include(s => s.HeadlessClients)
@@ -333,16 +354,44 @@ public class ServerInstanceService(
 
             logger.LogInformation("Starting server {Name}", instance.Name);
 
-            // Callbacks for stdout/stderr lines and process exit
-            void OnOutputLine(int pid, string line)
-            {
-                var broadcast = broadcaster.BroadcastLogEntryAsync(new LogEntryEvent(id, line, DateTime.UtcNow));
-                _ = broadcast.ContinueWith(t =>
+            // Console output is funnelled through a bounded channel: a chatty Arma
+            // server can emit thousands of lines/second, and one fire-and-forget
+            // broadcast per line floods SignalR and the thread pool. Under burst the
+            // oldest lines are dropped rather than growing without bound.
+            var logChannel = System.Threading.Channels.Channel.CreateBounded<LogEntryEvent>(
+                new System.Threading.Channels.BoundedChannelOptions(2000)
                 {
-                    if (t.IsFaulted)
-                        logger.LogDebug(t.Exception, "Failed to broadcast log entry for instance {InstanceId}", id);
-                }, TaskScheduler.Default);
-            }
+                    FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
+                    SingleReader = true
+                });
+
+            _ = Task.Run(async () =>
+            {
+                var reader = logChannel.Reader;
+                while (await reader.WaitToReadAsync(CancellationToken.None))
+                {
+                    var drained = 0;
+                    while (drained < 50 && reader.TryRead(out var entry))
+                    {
+                        try
+                        {
+                            await broadcaster.BroadcastLogEntryAsync(entry);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogDebug(ex, "Failed to broadcast log entry for instance {InstanceId}", id);
+                        }
+
+                        drained++;
+                    }
+
+                    if (drained == 50)
+                        await Task.Delay(50, CancellationToken.None); // burst — yield between batches
+                }
+            }, CancellationToken.None);
+
+            void OnOutputLine(int pid, string line)
+                => logChannel.Writer.TryWrite(new LogEntryEvent(id, line, DateTime.UtcNow));
 
             void OnProcessExited(int pid, int exitCode)
             {
@@ -367,6 +416,21 @@ public class ServerInstanceService(
                         }
 
                         var newStatus = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
+
+                        // Persist the real state so pages and API reads don't report a
+                        // dead server as Running until the watchdog's next 10 s sweep.
+                        // Only touch the row when it still refers to this process — a
+                        // fast restart may already have a newer PID.
+                        var instanceRow = await exitDb.ServerInstances
+                            .FirstOrDefaultAsync(s => s.Id == id, CancellationToken.None);
+                        if (instanceRow is not null && instanceRow.ProcessId == pid)
+                        {
+                            instanceRow.Status = newStatus;
+                            instanceRow.ProcessId = null;
+                            instanceRow.StartedAt = null;
+                            await exitDb.SaveChangesAsync(CancellationToken.None);
+                        }
+
                         await broadcaster.BroadcastServerStatusChangedAsync(
                             new ServerStatusChangedEvent(id, newStatus));
                         await broadcaster.BroadcastLogEntryAsync(
@@ -377,6 +441,35 @@ public class ServerInstanceService(
                     catch (Exception ex)
                     {
                         logger.LogError(ex, "Error handling process exit for instance {Id}", id);
+                    }
+                    finally
+                    {
+                        logChannel.Writer.TryComplete();
+                    }
+                }, CancellationToken.None);
+            }
+
+            void OnHeadlessClientExited(int pid, int exitCode)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await using var hcScope = scopeFactory.CreateAsyncScope();
+                        var hcDb = hcScope.ServiceProvider.GetRequiredService<KastDbContext>();
+                        var hcRow = await hcDb.HeadlessClients
+                            .FirstOrDefaultAsync(h => h.ServerInstanceId == id && h.ProcessId == pid, CancellationToken.None);
+                        if (hcRow is not null)
+                        {
+                            hcRow.Status = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
+                            hcRow.ProcessId = null;
+                            hcRow.StartedAt = null;
+                            await hcDb.SaveChangesAsync(CancellationToken.None);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Error handling headless client exit for instance {Id}", id);
                     }
                 }, CancellationToken.None);
             }
@@ -401,10 +494,12 @@ public class ServerInstanceService(
             }));
 
             // Start headless clients
+            var hcIndex = 0;
             foreach (var hc in instance.HeadlessClients)
             {
-                var hcArgs = BuildHeadlessClientArguments(instance);
-                var hcPid = await processManager.StartServerProcessAsync(executable, hcArgs, OnOutputLine, null, ct);
+                hcIndex++;
+                var hcArgs = BuildHeadlessClientArguments(instance, hcIndex);
+                var hcPid = await processManager.StartServerProcessAsync(executable, hcArgs, OnOutputLine, OnHeadlessClientExited, ct);
                 hc.ProcessId = hcPid;
                 hc.Status = ServerInstanceStatus.Running;
                 hc.StartedAt = DateTime.UtcNow;
@@ -433,8 +528,18 @@ public class ServerInstanceService(
         }
         finally
         {
-            await db.SaveChangesAsync(ct);
-            await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
+            // Must run even when the caller's token is cancelled: aborting here
+            // would strand Status = Starting in the database and mask the real
+            // exception from the catch block above.
+            try
+            {
+                await db.SaveChangesAsync(CancellationToken.None);
+                await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
+            }
+            catch (Exception persistEx)
+            {
+                logger.LogError(persistEx, "Failed to persist final start state for instance {Id}", id);
+            }
         }
     }
 
@@ -504,7 +609,7 @@ public class ServerInstanceService(
         {
             if (instance.ProcessId.HasValue)
             {
-                CloseProcessHistoryEntry(id, instance.ProcessId.Value, "Killed");
+                await CloseProcessHistoryEntryAsync(id, instance.ProcessId.Value, "Killed", ct: ct);
             }
 
             instance.ProcessId = null;
@@ -781,13 +886,15 @@ public class ServerInstanceService(
         return string.Join(" ", args);
     }
 
-    private static void AddServerConfigArgs(ServerInstance instance, string configDir, List<string> args)
+    private IServerConfigService GetServerConfigService()
+        => serverConfigService ?? new ServerConfigService();
+
+    private void AddServerConfigArgs(ServerInstance instance, string configDir, List<string> args)
     {
         if (instance.ServerCfgContent == null)
             return;
 
-        var cfgService = new ServerConfigService();
-        var cfg = cfgService.ParseServerConfig(instance.ServerCfgContent);
+        var cfg = GetServerConfigService().ParseServerConfig(instance.ServerCfgContent);
 
         if (cfg.NetlogEnabled) args.Add("-netlog");
         if (cfg.AutoInit) args.Add("-autoInit");
@@ -848,9 +955,34 @@ public class ServerInstanceService(
         return string.Join(";", serverMods);
     }
 
-    private static string BuildHeadlessClientArguments(ServerInstance instance)
+    private string BuildHeadlessClientArguments(ServerInstance instance, int hcIndex)
     {
-        return $"-client -connect=127.0.0.1 -port={instance.Port} -nosound -world=empty";
+        var configDir = GetInstanceConfigDirectory(instance);
+        var args = new List<string>
+        {
+            "-client",
+            $"-connect=127.0.0.1",
+            $"-port={instance.Port}",
+            "-nosound",
+            "-world=empty",
+            $"-name=server_{instance.Id}_hc{hcIndex}"
+        };
+
+        // A headless client is a regular client: it must join with the server
+        // password and the same mod set or the server rejects it.
+        if (instance.ServerCfgContent != null)
+        {
+            var cfg = GetServerConfigService().ParseServerConfig(instance.ServerCfgContent);
+            if (!string.IsNullOrWhiteSpace(cfg.Password))
+                args.Add($"-password={cfg.Password}");
+        }
+
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            args.Add($"\"-profiles={configDir}\"");
+
+        AddModArgs(instance, args);
+
+        return string.Join(" ", args);
     }
 
     private static string SanitizeModName(string name)
@@ -927,12 +1059,12 @@ public class ServerInstanceService(
         }
     }
 
-    private void CloseProcessHistoryEntry(int instanceId, int processId, string reason, int? exitCode = null)
+    private async Task CloseProcessHistoryEntryAsync(int instanceId, int processId, string reason, int? exitCode = null, CancellationToken ct = default)
     {
-        var history = db.ServerInstanceProcessHistories
+        var history = await db.ServerInstanceProcessHistories
             .Where(h => h.ServerInstanceId == instanceId && h.ProcessId == processId && h.EndedAt == null)
             .OrderByDescending(h => h.StartedAt)
-            .FirstOrDefault();
+            .FirstOrDefaultAsync(ct);
         if (history is not null)
         {
             history.EndedAt = DateTime.UtcNow;

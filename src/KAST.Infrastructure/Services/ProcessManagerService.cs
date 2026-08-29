@@ -33,6 +33,8 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             RedirectStandardError = true
         };
 
+        ct.ThrowIfCancellationRequested();
+
         var process = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start server process.");
 
@@ -103,6 +105,14 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
 
         using (process)
         {
+            // PID reuse guard: a stale ServerInstance.ProcessId whose PID the OS
+            // recycled must never take down an unrelated process tree.
+            if (!IsKnownServerProcess(process))
+            {
+                logger.LogWarning("Refusing to stop PID {Pid}: process name does not match a known Arma server executable", processId);
+                return;
+            }
+
             logger.LogInformation("Stopping process {Pid}", processId);
 
             if (!process.HasExited)
@@ -153,10 +163,31 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             if (process.HasExited)
                 return true;
 
+            if (!IsKnownServerProcess(process))
+            {
+                logger.LogWarning("Refusing to kill PID {Pid}: process name does not match a known Arma server executable", processId);
+                return false;
+            }
+
             logger.LogInformation("KillProcess: Force-killing process {Pid}", processId);
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(ct);
             return process.HasExited;
+        }
+    }
+
+    private static bool IsKnownServerProcess(Process process)
+    {
+        try
+        {
+            var name = process.ProcessName;
+            return KnownServerProcessNames.Any(n =>
+                name.StartsWith(n, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (InvalidOperationException)
+        {
+            // Process exited between resolution and the name read
+            return false;
         }
     }
 
@@ -172,13 +203,11 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
     {
         try
         {
-            var process = Process.GetProcessById(processId);
+            using var process = Process.GetProcessById(processId);
             if (process.HasExited)
                 return false;
 
-            var name = process.ProcessName;
-            return KnownServerProcessNames.Any(n =>
-                name.StartsWith(n, StringComparison.OrdinalIgnoreCase));
+            return IsKnownServerProcess(process);
         }
         catch
         {
@@ -208,7 +237,7 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
 
             return (cpuPercent, process.WorkingSet64);
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;
         }
@@ -244,13 +273,15 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
 
         await Parallel.ForEachAsync(processes, options, async (process, token) =>
         {
-            try
+            // Dispose covers the early HasExited return too — the handle used to
+            // leak when the process had already exited.
+            using (process)
             {
-                if (process.HasExited)
-                    return;
-
-                using (process)
+                try
                 {
+                    if (process.HasExited)
+                        return;
+
                     string? cmdLine = null;
                     try { cmdLine = GetProcessCommandLine(process); }
                     catch { }
@@ -284,10 +315,10 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
                         isManaged ? link.Id : null,
                         isManaged ? link.Name : null));
                 }
-            }
-            catch
-            {
-                // Process may have exited between enumeration and query
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Process may have exited between enumeration and query
+                }
             }
         });
 

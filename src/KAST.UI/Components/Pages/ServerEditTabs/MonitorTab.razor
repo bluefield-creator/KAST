@@ -37,7 +37,7 @@
         <MudCard Elevation="2">
             <MudCardContent>
                 <MudText Typo="Typo.overline" Color="Color.Secondary">Players</MudText>
-                <MudText Typo="Typo.h5">@_monitorPlayerCount</MudText>
+                <MudText Typo="Typo.h5">@_monitorPlayerCount@(_monitorMaxPlayers > 0 ? $" / {_monitorMaxPlayers}" : "")</MudText>
                 <MudText Typo="Typo.caption" Color="Color.Secondary">Uptime @GetUptime()</MudText>
             </MudCardContent>
         </MudCard>
@@ -172,6 +172,7 @@
     private double _monitorCpu;
     private long _monitorMemory;
     private int _monitorPlayerCount;
+    private int _monitorMaxPlayers;
     private bool _initialized;
     private bool _monitoringConnected;
     private string? _monitoringError;
@@ -338,6 +339,7 @@
                     _monitorCpu = evt.CpuPercent;
                     _monitorMemory = evt.MemoryBytes;
                     _monitorPlayerCount = evt.PlayerCount;
+                    _monitorMaxPlayers = evt.MaxPlayers;
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (Exception ex)

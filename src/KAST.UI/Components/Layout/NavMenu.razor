@@ -4,6 +4,7 @@
 @inject KAST.UI.Services.InternalHubTokenService HubToken
 @inject ILogger<NavMenu> Logger
 @inject IServerInstanceService ServerService
+@inject KAST.UI.Services.MonitoringSnapshotService Snapshots
 @implements IAsyncDisposable
 
 <MudNavMenu>
@@ -29,7 +30,7 @@
                 <MudNavLink Href="@($"/servers/{s.Id}")" Match="NavLinkMatch.All"
                             Icon="@UiHelpers.GetStatusIcon(s.Status)"
                             IconColor="@UiHelpers.GetStatusColor(s.Status)">
-                    @s.Name
+                    @s.Name@GetPlayerSuffix(s)
                 </MudNavLink>
             }
         </div>
@@ -60,10 +61,28 @@
             s.Name.Contains(_serverFilter, StringComparison.OrdinalIgnoreCase));
     }
 
+    private string GetPlayerSuffix(ServerInstance server)
+    {
+        if (server.Status != ServerInstanceStatus.Running)
+            return "";
+
+        var metrics = Snapshots.Current.InstanceMetrics.FirstOrDefault(m => m.ServerInstanceId == server.Id);
+        if (metrics is null)
+            return "";
+
+        return metrics.MaxPlayers > 0
+            ? $"  ({metrics.PlayerCount}/{metrics.MaxPlayers})"
+            : $"  ({metrics.PlayerCount})";
+    }
+
+    private void OnSnapshotChanged()
+        => _ = InvokeAsync(StateHasChanged);
+
     protected override async Task OnInitializedAsync()
     {
         await RefreshAsync();
         Nav.LocationChanged += OnLocationChanged;
+        Snapshots.Changed += OnSnapshotChanged;
 
         try
         {
@@ -140,6 +159,7 @@
     public async ValueTask DisposeAsync()
     {
         Nav.LocationChanged -= OnLocationChanged;
+        Snapshots.Changed -= OnSnapshotChanged;
         if (_hub is not null) await _hub.DisposeAsync();
     }
 

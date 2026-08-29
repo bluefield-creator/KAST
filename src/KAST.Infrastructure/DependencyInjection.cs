@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IMissionHashService, MissionHashService>();
         services.AddScoped<IMissionHttpDownloadService, MissionHttpDownloadService>();
         services.AddScoped<IMonitoringService, MonitoringService>();
+        services.AddSingleton<IServerQueryService, A2sServerQueryService>();
         services.AddScoped<IApiKeyService, ApiKeyService>();
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<IStorageService, StorageService>();

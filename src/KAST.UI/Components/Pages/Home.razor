@@ -180,7 +180,7 @@
                 <MudCardContent>
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Running</MudText>
                     <MudText Typo="Typo.h4" Color="Color.Success">@_instances.Count(i => i.Status == ServerInstanceStatus.Running)</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">Active servers</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@GetPlayersOnlineCaption()</MudText>
                 </MudCardContent>
             </MudCard>
         </MudItem>
@@ -364,6 +364,16 @@ else
     private const int MaxRecentActivities = 10;
 
     private void GoToServer(int id) => Nav.NavigateTo("/servers/" + id);
+
+    private string GetPlayersOnlineCaption()
+    {
+        var metrics = MonitoringState.InstanceMetrics.Values;
+        var players = metrics.Sum(m => m.PlayerCount);
+        var maxPlayers = metrics.Sum(m => m.MaxPlayers);
+        return maxPlayers > 0
+            ? $"{players} / {maxPlayers} players online"
+            : $"{players} players online";
+    }
 
     protected override void OnInitialized()
     {

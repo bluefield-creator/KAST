@@ -86,7 +86,8 @@ public class MetricsBackgroundService(
                                 inst.ServerInstanceId,
                                 inst.CpuUsagePercent,
                                 inst.MemoryUsageBytes,
-                                inst.PlayerCount));
+                                inst.PlayerCount,
+                                inst.MaxPlayers));
                     }
                 }
 

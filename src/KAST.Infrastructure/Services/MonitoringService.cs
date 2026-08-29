@@ -6,7 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KAST.Infrastructure.Services;
 
-public class MonitoringService(IProcessManagerService processManager, Data.KastDbContext db) : IMonitoringService
+public class MonitoringService(
+    IProcessManagerService processManager,
+    Data.KastDbContext db,
+    IServerQueryService? serverQuery = null) : IMonitoringService
 {
     public async Task<HostMetrics> GetHostMetricsAsync(CancellationToken ct = default)
     {
@@ -32,16 +35,7 @@ public class MonitoringService(IProcessManagerService processManager, Data.KastD
         if (instance?.ProcessId == null)
             return null;
 
-        var processMetrics = await processManager.GetProcessMetricsAsync(instance.ProcessId.Value, ct);
-        if (processMetrics == null)
-            return null;
-
-        return new InstanceMetrics
-        {
-            ServerInstanceId = serverInstanceId,
-            CpuUsagePercent = processMetrics.Value.CpuPercent,
-            MemoryUsageBytes = processMetrics.Value.MemoryBytes
-        };
+        return await SampleInstanceAsync(serverInstanceId, instance.ProcessId.Value, instance.SteamQueryPort, ct);
     }
 
     public async Task<IReadOnlyList<InstanceMetrics>> GetAllInstanceMetricsAsync(CancellationToken ct = default)
@@ -49,23 +43,38 @@ public class MonitoringService(IProcessManagerService processManager, Data.KastD
         var instances = await db.ServerInstances
             .AsNoTracking()
             .Where(s => s.ProcessId != null)
-            .Select(s => new { s.Id, ProcessId = s.ProcessId!.Value })
+            .Select(s => new { s.Id, ProcessId = s.ProcessId!.Value, s.SteamQueryPort })
             .ToListAsync(ct);
 
-        var samples = await Task.WhenAll(instances.Select(async instance =>
-        {
-            var processMetrics = await processManager.GetProcessMetricsAsync(instance.ProcessId, ct);
-            return processMetrics is null
-                ? null
-                : new InstanceMetrics
-                {
-                    ServerInstanceId = instance.Id,
-                    CpuUsagePercent = processMetrics.Value.CpuPercent,
-                    MemoryUsageBytes = processMetrics.Value.MemoryBytes
-                };
-        }));
+        var samples = await Task.WhenAll(instances.Select(
+            instance => SampleInstanceAsync(instance.Id, instance.ProcessId, instance.SteamQueryPort, ct)));
 
         return samples.Where(m => m is not null).Select(m => m!).ToList();
+    }
+
+    private async Task<InstanceMetrics?> SampleInstanceAsync(int instanceId, int processId, int steamQueryPort, CancellationToken ct)
+    {
+        // Process metrics (500 ms CPU delta) and the A2S player query run
+        // concurrently so an unresponsive query port never slows the sample.
+        var processTask = processManager.GetProcessMetricsAsync(processId, ct);
+        var queryTask = serverQuery is not null
+            ? serverQuery.QueryAsync("127.0.0.1", steamQueryPort, ct)
+            : Task.FromResult<ServerQueryResult?>(null);
+
+        var processMetrics = await processTask;
+        var query = await queryTask;
+
+        if (processMetrics == null)
+            return null;
+
+        return new InstanceMetrics
+        {
+            ServerInstanceId = instanceId,
+            CpuUsagePercent = processMetrics.Value.CpuPercent,
+            MemoryUsageBytes = processMetrics.Value.MemoryBytes,
+            PlayerCount = query?.PlayerCount ?? 0,
+            MaxPlayers = query?.MaxPlayers ?? 0
+        };
     }
 
     private static async Task ReadLinuxCpuAsync(HostMetrics metrics, CancellationToken ct)

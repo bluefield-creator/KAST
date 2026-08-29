@@ -13,7 +13,7 @@ public record ModDownloadProgressEvent(
 public record ModStatusChangedEvent(int ModId, ModStatus NewStatus);
 public record ServerStatusChangedEvent(int ServerInstanceId, ServerInstanceStatus NewStatus);
 public record HostMetricsUpdatedEvent(double CpuPercent, double MemoryPercent);
-public record InstanceMetricsUpdatedEvent(int ServerInstanceId, double CpuPercent, long MemoryBytes, int PlayerCount);
+public record InstanceMetricsUpdatedEvent(int ServerInstanceId, double CpuPercent, long MemoryBytes, int PlayerCount, int MaxPlayers = 0);
 public record LogEntryEvent(int ServerInstanceId, string Line, DateTime Timestamp);
 
 public enum ServerRuntimeEventSeverity

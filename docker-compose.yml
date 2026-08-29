@@ -2,8 +2,10 @@ services:
   kast:
     build: .
     container_name: kast
+    # Port 5000 is intentionally NOT published: nginx is the sole entrypoint.
+    expose:
+      - "5000"
     ports:
-      - "5000:5000"                  # Web UI / API
       - "2302-2322:2302-2322/udp"    # Arma 3 game + Steam query ports
       - "2302-2322:2302-2322/tcp"    # BattlEye RCON (TCP)
     volumes:
@@ -20,6 +22,13 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__Default=Data Source=/app/data/kast.db
+      # Keep cookies and the Steam login on the persisted volume so container
+      # recreates do not invalidate sessions or force a Steam re-login.
+      - Kast__DataDirectory=/app/data
+      - Kast__DataProtectionKeysDirectory=/app/data/keys
+      # nginx reaches the app from the compose bridge network; trust it so the
+      # per-IP rate limiters see real client addresses.
+      - ForwardedHeaders__KnownNetworks__0=172.16.0.0/12
       - Telemetry__Enabled=true
       - Telemetry__OtlpEndpoint=http://jaeger:4317
     depends_on:
@@ -29,8 +38,11 @@ services:
     image: jaegertracing/jaeger:latest
     container_name: kast-jaeger
     ports:
-      - "16686:16686"   # Web UI
-      - "4317:4317"     # OTLP gRPC receiver
+      # Loopback-only: traces include full SQL and the UI has no authentication.
+      # Change to "16686:16686" only behind a firewall or authenticated proxy.
+      - "127.0.0.1:16686:16686"   # Web UI
+    # OTLP (4317) stays internal to the compose network — kast reaches it by
+    # service name; nothing outside needs it.
     restart: unless-stopped
 
   nginx:

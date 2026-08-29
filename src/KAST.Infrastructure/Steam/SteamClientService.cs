@@ -25,10 +25,16 @@ public class SteamClientService : ISteamService, IDisposable
     private readonly SteamUnifiedMessages _steamUnifiedMessages;
     private readonly Client _cdnClient;
 
+    // Guards _loginTcs: it is swapped by request threads and completed by the
+    // callback-pump thread; without the lock a second login orphans the first
+    // awaiter and callbacks can complete a torn read.
+    private readonly object _loginSync = new();
     private TaskCompletionSource<bool>? _loginTcs;
-    private bool _isRunning;
+    private int _callbackLoopRunning;
     private CancellationTokenSource? _callbackCts;
     private bool _isReconnecting;
+    private uint _cellId;
+    private int _reconnectAttempts;
     private readonly SemaphoreSlim _qrAuthLock = new(1, 1);
     private readonly SemaphoreSlim _credentialAuthLock = new(1, 1);
     private readonly SemaphoreSlim _anonLoginLock = new(1, 1);
@@ -215,6 +221,22 @@ public class SteamClientService : ISteamService, IDisposable
 
     // ───── Authentication ─────
 
+    private TaskCompletionSource<bool> CreateLoginTcs()
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_loginSync)
+        {
+            _loginTcs = tcs;
+        }
+
+        return tcs;
+    }
+
+    private TaskCompletionSource<bool>? CurrentLoginTcs
+    {
+        get { lock (_loginSync) return _loginTcs; }
+    }
+
     public async Task<bool> LoginAnonymousAsync(CancellationToken ct = default)
     {
         // Fast path: already logged in anonymously
@@ -236,7 +258,7 @@ public class SteamClientService : ISteamService, IDisposable
             }
             else
             {
-                _loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var loginTcs = CreateLoginTcs();
                 CurrentUsername = null;
                 _pendingAccessToken = null;
                 _currentRefreshToken = null;
@@ -252,7 +274,7 @@ public class SteamClientService : ISteamService, IDisposable
                     _steamClient.Connect();
                 }
 
-                _anonymousLoginTask = _loginTcs.Task;
+                _anonymousLoginTask = loginTcs.Task;
                 loginTask = _anonymousLoginTask;
             }
         }
@@ -269,9 +291,19 @@ public class SteamClientService : ISteamService, IDisposable
 
         var result = await loginTask;
 
-        // Clear finished task so a future reconnect can start a new attempt.
-        if (loginTask.IsCompleted)
-            _anonymousLoginTask = null;
+        // Clear the finished task so a future reconnect can start a new attempt.
+        // Done under the lock, comparing instances, so we never null a newer
+        // attempt started by a concurrent caller.
+        await _anonLoginLock.WaitAsync(CancellationToken.None);
+        try
+        {
+            if (ReferenceEquals(_anonymousLoginTask, loginTask))
+                _anonymousLoginTask = null;
+        }
+        finally
+        {
+            _anonLoginLock.Release();
+        }
 
         return result;
     }
@@ -290,8 +322,7 @@ public class SteamClientService : ISteamService, IDisposable
             };
         }
 
-        var loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _loginTcs = loginTcs;
+        var loginTcs = CreateLoginTcs();
         CurrentUsername = username;
         _pendingAccessToken = refreshToken;
         _currentRefreshToken = refreshToken;
@@ -300,7 +331,17 @@ public class SteamClientService : ISteamService, IDisposable
         _steamClient.Connect();
 
         using var reg = ct.Register(() => loginTcs.TrySetResult(false));
-        return await loginTcs.Task;
+        try
+        {
+            // Bounded like the QR/credential flows — if a concurrent login swapped
+            // the TCS this one may never be completed, and we must not hang forever.
+            return await loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogWarning("Token login for {Username} timed out waiting for Steam logon", username);
+            return false;
+        }
     }
 
     public async Task LogoutAsync()
@@ -317,13 +358,13 @@ public class SteamClientService : ISteamService, IDisposable
         AuthStateChanged?.Invoke();
 
         // Disconnect — auto-reconnect will fire and log on anonymously
-        _loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logoutTcs = CreateLoginTcs();
         _isReconnecting = true;
         _steamClient.Disconnect();
 
         try
         {
-            await _loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(15), _callbackCts?.Token ?? CancellationToken.None);
+            await logoutTcs.Task.WaitAsync(TimeSpan.FromSeconds(15), _callbackCts?.Token ?? CancellationToken.None);
         }
         catch (Exception ex) when (ex is TimeoutException or OperationCanceledException or ObjectDisposedException)
         {
@@ -485,8 +526,7 @@ public class SteamClientService : ISteamService, IDisposable
 
             // Transition from anonymous → real account:
             // Disconnect (auto-reconnect will fire → OnConnected → LogOn with token)
-            var loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _loginTcs = loginTcs;
+            var loginTcs = CreateLoginTcs();
             _isReconnecting = true;
             _steamClient.Disconnect();
 
@@ -549,8 +589,7 @@ public class SteamClientService : ISteamService, IDisposable
 
             // Transition from anonymous → real account:
             // Disconnect (auto-reconnect will fire → OnConnected → LogOn with token)
-            var loginTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _loginTcs = loginTcs;
+            var loginTcs = CreateLoginTcs();
             _isReconnecting = true;
             _steamClient.Disconnect();
 
@@ -712,7 +751,7 @@ public class SteamClientService : ISteamService, IDisposable
 
             // 3-5. Get manifest request code + download manifest (automatic CDN fallback)
             statusProgress?.Report("Checking against Steam manifest");
-            var manifestRequestCode = await _steamContent.GetManifestRequestCode(depotId, appId, manifestId);
+            var manifestRequestCode = await _steamContent.GetManifestRequestCode(depotId, appId, manifestId).WaitAsync(ct);
             var manifest = await DownloadManifestWithFallbackAsync(
                 depotId, manifestId, manifestRequestCode, depotKey, pool, workshopActivity, ct);
 
@@ -728,27 +767,37 @@ public class SteamClientService : ISteamService, IDisposable
             workshopActivity?.SetTag("workshop.file_count", files.Count);
             workshopActivity?.SetTag("workshop.size_mb", Math.Round(manifest.TotalUncompressedSize / 1_048_576.0, 1));
 
-            // 6. Download all file chunks via CDN.Client (parallel workers, per-file spans)
+            // 6. Scan existing files (size + hash) so mod updates only fetch what
+            // changed instead of re-downloading the entire item every time.
             long totalSize = files.Sum(f => (long)f.TotalSize);
             Directory.CreateDirectory(destinationPath);
+            statusProgress?.Report("Scanning existing files");
+            var (toDownload, verifiedBytes) = await ScanExistingFilesAsync(files, destinationPath, ct);
+            var downloadSet = new HashSet<DepotManifest.FileData>(toDownload);
+
+            _logger.LogInformation("Workshop item {Id}: {Reuse} file(s) already valid, {Download} to download",
+                workshopId, files.Count - toDownload.Count, toDownload.Count);
+            workshopActivity?.SetTag("workshop.files_reused", files.Count - toDownload.Count);
+
             statusProgress?.Report("Preparing file list");
             foreach (var file in files)
             {
                 var relativePath = file.FileName.Replace('\\', Path.DirectorySeparatorChar);
+                var alreadyValid = !downloadSet.Contains(file);
                 fileProgress?.Report(new DownloadFileProgress(
                     relativePath,
-                    BytesDownloaded: 0,
+                    BytesDownloaded: alreadyValid ? (long)file.TotalSize : 0,
                     TotalBytes: (long)file.TotalSize,
-                    ProgressPercent: file.TotalSize == 0 ? 100 : 0,
+                    ProgressPercent: alreadyValid || file.TotalSize == 0 ? 100 : 0,
                     BytesPerSecond: 0,
-                    IsComplete: file.TotalSize == 0));
+                    IsComplete: alreadyValid || file.TotalSize == 0));
             }
 
             statusProgress?.Report("Downloading files");
             var (bytesTransferred, _, dlElapsed, skippedFiles) = await DownloadFilesInParallelAsync(
-                files, depotId, depotKey, pool, destinationPath,
+                toDownload, depotId, depotKey, pool, destinationPath,
                 parentSpanContext: workshopActivity?.Context ?? Activity.Current?.Context ?? default,
-                progressBase: 0, progressTotal: totalSize,
+                progressBase: verifiedBytes, progressTotal: totalSize,
                 progress, fileProgress, logProgress: null,
                 logPrefix: $"Workshop {workshopId}",
                 maxParallelWorkers: Math.Clamp(maxParallelDownloads, 1, 64), ct);
@@ -780,6 +829,64 @@ public class SteamClientService : ISteamService, IDisposable
             RecordExceptionEvent(workshopActivity, ex);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Splits manifest files into those already valid on disk (size + SHA-1 match)
+    /// and those that must be (re)downloaded. Mirrors the app-install scan phases
+    /// so workshop updates are resumable.
+    /// </summary>
+    private static async Task<(List<DepotManifest.FileData> ToDownload, long VerifiedBytes)> ScanExistingFilesAsync(
+        IReadOnlyList<DepotManifest.FileData> files, string destinationPath, CancellationToken ct)
+    {
+        var toDownload = new List<DepotManifest.FileData>();
+        var toVerify = new List<DepotManifest.FileData>();
+
+        foreach (var file in files)
+        {
+            var filePath = ResolveContentPath(destinationPath, file.FileName.Replace('\\', Path.DirectorySeparatorChar));
+            if (!File.Exists(filePath) || new FileInfo(filePath).Length != (long)file.TotalSize)
+                toDownload.Add(file);
+            else
+                toVerify.Add(file);
+        }
+
+        long verifiedBytes = 0;
+        if (toVerify.Count > 0)
+        {
+            var mismatched = new System.Collections.Concurrent.ConcurrentBag<DepotManifest.FileData>();
+            long verified = 0;
+
+            await Parallel.ForEachAsync(
+                toVerify,
+                new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount), CancellationToken = ct },
+                async (file, hashCt) =>
+                {
+                    if (file.FileHash is not { Length: > 0 })
+                    {
+                        Interlocked.Add(ref verified, (long)file.TotalSize);
+                        return;
+                    }
+
+                    var path = ResolveContentPath(destinationPath, file.FileName.Replace('\\', Path.DirectorySeparatorChar));
+                    var match = await Task.Run(() =>
+                    {
+                        using var sha1 = System.Security.Cryptography.SHA1.Create();
+                        using var stream = File.OpenRead(path);
+                        return sha1.ComputeHash(stream).SequenceEqual(file.FileHash);
+                    }, hashCt);
+
+                    if (match)
+                        Interlocked.Add(ref verified, (long)file.TotalSize);
+                    else
+                        mismatched.Add(file);
+                });
+
+            toDownload.AddRange(mismatched);
+            verifiedBytes = Interlocked.Read(ref verified);
+        }
+
+        return (toDownload, verifiedBytes);
     }
 
     private static List<(uint DepotId, ulong ManifestId)> ExtractDepotManifests(
@@ -1170,7 +1277,7 @@ public class SteamClientService : ISteamService, IDisposable
         int filesDone = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long lastReportBytes = 0;
-        var lastReportTime = sw.Elapsed;
+        long lastReportTicks = sw.Elapsed.Ticks;
         // Pre-compute so the lambda closure doesn't call Sum on every speed report.
         var downloadMb = files.Sum(f => (long)f.TotalSize) / 1_048_576.0;
         var skippedFiles = new System.Collections.Concurrent.ConcurrentBag<string>();
@@ -1278,7 +1385,7 @@ public class SteamClientService : ISteamService, IDisposable
                             ValidateDownloadedFile(tempPath, file);
                             break; // success
                         }
-                        catch (IOException ex) when (ex.Message.Contains("hash verification") && downloadAttempt < maxHashRetries)
+                        catch (ChunkHashMismatchException) when (downloadAttempt < maxHashRetries)
                         {
                             _logger.LogWarning("{Prefix}: hash mismatch for {File}, retry {Attempt}/{Max}",
                                 logPrefix, relativePath, downloadAttempt, maxHashRetries);
@@ -1287,8 +1394,8 @@ public class SteamClientService : ISteamService, IDisposable
                                 dir ?? destinationPath,
                                 $".{Path.GetFileName(filePath)}.{Guid.NewGuid():N}.kastdownload");
                         }
-                        catch (IOException ex) when (ex.Message.Contains("hash verification") &&
-                                                    Path.GetExtension(relativePath).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                        catch (ChunkHashMismatchException) when (
+                            Path.GetExtension(relativePath).Equals(".txt", StringComparison.OrdinalIgnoreCase))
                         {
                             _logger.LogWarning("{Prefix}: hash mismatch for non-critical file {File}, skipping",
                                 logPrefix, relativePath);
@@ -1343,7 +1450,7 @@ public class SteamClientService : ISteamService, IDisposable
                     // Speed + progress report: every 10 files, large files (≥ 50 MB), last file, or every 5 s
                     var nowBytes = Interlocked.Read(ref bytesDownloaded);
                     var elapsed = sw.Elapsed;
-                    var secSinceReport = (elapsed - lastReportTime).TotalSeconds;
+                    var secSinceReport = TimeSpan.FromTicks(elapsed.Ticks - Interlocked.Read(ref lastReportTicks)).TotalSeconds;
 
                     if (done % 10 == 0 || fileSizeMb >= 50 || done == files.Count || secSinceReport >= 5)
                     {
@@ -1358,7 +1465,7 @@ public class SteamClientService : ISteamService, IDisposable
                             _logger.LogDebug("{Prefix}: {Report}", logPrefix, report.TrimStart());
 
                         Interlocked.Exchange(ref lastReportBytes, nowBytes);
-                        lastReportTime = elapsed;
+                        Interlocked.Exchange(ref lastReportTicks, elapsed.Ticks);
                     }
                 }
                 catch (OperationCanceledException)
@@ -1492,7 +1599,7 @@ public class SteamClientService : ISteamService, IDisposable
         using var sha1 = System.Security.Cryptography.SHA1.Create();
         using var stream = File.OpenRead(filePath);
         if (!sha1.ComputeHash(stream).SequenceEqual(file.FileHash))
-            throw new IOException($"Downloaded file '{file.FileName}' failed hash verification.");
+            throw new ChunkHashMismatchException($"Downloaded file '{file.FileName}' failed hash verification.");
     }
 
     private static void TryDeleteTempFile(string path)
@@ -1573,26 +1680,27 @@ public class SteamClientService : ISteamService, IDisposable
         return TimeSpan.FromSeconds(seconds) + TimeSpan.FromMilliseconds(jitterMs);
     }
 
-    private static bool IsTransientSteamCdnException(Exception ex)
+    internal static bool IsTransientSteamCdnException(Exception ex)
     {
-        for (var current = ex; current != null; current = current.InnerException!)
+        for (var current = ex; current != null; current = current.InnerException)
         {
-            var typeName = current.GetType().FullName ?? current.GetType().Name;
-            var message = current.Message;
-
-            if (typeName.Contains("SteamKitWebRequestException", StringComparison.OrdinalIgnoreCase) &&
-                ContainsTransientHttpSignal(message))
+            // Authoritative signal: the actual HTTP status code from the CDN
+            if (current is SteamKitWebRequestException webEx)
             {
-                return true;
+                return webEx.StatusCode is System.Net.HttpStatusCode.TooManyRequests
+                    or System.Net.HttpStatusCode.InternalServerError
+                    or System.Net.HttpStatusCode.BadGateway
+                    or System.Net.HttpStatusCode.ServiceUnavailable
+                    or System.Net.HttpStatusCode.GatewayTimeout;
             }
 
-            if (current is HttpRequestException or IOException or TimeoutException &&
-                ContainsTransientHttpSignal(message))
-            {
+            if (current is TimeoutException)
                 return true;
-            }
 
-            if (ContainsTransientHttpSignal(message))
+            // Message heuristics as a fallback for wrapped socket/IO failures.
+            // Phrase matches only — bare digits like "500" false-positive on
+            // byte counts and file paths.
+            if (ContainsTransientHttpSignal(current.Message))
                 return true;
         }
 
@@ -1601,16 +1709,13 @@ public class SteamClientService : ISteamService, IDisposable
 
     private static bool ContainsTransientHttpSignal(string message)
     {
-        return message.Contains("429", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("Too Many Requests", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("500", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("502", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("503", StringComparison.OrdinalIgnoreCase)
+        return message.Contains("Too Many Requests", StringComparison.OrdinalIgnoreCase)
                || message.Contains("Service Unavailable", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("504", StringComparison.OrdinalIgnoreCase)
                || message.Contains("Gateway Timeout", StringComparison.OrdinalIgnoreCase)
                || message.Contains("timeout", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("temporarily unavailable", StringComparison.OrdinalIgnoreCase);
+               || message.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("temporarily unavailable", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("connection reset", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task DownloadAppAsync(
@@ -1836,8 +1941,11 @@ public class SteamClientService : ISteamService, IDisposable
             if (_cdnPool is not null)
                 return Task.FromResult(_cdnPool);
 
-            _cdnPool = new CdnServerPool(_steamClient, _steamContent, _logger, _sanitizer);
-            _logger.LogInformation("CDN server pool created");
+            _cdnPool = new CdnServerPool(_steamClient, _steamContent, _logger, _sanitizer)
+            {
+                CellId = _cellId
+            };
+            _logger.LogInformation("CDN server pool created (cell {Cell})", _cellId);
             return Task.FromResult(_cdnPool);
         }
     }
@@ -2013,23 +2121,25 @@ public class SteamClientService : ISteamService, IDisposable
 
     private void StartCallbackLoop()
     {
-        if (_isRunning) return;
+        // Atomic check-then-act: two concurrent logins must not spawn two pumps
+        // (RunWaitCallbacks from two threads duplicates callback delivery).
+        if (Interlocked.Exchange(ref _callbackLoopRunning, 1) == 1) return;
 
-        _isRunning = true;
-        _callbackCts = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
+        _callbackCts = cts;
 
         _ = Task.Run(() =>
         {
-            while (_isRunning && !_callbackCts.Token.IsCancellationRequested)
+            while (Volatile.Read(ref _callbackLoopRunning) == 1 && !cts.Token.IsCancellationRequested)
             {
                 _callbackManager.RunWaitCallbacks(TimeSpan.FromSeconds(1));
             }
-        }, _callbackCts.Token);
+        }, cts.Token);
     }
 
     private void StopCallbackLoop()
     {
-        _isRunning = false;
+        Volatile.Write(ref _callbackLoopRunning, 0);
         _callbackCts?.Cancel();
     }
 
@@ -2072,10 +2182,52 @@ public class SteamClientService : ISteamService, IDisposable
         }
         else
         {
-            _loginTcs?.TrySetResult(false);
+            CurrentLoginTcs?.TrySetResult(false);
+            ScheduleReconnect();
         }
 
         AuthStateChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Reconnects after an unexpected disconnect with exponential backoff.
+    /// Restores the authenticated session when a refresh token is held instead
+    /// of silently downgrading to anonymous.
+    /// </summary>
+    private void ScheduleReconnect()
+    {
+        var cts = _callbackCts;
+        if (cts is null || cts.IsCancellationRequested)
+            return; // shutting down
+
+        var attempt = Math.Min(_reconnectAttempts, 4);
+        _reconnectAttempts++;
+        var delay = TimeSpan.FromSeconds(Math.Min(60, 5 << attempt))
+                    + TimeSpan.FromMilliseconds(Random.Shared.Next(250, 1250));
+
+        _logger.LogInformation("Unexpected Steam disconnect — reconnecting in {Delay:F0}s (attempt {Attempt})",
+            delay.TotalSeconds, _reconnectAttempts);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delay, cts.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+            {
+                return;
+            }
+
+            if (_isConnected)
+                return;
+
+            // Re-arm the token logon so OnConnected restores the real account.
+            if (CurrentUsername != null && _currentRefreshToken != null)
+                _pendingAccessToken = _currentRefreshToken;
+
+            _steamClient.Connect();
+        }, CancellationToken.None);
     }
 
     private void OnLoggedOn(SteamUser.LoggedOnCallback cb)
@@ -2085,9 +2237,12 @@ public class SteamClientService : ISteamService, IDisposable
             _logger.LogInformation("Logged in to Steam{Account}",
                 CurrentUsername != null ? $" as {CurrentUsername}" : " (anonymous)");
             _isConnected = true;
+            _reconnectAttempts = 0;
 
-            // Pass the cell ID to the pool so Steam routes us to geographically close CDN nodes.
-            // The pool may already exist from a previous anonymous login; update it in-place.
+            // Cache the cell ID so Steam routes us to geographically close CDN nodes —
+            // the pool is usually created lazily *after* login, so it must be able to
+            // pick this up at construction time, not only via the in-place update below.
+            _cellId = cb.CellID;
             if (_cdnPool is not null)
                 _cdnPool.CellId = cb.CellID;
 
@@ -2096,7 +2251,7 @@ public class SteamClientService : ISteamService, IDisposable
             if (CurrentUsername != null)
                 _steamFriends.SetPersonaState(EPersonaState.Online);
 
-            _loginTcs?.TrySetResult(true);
+            CurrentLoginTcs?.TrySetResult(true);
             AuthStateChanged?.Invoke();
         }
         else
@@ -2111,7 +2266,7 @@ public class SteamClientService : ISteamService, IDisposable
                 _currentRefreshToken = null;
             }
             _isConnected = false;
-            _loginTcs?.TrySetResult(false);
+            CurrentLoginTcs?.TrySetResult(false);
             AuthStateChanged?.Invoke();
         }
     }
@@ -2160,7 +2315,9 @@ public class SteamClientService : ISteamService, IDisposable
         // No unmanaged resources: no finalizer or Dispose(bool) needed.
         StopCallbackLoop();
         _callbackCts?.Dispose();
-        _cdnPool?.Dispose();
+        // Reset via the lock so a concurrent EnsureCdnPoolAsync cannot orphan a
+        // freshly created pool (leaking its monitor task and collection).
+        ResetCdnPool();
         _cdnClient.Dispose();
         _steamClient.Disconnect();
     }

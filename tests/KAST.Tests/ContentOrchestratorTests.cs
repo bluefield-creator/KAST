@@ -328,6 +328,91 @@ public class ContentOrchestratorTests
         Assert.True(first.IsComplete);
     }
 
+    [Fact]
+    public async Task SteamQueue_CancelQueuedInstall_DoesNotWedgeQueue()
+    {
+        var provider = BuildServiceProvider();
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var installers = new[]
+        {
+            new FakeInstaller(ContentType.SteamMod, async (_, state, ct) =>
+            {
+                firstStarted.TrySetResult();
+                await release.Task.WaitAsync(ct);
+            })
+        };
+        var orchestrator = BuildOrchestrator(provider, installers);
+
+        // Occupy the single mod slot, then queue a second install behind it.
+        var first = orchestrator.StartModInstall(41, ContentType.SteamMod, "/tmp/mod41", maxParallelModDownloads: 1);
+        await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var second = orchestrator.StartModInstall(42, ContentType.SteamMod, "/tmp/mod42", maxParallelModDownloads: 1);
+
+        // Cancel the queued install; the slot accounting must not leak.
+        orchestrator.Cancel(ContentProgressTracker.ModKey(42));
+        await WaitForAsync(() => !orchestrator.IsRunning(ContentProgressTracker.ModKey(42)));
+
+        // Let the first finish, then a third install must still acquire the slot.
+        release.TrySetResult();
+        await WaitForAsync(() => first.IsComplete);
+
+        var thirdStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thirdRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        firstStarted = thirdStarted;
+        release = thirdRelease;
+
+        var third = orchestrator.StartModInstall(43, ContentType.SteamMod, "/tmp/mod43", maxParallelModDownloads: 1);
+        await thirdStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        thirdRelease.TrySetResult();
+        await WaitForAsync(() => third.IsComplete);
+
+        Assert.True(third.IsComplete);
+        Assert.False(second.IsComplete);
+    }
+
+    [Fact]
+    public async Task Cancel_AfterInstallCompleted_DoesNotThrow()
+    {
+        var provider = BuildServiceProvider();
+        var orchestrator = BuildOrchestrator(provider, new[]
+        {
+            new FakeInstaller(ContentType.SteamMod, (_, _, _) => Task.CompletedTask)
+        });
+
+        var state = orchestrator.StartModInstall(51, ContentType.SteamMod, "/tmp/mod51");
+        await WaitForAsync(() => state.IsComplete);
+
+        // Repeated cancels of a finished (or unknown) key must be safe no-ops.
+        orchestrator.Cancel(ContentProgressTracker.ModKey(51));
+        orchestrator.Cancel(ContentProgressTracker.ModKey(51));
+        orchestrator.Cancel(ContentProgressTracker.ModKey(999));
+    }
+
+    [Fact]
+    public async Task RunModInstall_PreCancelledToken_ReportsCancellationAndQueueStaysUsable()
+    {
+        var provider = BuildServiceProvider();
+        var orchestrator = BuildOrchestrator(provider, new[]
+        {
+            new FakeInstaller(ContentType.SteamMod, (_, _, _) => Task.CompletedTask)
+        });
+
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        var state = await orchestrator.RunModInstallAsync(
+            61, ContentType.SteamMod, "/tmp/mod61", ct: cancelled.Token);
+
+        Assert.False(state.IsComplete);
+        Assert.False(orchestrator.IsRunning(ContentProgressTracker.ModKey(61)));
+
+        // The queue must still grant slots after the dead entry.
+        var next = await orchestrator.RunModInstallAsync(62, ContentType.SteamMod, "/tmp/mod62");
+        Assert.True(next.IsComplete);
+    }
+
     private static ContentOrchestrator BuildOrchestrator(IServiceProvider provider, IEnumerable<IContentInstaller> installers)
     {
         var tracker = new ContentProgressTracker();

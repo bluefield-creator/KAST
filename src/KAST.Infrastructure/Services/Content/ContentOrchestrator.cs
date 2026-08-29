@@ -235,7 +235,17 @@ public class ContentOrchestrator(
     public void Cancel(string key)
     {
         if (_active.TryGetValue(key, out var active))
-            active.Cancellation.Cancel();
+        {
+            try
+            {
+                active.Cancellation.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // RunAsync's finally disposed the CTS between our read and Cancel —
+                // the install already finished, nothing to cancel.
+            }
+        }
     }
 
     // ── Validation ───────────────────────────────────────────────────────────
@@ -345,19 +355,51 @@ public class ContentOrchestrator(
 
     private async Task<IDisposable> WaitForSteamContentTurnAsync(ContentInstallRequest request, string key, CancellationToken ct)
     {
+        // An already-cancelled token would fire the registration callback
+        // synchronously before entry.Cancellation is assigned, leaking the real
+        // registration and enqueuing a dead entry.
+        ct.ThrowIfCancellationRequested();
+
         var entry = new SteamQueueEntry(
             key,
             request.Type,
             Math.Clamp(request.MaxParallelModDownloads, 1, 16));
-        entry.Cancellation = ct.Register(() => CancelSteamQueueEntry(entry));
 
         lock (_steamQueueLock)
         {
             _steamQueue.Enqueue(entry);
+        }
+
+        entry.Cancellation = ct.Register(() => CancelSteamQueueEntry(entry));
+
+        lock (_steamQueueLock)
+        {
             TryStartNextSteamQueueEntryLocked();
         }
 
-        await entry.Ready.Task.WaitAsync(ct);
+        try
+        {
+            await entry.Ready.Task.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // The slot may have been granted in the same instant the token fired.
+            // If so, release it here — otherwise the counter leaks and every later
+            // Steam install deadlocks behind a slot nobody holds.
+            bool started;
+            lock (_steamQueueLock)
+            {
+                started = entry.Started;
+            }
+
+            if (started)
+                CompleteSteamQueueEntry(entry);
+            else
+                CancelSteamQueueEntry(entry);
+
+            throw;
+        }
+
         return new SteamQueueLease(this, entry);
     }
 

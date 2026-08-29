@@ -123,7 +123,16 @@ public sealed class ModDownloadQueueService(
         if (_activeByModId.TryGetValue(modId, out var cts))
         {
             orchestrator.Cancel(ContentProgressTracker.ModKey(modId));
-            cts.Cancel();
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // RunJobGuardedAsync's finally disposed it between our read and
+                // Cancel — the job already finished.
+            }
+
             cancelled = true;
         }
 
@@ -214,7 +223,8 @@ public sealed class ModDownloadQueueService(
             {
                 await DispatchQueuedJobsAsync(stoppingToken);
 
-                var timerTask = Task.Delay(DispatchInterval, stoppingToken);
+                using var timerCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                var timerTask = Task.Delay(DispatchInterval, timerCts.Token);
                 var wakeTask = _wakeups.Reader.WaitToReadAsync(stoppingToken).AsTask();
                 var completed = await Task.WhenAny(timerTask, wakeTask);
                 if (completed == wakeTask && await wakeTask)
@@ -222,6 +232,9 @@ public sealed class ModDownloadQueueService(
                     while (_wakeups.Reader.TryRead(out _))
                     {
                     }
+
+                    // Release the losing timer instead of abandoning it until it fires
+                    await timerCts.CancelAsync();
                 }
                 else
                 {
@@ -235,7 +248,11 @@ public sealed class ModDownloadQueueService(
         finally
         {
             foreach (var active in _activeByModId.Values)
-                active.Cancel();
+            {
+                try { active.Cancel(); }
+                catch (ObjectDisposedException) { /* job finished concurrently */ }
+            }
+
             logger.LogInformation("Mod download queue service stopped");
         }
     }
@@ -381,7 +398,16 @@ public sealed class ModDownloadQueueService(
 
         var persistTask = PersistProgressUntilCompleteAsync(taskId, mod.Id, installTask, ct);
         var state = await installTask;
-        await persistTask;
+        try
+        {
+            await persistTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // The persist loop observed cancellation in the same tick the install
+            // finished. The install outcome (state.IsComplete) decides the task's
+            // fate — a successful download must not be recorded as Cancelled.
+        }
 
         if (state.IsComplete)
         {
@@ -409,9 +435,13 @@ public sealed class ModDownloadQueueService(
     {
         while (!installTask.IsCompleted)
         {
-            var completed = await Task.WhenAny(installTask, Task.Delay(ProgressPersistInterval, ct));
+            using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var completed = await Task.WhenAny(installTask, Task.Delay(ProgressPersistInterval, delayCts.Token));
             if (completed == installTask)
+            {
+                await delayCts.CancelAsync();
                 break;
+            }
 
             ct.ThrowIfCancellationRequested();
             await PersistProgressAsync(taskId, modId, ct);

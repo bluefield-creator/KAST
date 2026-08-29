@@ -63,7 +63,7 @@ internal sealed class CdnServerPool : IDisposable
         _logger = logger;
         _sanitizer = sanitizer;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(parentCt);
-        _monitorTask = Task.Run(MonitorAsync);
+        _monitorTask = Task.Run(MonitorAsync, parentCt);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ internal sealed class CdnServerPool : IDisposable
                         .ToList();
 
                     foreach (var s in sorted)
-                        _available.Add(s);
+                        _available.Add(s, _cts.Token);
 
                     _logger.LogInformation("CDN pool refilled with {Count} servers (cell {Cell}, best: {Host})",
                         sorted.Count, CellId, sorted.FirstOrDefault()?.Host ?? "none");

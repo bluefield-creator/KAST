@@ -280,7 +280,7 @@ public class SteamClientService : ISteamService, IDisposable
     {
         // Pre-populate profile from cache so the header shows something immediately
         var cached = LoadTokenCache();
-        if (cached?.Username == username && !string.IsNullOrEmpty(cached.PersonaName))
+        if (cached is not null && cached.Username == username && !string.IsNullOrEmpty(cached.PersonaName))
         {
             _profile = new SteamUserProfile
             {
@@ -323,11 +323,12 @@ public class SteamClientService : ISteamService, IDisposable
 
         try
         {
-            await _loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await _loginTcs.Task.WaitAsync(TimeSpan.FromSeconds(15), _callbackCts?.Token ?? CancellationToken.None);
         }
-        catch (TimeoutException)
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException or ObjectDisposedException)
         {
-            _logger.LogWarning("Anonymous reconnect after logout timed out");
+            // Timeout, callback pump shutdown, or disposed CTS — logout itself already succeeded.
+            _logger.LogWarning("Anonymous reconnect after logout did not complete: {Reason}", ex.GetType().Name);
         }
     }
 

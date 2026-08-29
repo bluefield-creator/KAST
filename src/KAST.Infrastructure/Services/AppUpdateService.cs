@@ -204,7 +204,7 @@ public partial class AppUpdateService : IAppUpdateService
         await File.WriteAllTextAsync(markerPath, check.Channel.Id, ct);
 
         progress?.Report(new(AppUpdateStage.Staged, 100, "Update staged."));
-        return new(true, checksumVerified ? "Update downloaded and verified." : "Update downloaded and staged.", updateId, extractPath, checksumVerified);
+        return new(true, "Update downloaded and verified.", updateId, extractPath, checksumVerified);
     }
 
     public async Task<AppUpdateApplyResult> ApplyStagedUpdateAsync(string stagedUpdateId, CancellationToken ct = default)

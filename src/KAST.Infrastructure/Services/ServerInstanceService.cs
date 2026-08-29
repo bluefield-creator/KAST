@@ -346,6 +346,7 @@ public class ServerInstanceService(
 
             void OnProcessExited(int pid, int exitCode)
             {
+                // Exit handling must always complete, even if the start request was cancelled.
                 _ = Task.Run(async () =>
                 {
                     try
@@ -356,13 +357,13 @@ public class ServerInstanceService(
                         var history = await exitDb.ServerInstanceProcessHistories
                             .Where(h => h.ServerInstanceId == id && h.ProcessId == pid && h.EndedAt == null)
                             .OrderByDescending(h => h.StartedAt)
-                            .FirstOrDefaultAsync();
+                            .FirstOrDefaultAsync(CancellationToken.None);
                         if (history is not null)
                         {
                             history.EndedAt = DateTime.UtcNow;
                             history.ExitCode = exitCode;
                             history.TerminationReason = exitCode == 0 ? "Exited" : "Crashed";
-                            await exitDb.SaveChangesAsync();
+                            await exitDb.SaveChangesAsync(CancellationToken.None);
                         }
 
                         var newStatus = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
@@ -377,7 +378,7 @@ public class ServerInstanceService(
                     {
                         logger.LogError(ex, "Error handling process exit for instance {Id}", id);
                     }
-                });
+                }, CancellationToken.None);
             }
 
             var pid = await processManager.StartServerProcessAsync(executable, args, OnOutputLine, OnProcessExited, ct);

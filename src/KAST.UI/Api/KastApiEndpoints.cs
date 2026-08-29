@@ -253,6 +253,10 @@ public static class KastApiEndpoints
             var mission = await svc.UploadMissionAsync(instanceId, file.FileName, stream, ct);
             return Results.Created($"/api/missions/{mission.Id}", mission);
         }).DisableAntiforgery();
+        // DisableAntiforgery is acceptable here: the endpoint requires an
+        // authenticated session, the KAST.Auth cookie is SameSite=Lax (not sent
+        // on cross-site POSTs), and non-browser API clients cannot obtain
+        // antiforgery tokens. Revisit if the cookie policy ever changes.
 
         mg.MapGet("/{id:int}", async (int id, IMissionService svc, CancellationToken ct) =>
         {

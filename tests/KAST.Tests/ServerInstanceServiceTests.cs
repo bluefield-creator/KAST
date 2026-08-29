@@ -196,7 +196,7 @@ public class ServerInstanceServiceTests : IDisposable
     [Fact]
     public async Task StartInstance_NonExistentId_Throws()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => _sut.StartInstanceAsync(999));
     }
 
@@ -314,7 +314,7 @@ public class ServerInstanceServiceTests : IDisposable
         _processManager.StartServerProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Action<int, string>?>(), Arg.Any<Action<int, int>?>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Failed to start"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => _sut.StartInstanceAsync(instance.Id));
 
         var updated = await _db.ServerInstances.FindAsync(instance.Id);
@@ -374,7 +374,7 @@ public class ServerInstanceServiceTests : IDisposable
     [Fact]
     public async Task StopInstance_NonExistentId_Throws()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => _sut.StopInstanceAsync(999));
     }
 

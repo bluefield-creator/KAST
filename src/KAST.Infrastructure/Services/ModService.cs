@@ -84,6 +84,14 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
         var isZip = path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
         activity?.SetTag("mod.source", isZip ? "zip" : "folder");
 
+        // The path comes from user input (UI or API) — require that it actually
+        // points at an existing mod source before persisting it.
+        var fullPath = Path.GetFullPath(path);
+        if (isZip ? !File.Exists(fullPath) : !Directory.Exists(fullPath))
+            throw new ArgumentException($"Local mod path does not exist or is not a {(isZip ? "zip file" : "directory")}.");
+
+        path = fullPath;
+
         var mod = new SteamMod
         {
             Name = name,
@@ -111,13 +119,26 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
         {
             activity?.SetTag("mod.name", mod.Name);
 
-            // Delete mod files from disk only when the caller explicitly requests it.
+            // Delete mod files from disk only when the caller explicitly requests
+            // it, and only inside the managed mods root — LocalPath is
+            // user-supplied, and honoring an arbitrary path here would turn
+            // delete-mod into a delete-any-directory primitive.
             if (deleteFiles && !string.IsNullOrEmpty(mod.LocalPath) && Directory.Exists(mod.LocalPath))
             {
                 try
                 {
-                    Directory.Delete(mod.LocalPath, recursive: true);
-                    logger.LogInformation("Deleted mod files for mod {Id}", mod.Id);
+                    var settings = await settingsService.GetSettingsAsync(ct);
+                    var modsRoot = Path.GetFullPath(settings.ModsDirectory) + Path.DirectorySeparatorChar;
+                    var target = Path.GetFullPath(mod.LocalPath);
+                    if (!target.StartsWith(modsRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    {
+                        logger.LogWarning("Refusing to delete mod files outside the managed mods directory for mod {Id}", mod.Id);
+                    }
+                    else
+                    {
+                        Directory.Delete(target, recursive: true);
+                        logger.LogInformation("Deleted mod files for mod {Id}", mod.Id);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -146,7 +167,7 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
     public async Task DownloadModAsync(int id, IProgress<double>? progress = null, CancellationToken ct = default)
     {
         var mod = await db.Mods.FindAsync([id], ct)
-            ?? throw new InvalidOperationException($"Mod {id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Mod {id} not found");
 
         using var activity = KastActivitySources.Mods.StartActivity(
             "kast.mod.download", ActivityKind.Internal);
@@ -213,7 +234,7 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
     public async Task UpdateModFilesAsync(int id, IProgress<double>? progress = null, CancellationToken ct = default)
     {
         var mod = await db.Mods.FindAsync([id], ct)
-            ?? throw new InvalidOperationException($"Mod {id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Mod {id} not found");
 
         using var activity = KastActivitySources.Mods.StartActivity(
             "kast.mod.update", ActivityKind.Internal);
@@ -316,7 +337,7 @@ public class ModService(KastDbContext db, ISteamService steamService, ISettingsS
     public async Task CheckModForUpdateAsync(int id, CancellationToken ct = default)
     {
         var mod = await db.Mods.FindAsync([id], ct)
-            ?? throw new InvalidOperationException($"Mod {id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Mod {id} not found");
 
         if (mod.Source != ModSource.SteamWorkshop) return;
 

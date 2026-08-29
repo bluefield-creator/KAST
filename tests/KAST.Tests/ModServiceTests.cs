@@ -110,20 +110,45 @@ public class ModServiceTests : IDisposable
     [Fact]
     public async Task ImportLocalMod_Directory_SetsLocalFolderSource()
     {
-        var mod = await _sut.ImportLocalModAsync("/some/path/mod", "Local Mod");
+        var path = Path.Combine(Path.GetTempPath(), $"kast-mod-import-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        try
+        {
+            var mod = await _sut.ImportLocalModAsync(path, "Local Mod");
 
-        Assert.Equal("Local Mod", mod.Name);
-        Assert.Equal(ModSource.LocalFolder, mod.Source);
-        Assert.Equal(ModStatus.Installed, mod.Status);
-        Assert.Equal("/some/path/mod", mod.LocalPath);
+            Assert.Equal("Local Mod", mod.Name);
+            Assert.Equal(ModSource.LocalFolder, mod.Source);
+            Assert.Equal(ModStatus.Installed, mod.Status);
+            Assert.Equal(Path.GetFullPath(path), mod.LocalPath);
+        }
+        finally
+        {
+            Directory.Delete(path, recursive: true);
+        }
     }
 
     [Fact]
     public async Task ImportLocalMod_ZipFile_SetsLocalZipSource()
     {
-        var mod = await _sut.ImportLocalModAsync("/some/path/mod.zip", "Zipped Mod");
+        var path = Path.Combine(Path.GetTempPath(), $"kast-mod-import-{Guid.NewGuid():N}.zip");
+        File.WriteAllBytes(path, [0x50, 0x4B]);
+        try
+        {
+            var mod = await _sut.ImportLocalModAsync(path, "Zipped Mod");
 
-        Assert.Equal(ModSource.LocalZip, mod.Source);
+            Assert.Equal(ModSource.LocalZip, mod.Source);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ImportLocalMod_NonExistentPath_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _sut.ImportLocalModAsync(Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}"), "Ghost"));
     }
 
     // ── GetAllModsAsync ──
@@ -218,17 +243,52 @@ public class ModServiceTests : IDisposable
     [Fact]
     public async Task DeleteMod_WithDeleteFilesRemovesFilesOnDisk()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"kast-mod-delete-{Guid.NewGuid():N}");
+        // Deletion only happens inside the managed mods root
+        var modsRoot = Path.Combine(Path.GetTempPath(), $"kast-mods-root-{Guid.NewGuid():N}");
+        _settingsService.GetSettingsAsync(Arg.Any<CancellationToken>())
+            .Returns(new KastSettings { ModsDirectory = modsRoot });
+        var path = Path.Combine(modsRoot, "delete-me");
         Directory.CreateDirectory(path);
         File.WriteAllText(Path.Combine(path, "mod.cpp"), "data");
         var mod = new SteamMod { Name = "Delete Files", WorkshopId = 101, LocalPath = path };
         _db.Mods.Add(mod);
         await _db.SaveChangesAsync();
 
-        await _sut.DeleteModAsync(mod.Id, deleteFiles: true);
+        try
+        {
+            await _sut.DeleteModAsync(mod.Id, deleteFiles: true);
 
-        Assert.False(Directory.Exists(path));
-        Assert.Empty(_db.Mods);
+            Assert.False(Directory.Exists(path));
+            Assert.Empty(_db.Mods);
+        }
+        finally
+        {
+            if (Directory.Exists(modsRoot))
+                Directory.Delete(modsRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteMod_WithDeleteFiles_RefusesPathOutsideModsRoot()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"kast-mod-outside-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        var mod = new SteamMod { Name = "Outside", WorkshopId = 102, LocalPath = path };
+        _db.Mods.Add(mod);
+        await _db.SaveChangesAsync();
+
+        try
+        {
+            await _sut.DeleteModAsync(mod.Id, deleteFiles: true);
+
+            // DB row removed, but files outside the managed root survive
+            Assert.True(Directory.Exists(path));
+            Assert.Empty(_db.Mods);
+        }
+        finally
+        {
+            Directory.Delete(path, recursive: true);
+        }
     }
 
     [Fact]
@@ -259,7 +319,7 @@ public class ModServiceTests : IDisposable
     [Fact]
     public async Task DownloadMod_NonExistentId_Throws()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<KAST.Core.Exceptions.NotFoundException>(
             () => _sut.DownloadModAsync(999));
     }
 

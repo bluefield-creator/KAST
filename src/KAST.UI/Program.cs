@@ -294,6 +294,15 @@ if (telemetry.GetValue("Enabled", true))
             }));
 }
 
+// Point the Steam token cache at the configured data directory (persisted
+// volume in Docker) before any Steam login can run.
+var kastDataDirectory = builder.Configuration["Kast:DataDirectory"];
+if (!string.IsNullOrWhiteSpace(kastDataDirectory))
+    KAST.Infrastructure.Steam.SteamClientService.ConfigureTokenCacheDirectory(
+        Path.IsPathFullyQualified(kastDataDirectory)
+            ? kastDataDirectory
+            : Path.GetFullPath(kastDataDirectory, builder.Environment.ContentRootPath));
+
 var app = builder.Build();
 var lifecycleLogger = app.Services.GetRequiredService<ILogger<Program>>();
 var crashReports = app.Services.GetRequiredService<ICrashReportService>();
@@ -505,12 +514,21 @@ foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownPr
     if (IPAddress.TryParse(proxy, out var address))
         forwardedHeadersOptions.KnownProxies.Add(address);
 }
+// CIDR-based trust for containerized reverse proxies (e.g. the compose bridge
+// network), where the proxy's exact IP is not stable enough to pin.
+foreach (var network in builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+{
+    if (System.Net.IPNetwork.TryParse(network, out var parsed))
+        forwardedHeadersOptions.KnownIPNetworks.Add(parsed);
+}
 app.UseForwardedHeaders(forwardedHeadersOptions);
 app.UseStaticFiles();
-app.UseAntiforgery();
 app.UseAuthentication();
 app.UseKastAccountGate();
 app.UseAuthorization();
+// Antiforgery must come after authentication/authorization — its tokens are
+// bound to the authenticated user.
+app.UseAntiforgery();
 app.UseRateLimiter();
 
 // ── Health checks ─────────────────────────────────────────────────────────────
@@ -538,7 +556,9 @@ app.MapAccountEndpoints();
 app.MapMissionDownloadEndpoints();
 
 // ── Minimal API groups ────────────────────────────────────────────────────────
-app.MapGroup("/api").MapKastApi().RequireAuthorization();
+var apiGroup = app.MapGroup("/api");
+apiGroup.AddEndpointFilter<KAST.UI.Api.ApiExceptionFilter>();
+apiGroup.MapKastApi().RequireAuthorization();
 
 // ── SignalR hubs ──────────────────────────────────────────────────────────────
 app.MapHub<MonitoringHub>("/hubs/monitoring").RequireAuthorization("AdminOrInternalHub");

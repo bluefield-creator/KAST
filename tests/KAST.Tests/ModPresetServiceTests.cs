@@ -165,7 +165,7 @@ public class ModPresetServiceTests : IDisposable
     [Fact]
     public async Task UpdatePreset_NotFound_Throws()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => _sut.UpdatePresetAsync(new ModPreset { Id = 999, Name = "Ghost" }));
     }
 
@@ -386,7 +386,7 @@ public class ModPresetServiceTests : IDisposable
     [Fact]
     public async Task ApplyPreset_NotFound_Throws()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => _sut.ApplyPresetAsync(999, 1));
     }
 

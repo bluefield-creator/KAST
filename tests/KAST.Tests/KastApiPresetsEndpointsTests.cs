@@ -7,6 +7,7 @@ using KAST.Infrastructure.Services.Content;
 using KAST.UI.Api;
 using KAST.UI.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -155,6 +156,36 @@ public class KastApiPresetsEndpointsTests
         await presetService.Received(1).ApplyPresetAsync(1, 5, Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task UpdatePreset_UnknownId_Returns404ProblemDetails()
+    {
+        var presetService = Substitute.For<IModPresetService>();
+        presetService.UpdatePresetAsync(Arg.Any<ModPreset>(), Arg.Any<CancellationToken>())
+            .Returns<Task<ModPreset>>(_ => throw new KAST.Core.Exceptions.NotFoundException("Preset 999 not found"));
+
+        await using var app = await CreateApiAppAsync(presetsService: presetService);
+
+        var response = await app.Client.PutAsJsonAsync("/api/presets/999", new ModPreset { Id = 999, Name = "x" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task UpdatePreset_UnexpectedError_Returns500ProblemJson()
+    {
+        var presetService = Substitute.For<IModPresetService>();
+        presetService.UpdatePresetAsync(Arg.Any<ModPreset>(), Arg.Any<CancellationToken>())
+            .Returns<Task<ModPreset>>(_ => throw new IOException("disk on fire"));
+
+        await using var app = await CreateApiAppAsync(presetsService: presetService);
+
+        var response = await app.Client.PutAsJsonAsync("/api/presets/1", new ModPreset { Id = 1, Name = "x" });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
     private static async Task<ApiAppContext> CreateApiAppAsync(
         IModPresetService? presetsService = null)
     {
@@ -181,8 +212,12 @@ public class KastApiPresetsEndpointsTests
             sp.GetRequiredService<IModDownloadQueueService>()));
         builder.Services.AddSingleton(Substitute.For<IProcessManagerService>());
 
+        builder.Services.AddSingleton<IOutputSanitizer>(new KAST.Infrastructure.Services.OutputSanitizer());
+
         var app = builder.Build();
-        app.MapGroup("/api").MapKastApi();
+        var api = app.MapGroup("/api");
+        api.AddEndpointFilter<ApiExceptionFilter>();
+        api.MapKastApi();
         await app.StartAsync();
 
         return new ApiAppContext(app, app.GetTestClient());

@@ -318,7 +318,7 @@ public class ServerInstanceService(
             .Include(s => s.HeadlessClients)
             .OrderBy(s => s.Id)
             .FirstOrDefaultAsync(s => s.Id == id, ct)
-            ?? throw new InvalidOperationException($"Server instance {id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {id} not found");
 
         if (instance.Status is ServerInstanceStatus.Running
             or ServerInstanceStatus.Starting
@@ -549,7 +549,7 @@ public class ServerInstanceService(
             .Include(s => s.HeadlessClients)
             .OrderBy(s => s.Id)
             .FirstOrDefaultAsync(s => s.Id == id, ct)
-            ?? throw new InvalidOperationException($"Server instance {id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {id} not found");
 
         using var activity = KastActivitySources.Instances.StartActivity(
             "kast.instance.stop", ActivityKind.Internal);
@@ -635,7 +635,7 @@ public class ServerInstanceService(
     public async Task RestartInstanceAsync(int id, CancellationToken ct = default)
     {
         var instance = await db.ServerInstances.FindAsync([id], ct)
-            ?? throw new InvalidOperationException($"Server instance {id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {id} not found");
 
         using var activity = KastActivitySources.Instances.StartActivity(
             "kast.instance.restart", ActivityKind.Internal);
@@ -727,7 +727,7 @@ public class ServerInstanceService(
             .AsNoTracking()
             .OrderBy(s => s.Id)
             .FirstOrDefaultAsync(s => s.Id == instanceId, ct)
-            ?? throw new InvalidOperationException($"Server instance {instanceId} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {instanceId} not found");
 
         using var activity = KastActivitySources.Instances.StartActivity(
             "kast.instance.link_mods", ActivityKind.Internal);

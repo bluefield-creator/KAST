@@ -80,9 +80,13 @@ public class KastApiModsEndToEndTests
     {
         await using var app = await EndToEndApiApp.CreateAsync();
 
+        // The import endpoint validates that the path exists
+        var localModPath = Path.Combine(Path.GetTempPath(), $"kast-e2e-local-mod-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(localModPath);
+
         var createResponse = await app.Client.PostAsJsonAsync("/api/mods/local", new
         {
-            Path = "/tmp/local-mod-folder",
+            Path = localModPath,
             Name = EnhancedMovementModName
         });
 

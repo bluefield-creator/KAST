@@ -67,7 +67,7 @@ public class MissionService(
     public async Task<Mission> UploadMissionAsync(int instanceId, string fileName, Stream pboStream, CancellationToken ct = default)
     {
         var instance = await serverInstanceService.GetInstanceByIdAsync(instanceId, ct)
-            ?? throw new InvalidOperationException($"Server instance {instanceId} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {instanceId} not found");
 
         var gate = GetInstanceLock(instanceId);
         await gate.WaitAsync(ct);
@@ -152,7 +152,7 @@ public class MissionService(
     public async Task<Mission> UpdateMissionAsync(Mission mission, CancellationToken ct = default)
     {
         var existing = await db.Missions.FindAsync([mission.Id], ct)
-            ?? throw new InvalidOperationException($"Mission {mission.Id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Mission {mission.Id} not found");
 
         existing.DisplayName = mission.DisplayName;
         existing.MapName = mission.MapName;
@@ -311,7 +311,7 @@ public class MissionService(
     public async Task<Campaign> UpdateCampaignAsync(Campaign campaign, CancellationToken ct = default)
     {
         var existing = await db.Campaigns.FindAsync([campaign.Id], ct)
-            ?? throw new InvalidOperationException($"Campaign {campaign.Id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Campaign {campaign.Id} not found");
 
         existing.Title = NormalizeFolderTitle(campaign.Title, "New Campaign");
         existing.Description = campaign.Description?.Trim();
@@ -333,9 +333,9 @@ public class MissionService(
     public async Task AddMissionToCampaignAsync(int campaignId, int missionId, int orderIndex, CancellationToken ct = default)
     {
         var campaign = await db.Campaigns.FindAsync([campaignId], ct)
-            ?? throw new InvalidOperationException($"Campaign {campaignId} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Campaign {campaignId} not found");
         var mission = await db.Missions.FindAsync([missionId], ct)
-            ?? throw new InvalidOperationException($"Mission {missionId} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Mission {missionId} not found");
 
         if (campaign.ServerInstanceId != mission.ServerInstanceId)
             throw new InvalidOperationException("Campaigns can only contain missions from the same server instance.");
@@ -449,7 +449,7 @@ public class MissionService(
     public async Task<Set> UpdateSetAsync(Set set, CancellationToken ct = default)
     {
         var existing = await db.Sets.FindAsync([set.Id], ct)
-            ?? throw new InvalidOperationException($"Set {set.Id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Set {set.Id} not found");
 
         existing.Title = NormalizeFolderTitle(set.Title, "New Set");
         existing.Description = set.Description?.Trim();
@@ -471,9 +471,9 @@ public class MissionService(
     public async Task AddMissionToSetAsync(int setId, int missionId, CancellationToken ct = default)
     {
         var set = await db.Sets.FindAsync([setId], ct)
-            ?? throw new InvalidOperationException($"Set {setId} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Set {setId} not found");
         var mission = await db.Missions.FindAsync([missionId], ct)
-            ?? throw new InvalidOperationException($"Mission {missionId} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Mission {missionId} not found");
 
         if (set.ServerInstanceId != mission.ServerInstanceId)
             throw new InvalidOperationException("Sets can only contain missions from the same server instance.");

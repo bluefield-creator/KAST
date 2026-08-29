@@ -121,9 +121,38 @@ public class SteamClientService : ISteamService, IDisposable
     private CdnServerPool? _cdnPool;
     private readonly object _cdnPoolLock = new();
 
-    // Token cache
-    private static readonly string TokenCachePath = Path.Combine(
-        AppContext.BaseDirectory, "steam-token-cache.json");
+    // Token cache. The directory is configurable (Kast:DataDirectory) so the
+    // cache can live on a persisted volume/data dir instead of next to the
+    // binary, where container recreates and app updates wipe it.
+    private const string TokenCacheFileName = "steam-token-cache.json";
+    private static string _tokenCacheDirectory = AppContext.BaseDirectory;
+
+    private static string TokenCachePath => Path.Combine(_tokenCacheDirectory, TokenCacheFileName);
+
+    /// <summary>
+    /// Points the token cache at a data directory. Call once at startup before
+    /// any Steam login; migrates an existing cache from the legacy location
+    /// (next to the binary) on first use.
+    /// </summary>
+    public static void ConfigureTokenCacheDirectory(string directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+            return;
+
+        _tokenCacheDirectory = Path.GetFullPath(directory);
+
+        try
+        {
+            Directory.CreateDirectory(_tokenCacheDirectory);
+            var legacyPath = Path.Combine(AppContext.BaseDirectory, TokenCacheFileName);
+            if (!File.Exists(TokenCachePath) && File.Exists(legacyPath))
+                File.Copy(legacyPath, TokenCachePath);
+        }
+        catch (Exception)
+        {
+            // Fall back silently — worst case the user logs in to Steam again
+        }
+    }
 
     // Connection + profile state
     private bool _isConnected;                 // true when Steam network is reachable (anon or real)

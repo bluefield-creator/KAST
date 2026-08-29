@@ -202,7 +202,7 @@ public class MissionServiceTests : IDisposable
     public async Task UploadMission_InstanceNotFound_Throws()
     {
         using var stream = new MemoryStream(new byte[] { 0x00 });
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => _sut.UploadMissionAsync(999, "test.pbo", stream));
     }
 
@@ -243,7 +243,7 @@ public class MissionServiceTests : IDisposable
     [Fact]
     public async Task UpdateMission_NotFound_Throws()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => _sut.UpdateMissionAsync(new Mission { Id = 999 }));
     }
 

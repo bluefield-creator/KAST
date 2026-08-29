@@ -36,7 +36,7 @@ public class ModPresetService(
     public async Task<ModPreset> UpdatePresetAsync(ModPreset preset, CancellationToken ct = default)
     {
         var existing = await db.ModPresets.FindAsync([preset.Id], ct)
-            ?? throw new InvalidOperationException($"Preset {preset.Id} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Preset {preset.Id} not found");
 
         existing.Name = preset.Name;
         existing.ImagePath = preset.ImagePath;
@@ -131,7 +131,7 @@ public class ModPresetService(
         var preset = await db.ModPresets
             .Include(p => p.Entries)
             .FirstOrDefaultAsync(p => p.Id == presetId, ct)
-            ?? throw new InvalidOperationException($"Preset {presetId} not found");
+            ?? throw new KAST.Core.Exceptions.NotFoundException($"Preset {presetId} not found");
 
         // Diff against the current assignments instead of remove-all + re-add:
         // deleting and inserting the same (ServerInstanceId, SteamModId) composite

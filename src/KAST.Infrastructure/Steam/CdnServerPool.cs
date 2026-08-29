@@ -40,8 +40,9 @@ internal sealed class CdnServerPool : IDisposable
     // Freshly discovered servers waiting to be used — fallback supply
     private readonly BlockingCollection<Server> _available = new();
 
-    // Signals the monitor that the pool has dropped below minimum
-    private readonly AutoResetEvent _refillNeeded = new(initialState: true);
+    // Signals the monitor that the pool has dropped below minimum.
+    // Semaphore with max count 1 acts as an async-awaitable auto-reset event.
+    private readonly SemaphoreSlim _refillNeeded = new(initialCount: 1, maxCount: 1);
 
     private readonly Task _monitorTask;
 
@@ -82,7 +83,7 @@ internal sealed class CdnServerPool : IDisposable
 
         // Signal the monitor we are running low
         if (_available.Count < MinimumPoolSize)
-            _refillNeeded.Set();
+            SignalRefill();
 
         // Bounded wait: when Steam is unreachable (disconnect, rate limiting)
         // nothing will arrive — surface a clean timeout instead of hanging.
@@ -112,6 +113,22 @@ internal sealed class CdnServerPool : IDisposable
         _proven.Push(server);
     }
 
+    private void SignalRefill()
+    {
+        try
+        {
+            _refillNeeded.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+            // Already signalled — auto-reset semantics
+        }
+        catch (ObjectDisposedException)
+        {
+            // Pool is shutting down
+        }
+    }
+
     // ── Background monitor ────────────────────────────────────────────────────
 
     private async Task MonitorAsync()
@@ -123,7 +140,7 @@ internal sealed class CdnServerPool : IDisposable
             try
             {
                 // Sleep up to 5 s between checks; wake early if the pool dips below minimum
-                _refillNeeded.WaitOne(TimeSpan.FromSeconds(5));
+                await _refillNeeded.WaitAsync(TimeSpan.FromSeconds(5), _cts.Token);
 
                 if (_cts.Token.IsCancellationRequested)
                     break;
@@ -135,10 +152,7 @@ internal sealed class CdnServerPool : IDisposable
                     _available.Count, MinimumPoolSize, CellId);
 
                 if (throttleSeconds > 0)
-                {
                     await Task.Delay(TimeSpan.FromSeconds(throttleSeconds), _cts.Token);
-                    throttleSeconds = 0;
-                }
 
                 using var refillActivity = KastActivitySources.Steam.StartActivity(
                     "kast.steam.cdn_pool.refill", ActivityKind.Internal);
@@ -158,10 +172,13 @@ internal sealed class CdnServerPool : IDisposable
                             CellId,
                             _cts.Token);
                     }
-                    catch
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         // Fallback: use the SteamContent handler (does not carry cell ID hint
-                        // but always works, even before the cell ID is known)
+                        // but always works, even before the cell ID is known).
+                        // GetServersForSteamPipe accepts no token, so bail out first if
+                        // the pool is being torn down.
+                        _cts.Token.ThrowIfCancellationRequested();
                         servers = await _steamContent.GetServersForSteamPipe();
                     }
 
@@ -178,6 +195,9 @@ internal sealed class CdnServerPool : IDisposable
 
                     foreach (var s in sorted)
                         _available.Add(s, _cts.Token);
+
+                    // Successful refill — release any accumulated rate-limit backoff
+                    throttleSeconds = 0;
 
                     _logger.LogInformation("CDN pool refilled with {Count} servers (cell {Cell}, best: {Host})",
                         sorted.Count, CellId, sorted.FirstOrDefault()?.Host ?? "none");
@@ -206,7 +226,7 @@ internal sealed class CdnServerPool : IDisposable
             {
                 break;
             }
-            catch (Exception ex) when (ex.Message.Contains("429") || ex.Message.Contains("Too Many Requests"))
+            catch (Exception ex) when (IsRateLimited(ex))
             {
                 throttleSeconds = Math.Min(throttleSeconds + 5, 60);
                 _logger.LogWarning("CDN directory rate-limited — backing off {Sec}s", throttleSeconds);
@@ -219,11 +239,30 @@ internal sealed class CdnServerPool : IDisposable
         }
     }
 
+    internal static bool IsRateLimited(Exception ex)
+    {
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is SteamKitWebRequestException { StatusCode: System.Net.HttpStatusCode.TooManyRequests })
+                return true;
+            if (current.Message.Contains("Too Many Requests", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     // ── IDisposable ───────────────────────────────────────────────────────────
 
     public void Dispose()
     {
         _cts.Cancel();
+
+        // Let the monitor observe cancellation before its handles are disposed,
+        // otherwise it can fault on a disposed collection/semaphore mid-iteration.
+        try { _monitorTask.Wait(TimeSpan.FromSeconds(5)); }
+        catch (AggregateException) { /* cancellation surfaced through the task */ }
+
         _available.Dispose();
         _refillNeeded.Dispose();
         _cts.Dispose();

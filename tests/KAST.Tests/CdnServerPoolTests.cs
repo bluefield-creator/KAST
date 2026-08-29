@@ -71,6 +71,35 @@ public class CdnServerPoolTests
         Assert.Throws<OperationCanceledException>(() => pool.GetServer(cancelled.Token));
     }
 
+    [Fact]
+    public void IsRateLimited_MatchesWrappedSteamKitWebRequestException()
+    {
+        var inner = CreateWebRequestException(System.Net.HttpStatusCode.TooManyRequests);
+        var wrapped = new InvalidOperationException("outer", inner);
+
+        Assert.True(CdnServerPool.IsRateLimited(wrapped));
+    }
+
+    [Fact]
+    public void IsRateLimited_MatchesTooManyRequestsMessage()
+    {
+        Assert.True(CdnServerPool.IsRateLimited(new HttpRequestException("HTTP 429 Too Many Requests")));
+    }
+
+    [Theory]
+    [InlineData("expected 5031 bytes but received 4290")]
+    [InlineData("connection reset")]
+    public void IsRateLimited_IgnoresIncidentalDigits(string message)
+    {
+        Assert.False(CdnServerPool.IsRateLimited(new IOException(message)));
+    }
+
+    private static SteamKitWebRequestException CreateWebRequestException(System.Net.HttpStatusCode statusCode)
+    {
+        using var response = new HttpResponseMessage(statusCode);
+        return new SteamKitWebRequestException("request failed", response);
+    }
+
     private static Server CreateServerStub()
     {
         var server = (Server)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Server));

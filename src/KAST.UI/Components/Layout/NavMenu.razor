@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Components.Routing
 @inject NavigationManager Nav
 @inject KastInternalUrlProvider InternalUrls
 @inject KAST.UI.Services.InternalHubTokenService HubToken
@@ -7,12 +8,38 @@
 @inject KAST.UI.Services.MonitoringSnapshotService Snapshots
 @implements IAsyncDisposable
 
-<MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
-    <MudNavLink Href="/servers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Storage">Servers</MudNavLink>
+@* Themed banner navigation — each destination is a skewed banner plate:
+   kicker, serif title, one domed fitting. The active banner wears the
+   brass rail and the crimson hem. *@
+<nav class="fgo-nav" aria-label="Main navigation">
+
+    <NavLink href="" Match="NavLinkMatch.All" class="fgo-banner" ActiveClass="active">
+        <span class="fgo-banner-inner">
+            <span class="fgo-banner-text">
+                <span class="fgo-kicker">Terminal</span>
+                <span class="fgo-title">Dashboard</span>
+            </span>
+            <span class="fgo-fitting" aria-hidden="true"></span>
+        </span>
+    </NavLink>
+
+    <NavLink href="servers" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
+        <span class="fgo-banner-inner">
+            <span class="fgo-banner-text">
+                <span class="fgo-kicker">Garrison</span>
+                <span class="fgo-title">Servers</span>
+            </span>
+            @if (RunningCount > 0)
+            {
+                <span class="fgo-badge fgo-badge-live">@RunningCount</span>
+            }
+            <span class="fgo-fitting" aria-hidden="true"></span>
+        </span>
+    </NavLink>
+
     @if (_servers.Count > 0)
     {
-        <div class="kast-sub-nav">
+        <div class="fgo-sub-nav">
             @if (_servers.Count > 5)
             {
                 <MudTextField @bind-Value="_serverFilter"
@@ -27,28 +54,68 @@
             }
             @foreach (var s in GetFilteredServers())
             {
-                <MudNavLink Href="@($"/servers/{s.Id}")" Match="NavLinkMatch.All"
-                            Icon="@UiHelpers.GetStatusIcon(s.Status)"
-                            IconColor="@UiHelpers.GetStatusColor(s.Status)">
-                    @s.Name@GetPlayerSuffix(s)
-                </MudNavLink>
+                <NavLink href="@($"servers/{s.Id}")" Match="NavLinkMatch.All" class="fgo-banner fgo-banner-sub" ActiveClass="active">
+                    <span class="fgo-banner-inner">
+                        <span class="fgo-status fgo-status-@s.Status.ToString().ToLowerInvariant()" aria-hidden="true"></span>
+                        <span class="fgo-sub-name">@s.Name</span>
+                        <span class="fgo-sub-players">@GetPlayerSuffix(s)</span>
+                    </span>
+                </NavLink>
             }
         </div>
     }
-    <MudNavLink Href="mods" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Extension">Mods</MudNavLink>
-    <MudNavLink Href="monitoring" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BarChart"
-                IconColor="@(_monitoringUnavailable ? Color.Warning : Color.Default)">Monitoring</MudNavLink>
-    @if (_monitoringUnavailable)
-    {
-        <MudText Typo="Typo.caption" Color="Color.Warning" Class="px-4">Monitoring unavailable</MudText>
-    }
-    <MudNavLink Href="settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink>
-    <MudNavLink Href="about" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Info">About</MudNavLink>
-</MudNavMenu>
+
+    <NavLink href="mods" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
+        <span class="fgo-banner-inner">
+            <span class="fgo-banner-text">
+                <span class="fgo-kicker">Armoury</span>
+                <span class="fgo-title">Mods</span>
+            </span>
+            <span class="fgo-fitting" aria-hidden="true"></span>
+        </span>
+    </NavLink>
+
+    <NavLink href="monitoring" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
+        <span class="fgo-banner-inner">
+            <span class="fgo-banner-text">
+                <span class="fgo-kicker">Watchtower</span>
+                <span class="fgo-title">Monitoring</span>
+            </span>
+            @if (_monitoringUnavailable)
+            {
+                <span class="fgo-badge fgo-badge-warn" title="Monitoring unavailable">!</span>
+            }
+            <span class="fgo-fitting" aria-hidden="true"></span>
+        </span>
+    </NavLink>
+
+    <NavLink href="settings" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
+        <span class="fgo-banner-inner">
+            <span class="fgo-banner-text">
+                <span class="fgo-kicker">Standing Orders</span>
+                <span class="fgo-title">Settings</span>
+            </span>
+            <span class="fgo-fitting" aria-hidden="true"></span>
+        </span>
+    </NavLink>
+
+    <NavLink href="about" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
+        <span class="fgo-banner-inner">
+            <span class="fgo-banner-text">
+                <span class="fgo-kicker">Archive</span>
+                <span class="fgo-title">About</span>
+            </span>
+            <span class="fgo-fitting" aria-hidden="true"></span>
+        </span>
+    </NavLink>
+
+</nav>
 
 @code {
     private IReadOnlyList<ServerInstance> _servers = [];
     private string _serverFilter = string.Empty;
+
+    private int RunningCount => _servers.Count(s => s.Status == ServerInstanceStatus.Running);
     private HubConnection? _hub;
     private bool _monitoringUnavailable;
 

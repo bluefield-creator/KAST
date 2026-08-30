@@ -1,3 +1,285 @@
-.kast-sub-nav ::deep .mud-nav-link {
-    padding-left: 32px !important;
+/* ═══ Themed banner navigation ════════════════════════════════════════════
+   Each destination is a parallelogram banner plate, flat cel fill, ink
+   hairline, kicker + serif title, one domed fitting. Active wears the
+   brass rail and the crimson hem. Doctrine: docs/DESIGN.md. */
+
+.fgo-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 14px 14px 14px 10px;
+}
+
+::deep .fgo-banner {
+    position: relative;
+    overflow: hidden;
+    display: block;
+    text-decoration: none;
+    background: var(--indigo-850);
+    border: 1px solid var(--indigo-500);
+    border-left: 3px solid var(--indigo-500);
+    border-radius: var(--k-radius-sm);
+    transform: skewX(-8deg);
+    transform-origin: bottom left;
+    margin-left: 6px;
+    transition: background-color var(--k-dur) var(--k-ease),
+                border-color var(--k-dur) var(--k-ease),
+                box-shadow var(--k-dur) var(--k-ease),
+                transform var(--k-dur) var(--k-ease);
+}
+
+/* The shine pass — a narrow cream light sweeping the plate on hover. */
+::deep .fgo-banner::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    left: -45%;
+    width: 26%;
+    background: linear-gradient(105deg, transparent 0%, rgb(240 220 180 / 0.14) 50%, transparent 100%);
+    pointer-events: none;
+    transition: left 0.5s var(--k-ease);
+}
+
+::deep .fgo-banner:hover::before {
+    left: 120%;
+}
+
+::deep .fgo-banner:hover {
+    transform: skewX(-8deg) translateX(3px);
+}
+
+::deep .fgo-banner-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px 7px 14px;
+    transform: skewX(8deg);   /* counter-skew the content */
+}
+
+::deep .fgo-banner-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+::deep .fgo-kicker {
+    font-family: var(--k-font-sans);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--mist-500);
+    line-height: 1.2;
+    transition: color var(--k-dur) var(--k-ease);
+}
+
+::deep .fgo-title {
+    font-family: 'Cinzel', var(--k-font-display);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    color: var(--mist-300);
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color var(--k-dur) var(--k-ease);
+}
+
+/* The fitting: one small domed button per banner (Law 4). */
+::deep .fgo-fitting {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--indigo-400);
+    box-shadow: inset 1px 1px 0 0 rgb(90 87 168 / 0.9);
+    transition: background-color var(--k-dur) var(--k-ease);
+}
+
+/* ── States ── */
+::deep .fgo-banner:hover {
+    background: var(--aubergine-wash);
+    border-color: var(--indigo-400);
+}
+
+::deep .fgo-banner:hover .fgo-title {
+    color: var(--tunic-1);
+}
+
+::deep .fgo-banner.active {
+    background: var(--indigo-700);
+    border-color: var(--indigo-400);
+    border-left-color: var(--brass);
+    /* the crimson hem — the lining shows on the chosen banner */
+    box-shadow: inset 0 -2px 0 0 var(--crimson-2);
+}
+
+::deep .fgo-banner.active .fgo-kicker {
+    color: var(--cream);
+}
+
+::deep .fgo-banner.active .fgo-title {
+    color: var(--tunic-0);
+}
+
+::deep .fgo-banner.active .fgo-fitting {
+    background: var(--brass);
+    box-shadow: inset 1px 1px 0 0 var(--cream-lit);
+}
+
+::deep .fgo-banner:focus-visible {
+    outline: 2px solid var(--k-ring);
+    outline-offset: 2px;
+}
+
+/* ── Badges: live count (jade) and warning (apricot) ── */
+::deep .fgo-badge {
+    flex: none;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-family: var(--k-font-sans);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+::deep .fgo-badge-live {
+    background: rgb(78 140 126 / .18);
+    border: 1px solid rgb(78 140 126 / .55);
+    color: var(--k-success);
+}
+
+::deep .fgo-badge-warn {
+    background: rgb(221 163 137 / .16);
+    border: 1px solid rgb(221 163 137 / .5);
+    color: var(--k-warning);
+}
+
+/* ── Server sub-banners: smaller plates, deeper in the file ── */
+.fgo-sub-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: -2px 0 2px 18px;
+}
+
+::deep .fgo-banner-sub {
+    background: var(--indigo-900);
+    border-left-width: 2px;
+}
+
+::deep .fgo-banner-sub .fgo-banner-inner {
+    padding: 5px 10px 5px 11px;
+}
+
+::deep .fgo-sub-name {
+    font-family: var(--k-font-sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mist-300);
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color var(--k-dur) var(--k-ease);
+}
+
+::deep .fgo-banner-sub:hover .fgo-sub-name,
+::deep .fgo-banner-sub.active .fgo-sub-name {
+    color: var(--tunic-0);
+}
+
+::deep .fgo-sub-players {
+    font-family: var(--k-font-mono);
+    font-size: 10px;
+    color: var(--k-success);
+    white-space: nowrap;
+}
+
+/* Status fitting on sub-banners: square, rotated — repetition, not shape. */
+::deep .fgo-status {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    transform: rotate(45deg);
+    border: 1px solid var(--indigo-400);
+    background: var(--indigo-600);
+}
+
+::deep .fgo-status-running {
+    border-color: rgb(78 140 126 / .8);
+    background: var(--k-success);
+}
+
+::deep .fgo-status-crashed,
+::deep .fgo-status-faulted {
+    border-color: var(--crimson-3);
+    background: var(--crimson-2);
+}
+
+::deep .fgo-status-starting,
+::deep .fgo-status-stopping,
+::deep .fgo-status-restarting,
+::deep .fgo-status-downloading {
+    border-color: rgb(221 163 137 / .8);
+    background: var(--k-warning);
+}
+
+/* ═══ Motion — the banners fall in like dealt cards ═══════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+    ::deep .fgo-banner {
+        opacity: 0;
+        animation: fgo-banner-in 300ms var(--k-ease) forwards;
+    }
+
+    .fgo-nav > ::deep .fgo-banner:nth-child(1) { animation-delay: 30ms; }
+    .fgo-nav > ::deep .fgo-banner:nth-child(2) { animation-delay: 80ms; }
+    .fgo-nav > ::deep .fgo-banner:nth-child(3) { animation-delay: 130ms; }
+    .fgo-nav > ::deep .fgo-banner:nth-child(4) { animation-delay: 180ms; }
+    .fgo-nav > ::deep .fgo-banner:nth-child(5) { animation-delay: 230ms; }
+    .fgo-nav > ::deep .fgo-banner:nth-child(6) { animation-delay: 280ms; }
+    .fgo-nav > ::deep .fgo-banner:nth-child(7) { animation-delay: 330ms; }
+
+    .fgo-sub-nav ::deep .fgo-banner:nth-child(1) { animation-delay: 140ms; }
+    .fgo-sub-nav ::deep .fgo-banner:nth-child(2) { animation-delay: 180ms; }
+    .fgo-sub-nav ::deep .fgo-banner:nth-child(3) { animation-delay: 220ms; }
+    .fgo-sub-nav ::deep .fgo-banner:nth-child(4) { animation-delay: 260ms; }
+    .fgo-sub-nav ::deep .fgo-banner:nth-child(5) { animation-delay: 300ms; }
+    .fgo-sub-nav ::deep .fgo-banner:nth-child(n+6) { animation-delay: 340ms; }
+
+    /* the live badge breathes */
+    ::deep .fgo-badge-live {
+        animation: fgo-badge-breathe 2.4s var(--k-ease) infinite;
+    }
+}
+
+/* Slides via margin so the filled animation never wrestles the hover
+   transform for control of `transform`. */
+@keyframes fgo-banner-in {
+    from {
+        opacity: 0;
+        margin-left: -12px;
+    }
+    60% {
+        opacity: 1;
+        margin-left: 9px;
+    }
+    to {
+        opacity: 1;
+        margin-left: 6px;
+    }
+}
+
+@keyframes fgo-badge-breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgb(78 140 126 / 0.35); }
+    50%      { box-shadow: 0 0 0 3px rgb(78 140 126 / 0); }
 }

@@ -1,7 +1,8 @@
 /* ═══ Themed banner navigation ════════════════════════════════════════════
-   Each destination is a parallelogram banner plate, flat cel fill, ink
-   hairline, kicker + serif title, one domed fitting. Active wears the
-   brass rail and the crimson hem. Doctrine: docs/DESIGN.md. */
+   Each destination is a tailored banner plate — flat cel fill, ink
+   hairline, one stepped corner (the capelet's hem), kicker + serif title,
+   one domed fitting. Active wears the brass rail and the crimson hem.
+   Doctrine: docs/DESIGN.md. */
 
 .fgo-nav {
     display: flex;
@@ -19,8 +20,8 @@
     border: 1px solid var(--indigo-500);
     border-left: 3px solid var(--indigo-500);
     border-radius: var(--k-radius-sm);
-    transform: skewX(-8deg);
-    transform-origin: bottom left;
+    /* the capelet's stepped hem: one clipped corner instead of a skew */
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
     margin-left: 6px;
     transition: background-color var(--k-dur) var(--k-ease),
                 border-color var(--k-dur) var(--k-ease),
@@ -46,15 +47,14 @@
 }
 
 ::deep .fgo-banner:hover {
-    transform: skewX(-8deg) translateX(3px);
+    transform: translateX(3px);
 }
 
 ::deep .fgo-banner-inner {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 12px 7px 14px;
-    transform: skewX(8deg);   /* counter-skew the content */
+    padding: 8px 14px;
 }
 
 ::deep .fgo-banner-text {
@@ -174,10 +174,11 @@
 ::deep .fgo-banner-sub {
     background: var(--indigo-900);
     border-left-width: 2px;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
 }
 
 ::deep .fgo-banner-sub .fgo-banner-inner {
-    padding: 5px 10px 5px 11px;
+    padding: 5px 11px;
 }
 
 ::deep .fgo-sub-name {

@@ -35,6 +35,13 @@ public class ThemeService(ProtectedLocalStorage storage) : IDisposable
     /// <summary>Hex accent color applied as Secondary palette entry.</summary>
     public string AccentColor { get; private set; } = DefaultAccent;
 
+    /// <summary>
+    /// True (default) = Regulation, the night watch. False = Full Dress,
+    /// the daylight portrait — garments keep their colors, the ground
+    /// turns tunic-white.
+    /// </summary>
+    public bool IsDarkMode { get; private set; } = true;
+
     public event Action? OnChange;
 
     public async Task InitializeAsync()
@@ -56,8 +63,9 @@ public class ThemeService(ProtectedLocalStorage storage) : IDisposable
                 }
             }
 
-            // The cape is the only theme — clear any stale dark-mode preference.
-            try { await storage.DeleteAsync(DarkModeKey); } catch { }
+            var darkResult = await storage.GetAsync<bool>(DarkModeKey);
+            if (darkResult.Success)
+                IsDarkMode = darkResult.Value;
         }
         catch (CryptographicException)
         {
@@ -75,6 +83,13 @@ public class ThemeService(ProtectedLocalStorage storage) : IDisposable
         AccentColor = color;
         _userAccentOverride = true;
         try { await storage.SetAsync(AccentKey, color); } catch { }
+        OnChange?.Invoke();
+    }
+
+    public async Task SetDarkModeAsync(bool isDark)
+    {
+        IsDarkMode = isDark;
+        try { await storage.SetAsync(DarkModeKey, isDark); } catch { }
         OnChange?.Invoke();
     }
 

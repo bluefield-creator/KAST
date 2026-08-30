@@ -156,3 +156,67 @@
   --k-dur:      160ms;
   --k-dur-slow: 240ms;
 }
+
+/* ═══ FULL DRESS — the daylight portrait ═════════════════════════════════
+   The dossier measured her at 55% white: she is a light-mode character in
+   dark garments. The rule: the garments keep their colors — the kepi
+   (app bar), the capelet (drawer + nav banners), and the belt (table
+   headers) stay indigo; only the ground turns tunic-white, with fold
+   shadows that lean violet, never grey. In daylight the coat carries
+   actions (indigo primary), brass darkens to text grade, and the blonde
+   sheen survives only on dark chrome. Toggled as `full-dress` on <html>. */
+.full-dress {
+  /* the tunic ground */
+  --day-ground:  #ECEDF4;
+  --day-card:    #FBFBFE;
+  --day-fold:    #E0E1EB;
+  --day-hairline:#C9CBDD;
+  --day-hairline-soft:#DCDEE9;
+  --day-ink:     #15162A;
+  --day-ink-2:   #4B4D69;
+  --day-ink-3:   #71738D;
+  --day-crimson: #A8142F;
+  --day-brass:   #8A6526;
+  --day-aubergine-wash:#E9E2F1;
+
+  /* semantic slots flip to daylight */
+  --k-background:         var(--day-ground);
+  --k-foreground:         var(--day-ink);
+  --k-card:               var(--day-card);
+  --k-card-foreground:    var(--day-ink);
+  --k-muted:              var(--day-fold);
+  --k-muted-foreground:   var(--day-ink-2);
+  --k-border:             var(--day-hairline);
+  --k-border-strong:      #B4B6CC;
+  --k-input:              var(--day-hairline);
+  --k-primary:            var(--indigo-400);      /* the coat carries actions */
+  --k-primary-hover:      var(--indigo-600);
+  --k-primary-foreground: #FFFFFF;
+  --k-primary-wash:       var(--day-aubergine-wash);
+  --k-primary-tint:       #D9D2E8;
+  --k-accent:             var(--day-brass);
+  --k-accent-decor:       var(--brass);
+  --k-accent-text:        var(--day-brass);
+  --k-ring:               var(--day-brass);
+  --k-destructive:        var(--day-crimson);
+  --k-destructive-foreground: #FFFFFF;
+  --k-success:            #2F7263;
+  --k-warning:            #A6633C;
+  --k-info:               #33689B;
+  --k-disabled:           #9092A9;
+  --artoria-success: #2F7263;
+  --artoria-warning: #A6633C;
+  --artoria-error:   var(--day-crimson);
+  --artoria-info:    #33689B;
+  --artoria-success-wash: rgb(47 114 99 / .09);
+  --artoria-warning-wash: rgb(166 99 60 / .09);
+  --artoria-error-wash:   rgb(168 20 47 / .07);
+  --artoria-info-wash:    rgb(51 104 155 / .08);
+
+  /* daylight ornaments */
+  --sheen-wheat: linear-gradient(168deg, #B8894A 5%, #8A6526 55%, #6E4E1B 100%);
+  --rule-fade: linear-gradient(90deg, transparent, var(--day-hairline) 18%, var(--day-hairline) 82%, transparent);
+  --rule-brass-fade: linear-gradient(90deg, transparent, rgb(138 101 38 / 0.7) 30%, rgb(138 101 38 / 0.7) 70%, transparent);
+  --k-shadow-ambient: 0 1px 0 rgb(21 22 42 / 0.07);
+  --k-shadow-float:   0 16px 40px rgb(21 22 42 / 0.22);
+}

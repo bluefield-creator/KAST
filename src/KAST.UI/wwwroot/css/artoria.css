@@ -574,6 +574,159 @@ a:focus-visible {
     transition-timing-function: var(--k-ease);
 }
 
+/* ── 18. FULL DRESS — the daylight portrait ──────────────────────────── */
+/* Garments keep their colors (kepi appbar, capelet drawer, belt headers,
+   dark chips, missives, tooltips stay indigo); only the ground and its
+   plates turn tunic-white. Translucent aubergine hovers work unchanged
+   on both grounds. */
+/* The mode class is rendered server-side on the layout root, so the CSS
+   layer and the MudBlazor palette always flip in the same render — no JS
+   race, no half-applied refreshes. */
+.artoria-root {
+    min-height: 100dvh;
+    display: flow-root;
+}
+
+.artoria-root.full-dress {
+    background: var(--day-ground);
+    color: var(--day-ink);
+}
+
+.full-dress .mud-paper:not(.mud-menu-list):not(.mud-popover):not(.mud-dialog):not(.mud-alert):not(.mud-snackbar):not(.mud-appbar):not(.mud-table),
+.full-dress .mud-card {
+    background-color: var(--day-card) !important;
+    border-color: var(--day-hairline);
+}
+
+.full-dress .mud-table,
+.full-dress .mud-simple-table {
+    background-color: var(--day-card) !important;
+    border-color: var(--day-hairline);
+}
+
+.full-dress .mud-popover,
+.full-dress .mud-menu-list {
+    background-color: var(--day-card) !important;
+    border-color: var(--day-hairline);
+}
+
+/* The dialog is still the coat opening: brass piping and the lining band
+   survive daylight — only the plate goes white. */
+.full-dress .mud-dialog {
+    background-color: var(--day-card) !important;
+    box-shadow:
+        var(--k-shadow-float),
+        inset 0 0 0 3px var(--day-card),
+        inset 0 0 0 4px rgb(138 101 38 / 0.4),
+        inset 0 8px 0 -5px var(--day-crimson) !important;
+}
+
+/* In daylight the coat carries actions: indigo primary, white text.
+   The lining still shows on hover. */
+.full-dress .mud-button-filled.mud-button-filled-primary {
+    background: var(--indigo-400) !important;
+    color: #FFFFFF !important;
+    border-color: var(--indigo-deep, #24225E);
+}
+
+.full-dress .mud-button-filled.mud-button-filled-primary:hover {
+    background: var(--indigo-400) !important;
+    box-shadow: inset 0 -2px 0 0 var(--day-crimson) !important;
+}
+
+.full-dress .mud-button-filled.mud-button-filled-primary:active {
+    background: var(--indigo-600) !important;
+}
+
+.full-dress .mud-button-outlined {
+    border-color: var(--day-hairline);
+    color: var(--day-ink);
+}
+
+.full-dress .mud-button-outlined:hover {
+    border-color: var(--day-brass);
+    color: var(--day-ink);
+}
+
+.full-dress .mud-button-filled.mud-button-filled-error {
+    color: var(--day-crimson) !important;
+    border-color: rgb(168 20 47 / 0.45);
+}
+
+.full-dress .mud-button-filled.mud-button-filled-error:hover {
+    background: var(--day-crimson) !important;
+    color: #FFFFFF !important;
+    border-color: var(--day-brass);
+}
+
+.full-dress .mud-button-outlined:active,
+.full-dress .mud-button-text:active {
+    box-shadow: inset 0 -2px 0 0 var(--day-crimson) !important;
+}
+
+.full-dress .mud-input.mud-input-outlined:hover .mud-input-outlined-border {
+    border-color: var(--indigo-300);
+}
+
+.full-dress .mud-input.mud-input-outlined:focus-within .mud-input-outlined-border {
+    border-color: var(--indigo-400);
+}
+
+.full-dress .mud-input.mud-input-filled {
+    background-color: var(--day-fold);
+}
+
+.full-dress .mud-input input,
+.full-dress .mud-input textarea {
+    caret-color: var(--day-brass);
+}
+
+.full-dress .mud-table-cell,
+.full-dress .mud-simple-table td {
+    border-bottom-color: var(--day-hairline-soft);
+}
+
+.full-dress .mud-alert {
+    border-color: var(--day-hairline);
+}
+
+.full-dress .mud-alert.mud-alert-filled-error,
+.full-dress .mud-alert.mud-alert-text-error {
+    color: var(--day-crimson);
+    border-color: rgb(168 20 47 / .35);
+}
+
+.full-dress .mud-tab.mud-tab-active {
+    color: var(--day-ink);
+}
+
+.full-dress .mud-tab-slider {
+    background: var(--day-crimson);
+}
+
+/* Dark garments that float over the daylight keep their light lettering. */
+.full-dress .mud-snackbar,
+.full-dress .mud-snackbar .mud-snackbar-icon .mud-icon-root,
+.full-dress .mud-snackbar .mud-snackbar-content-message {
+    color: var(--tunic-1) !important;
+}
+
+.full-dress .mud-tooltip {
+    color: var(--tunic-1);
+}
+
+.full-dress * {
+    scrollbar-color: #B4B6CC transparent;
+}
+
+.full-dress *::-webkit-scrollbar-thumb {
+    background: #B4B6CC;
+}
+
+.full-dress *::-webkit-scrollbar-thumb:hover {
+    background: #9092A9;
+}
+
 /* Stat counters — data is sans, even inside heading slots. */
 .artoria-stat {
     font-family: var(--k-font-sans) !important;

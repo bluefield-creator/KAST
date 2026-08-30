@@ -6,7 +6,8 @@
 @inject NavigationManager NavigationManager
 @inject KeyboardShortcutService KeyboardShortcuts
 
-<MudThemeProvider Theme="@_theme" IsDarkMode="true" />
+<MudThemeProvider Theme="@_theme" IsDarkMode="_isDark" />
+<div class="artoria-root @(_isDark ? null : "full-dress")">
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -31,6 +32,10 @@
         <MudSpacer />
         <SteamAccountWidget />
         <AccountWidget />
+        <MudTooltip Text="@(_isDark ? "Full Dress (light)" : "Regulation (dark)")" Placement="Placement.Bottom">
+            <MudIconButton Icon="@(_isDark ? Icons.Material.Outlined.WbSunny : Icons.Material.Outlined.NightsStay)"
+                           Color="Color.Inherit" OnClick="@ToggleModeAsync" aria-label="Toggle Full Dress mode" />
+        </MudTooltip>
     </MudAppBar>
     <MudDrawer id="nav-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2"
                Width="290px" Breakpoint="Breakpoint.Md">
@@ -69,6 +74,7 @@
             </MudPaper>
         </MudOverlay>
     }
+</div>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
@@ -78,6 +84,7 @@
 
 @code {
     private bool _drawerOpen = true;
+    private bool _isDark = true;
     private MudTheme? _theme = null;
     private List<BreadcrumbItem> _breadcrumbItems = new();
 
@@ -91,12 +98,14 @@
         await base.OnInitializedAsync();
         await ThemeService.InitializeAsync();
 
+        _isDark = ThemeService.IsDarkMode;
         _theme = ArtoriaTheme.Build();
-        _theme.PaletteDark.Secondary = ThemeService.AccentColor;
+        ApplyAccent();
 
         _themeChangeHandler = () =>
         {
-            _theme.PaletteDark.Secondary = ThemeService.AccentColor;
+            _isDark = ThemeService.IsDarkMode;
+            ApplyAccent();
             InvokeAsync(StateHasChanged);
         };
         ThemeService.OnChange += _themeChangeHandler;
@@ -104,6 +113,15 @@
         BuildBreadcrumbs(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
     }
+
+    private void ApplyAccent()
+    {
+        _theme!.PaletteDark.Secondary = ThemeService.AccentColor;
+        _theme.PaletteLight.Secondary = ArtoriaTheme.ToDaylightAccent(ThemeService.AccentColor);
+    }
+
+    private async Task ToggleModeAsync()
+        => await ThemeService.SetDarkModeAsync(!_isDark);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

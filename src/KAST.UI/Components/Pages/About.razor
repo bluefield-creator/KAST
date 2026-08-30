@@ -3,49 +3,36 @@
 @using System.Reflection
 @using System.Runtime.InteropServices
 
-<PageTitle>KAST -- About</PageTitle>
+<PageTitle>CASTER -- About</PageTitle>
 
 @* ══ Hero ════════════════════════════════════════════════════════════════ *@
 <MudCard Elevation="3" Class="mb-4" Style="overflow:hidden; position:relative;">
-    @* subtle ember glow in the background *@
+    @* subtle starlight glow in the background *@
     <div style="position:absolute; top:-60px; right:-60px; width:260px; height:260px;
-                border-radius:50%; background:radial-gradient(circle, rgba(224,101,24,.18) 0%, transparent 70%);
+                border-radius:50%; background:radial-gradient(circle, rgba(94,177,255,.18) 0%, transparent 70%);
                 pointer-events:none;"></div>
 
     <MudCardContent Class="pa-8">
         <div class="d-flex align-center gap-4 flex-wrap justify-center justify-sm-start">
 
-            @* K logo — scaled from favicon.svg *@
-            <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"
-                 width="88" height="88" style="flex-shrink:0; filter:drop-shadow(0 0 12px rgba(224,101,24,.5));">
-                <defs>
-                    <linearGradient id="hero-k" x1="0" y1="4" x2="0" y2="28" gradientUnits="userSpaceOnUse">
-                        <stop offset="0%"   stop-color="#f5b040"/>
-                        <stop offset="45%"  stop-color="#e06518"/>
-                        <stop offset="100%" stop-color="#8a3200"/>
-                    </linearGradient>
-                </defs>
-                <g fill="url(#hero-k)">
-                    <rect x="4"  y="4"  width="7" height="24"/>
-                    <polygon points="10,4  28,4  10,14"/>
-                    <polygon points="10,17 10,28 28,28"/>
-                </g>
-            </svg>
+            @* CASTER mark — the kepi-C from favicon.svg (keep both in sync) *@
+            <img src="favicon.svg" alt="" width="88" height="88" draggable="false"
+                 style="flex-shrink:0; filter:drop-shadow(0 0 12px rgba(90,87,168,.5));" />
 
             @* Title block *@
             <div>
                 <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
-                    <span style="font-size:3rem; font-weight:800; letter-spacing:.06em; line-height:1;
-                                 background:linear-gradient(160deg,#f5b040 0%,#e06518 45%,#8a3200 100%);
+                    <span style="font-family:'Cinzel','Cormorant Garamond',serif; font-size:2.8rem; font-weight:700; letter-spacing:.06em; line-height:1;
+                                 background:var(--sheen-wheat);
                                  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-                                 background-clip:text;">KAST</span>
+                                 background-clip:text;">CASTER</span>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                             Color="Color.Warning" Style="font-family:monospace; font-size:11px; margin:0;">
+                             Color="Color.Tertiary" Style="font-family:monospace; font-size:11px; margin:0;">
                         @_version
                     </MudChip>
                 </div>
                 <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Style="margin-top:2px;">
-                    Keelah's Arma Server Tool
+                    Arma Server Tool — Enterprise Edition
                 </MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top:6px; opacity:.75;">
                     Manage your Arma 3 dedicated servers with ease —
@@ -99,7 +86,7 @@
                 {
                     <div class="d-flex align-center gap-2 mb-1">
                         <MudIcon Icon="@Icons.Material.Filled.Circle"
-                                 Style="font-size:5px; color:var(--mud-palette-warning); flex-shrink:0;" />
+                                 Style="font-size:5px; color:var(--mud-palette-tertiary); flex-shrink:0;" />
                         <MudLink Href="@url" Target="_blank" Typo="Typo.body2"
                                  Style="color:var(--mud-palette-text-primary);">@tech</MudLink>
                     </div>
@@ -113,16 +100,16 @@
 <MudCard Elevation="2">
     <MudCardContent Class="d-flex flex-wrap gap-2 align-center pa-4">
         <MudButton StartIcon="@Icons.Custom.Brands.GitHub"
-                   Href="https://github.com/Foxlider/KAST" Target="_blank"
+                   Href="https://github.com/bluefield-creator/CASTER" Target="_blank"
                    Variant="Variant.Outlined" Size="Size.Small">GitHub</MudButton>
         <MudButton StartIcon="@Icons.Material.Filled.Forum"
                    Href="https://discord.gg/2BUuZa3" Target="_blank"
                    Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary">Discord</MudButton>
         <MudButton StartIcon="@Icons.Material.Filled.Article"
-                   Href="https://github.com/Foxlider/KAST/blob/main/CHANGELOG.md" Target="_blank"
+                   Href="https://github.com/bluefield-creator/CASTER/blob/caster/CHANGELOG.md" Target="_blank"
                    Variant="Variant.Outlined" Size="Size.Small">Changelog</MudButton>
         <MudButton StartIcon="@Icons.Material.Filled.People"
-                   Href="https://github.com/Foxlider/KAST/blob/main/CONTRIBUTING.md" Target="_blank"
+                   Href="https://github.com/bluefield-creator/CASTER/blob/caster/CONTRIBUTING.md" Target="_blank"
                    Variant="Variant.Outlined" Size="Size.Small">Contributing</MudButton>
         <MudSpacer />
         <MudButton StartIcon="@Icons.Material.Filled.BugReport"
@@ -173,7 +160,7 @@
     private static string BuildIssueUrl()
     {
         var body =
-            $"**KAST Version:** `{_version}`\n" +
+            $"**CASTER Version:** `{_version}`\n" +
             $"**Runtime:** `{_runtime}`\n" +
             $"**Platform:** `{_platform}`\n" +
             $"**Arch:** `{_arch}`\n" +
@@ -183,9 +170,9 @@
             "**Steps to reproduce**\n1. \n2. \n3. \n\n" +
             "**Expected behaviour**\n<!-- What should have happened -->\n\n" +
             "**Actual behaviour**\n<!-- What happened instead -->\n\n" +
-            "**Logs**\n```\n<!-- Paste relevant output from the KAST log console -->\n```\n";
+            "**Logs**\n```\n<!-- Paste relevant output from the CASTER log console -->\n```\n";
 
-        return "https://github.com/Foxlider/KAST/issues/new" +
+        return "https://github.com/bluefield-creator/CASTER/issues/new" +
                "?labels=bug%2Cneeds-triage" +
                "&title=%5BBug%5D%3A+" +
                "&body=" + Uri.EscapeDataString(body);

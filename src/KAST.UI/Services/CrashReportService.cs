@@ -33,7 +33,7 @@ public sealed class CrashReportService(
                         "UncleanShutdown",
                         Environment.ProcessId,
                         GetVersion(),
-                        "KAST started after the previous process ended without a clean shutdown marker.",
+                        "CASTER started after the previous process ended without a clean shutdown marker.",
                         null,
                         null,
                         false,

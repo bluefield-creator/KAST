@@ -11,7 +11,7 @@
 @inject IServerInstanceService ServerService
 @implements IDisposable
 
-<PageTitle>KAST -- @(_isNew ? "New Server" : _instance.Name)</PageTitle>
+<PageTitle>CASTER -- @(_isNew ? "New Server" : _instance.Name)</PageTitle>
 
 @* ── Toolbar ── *@
 <div class="d-flex align-center gap-2 mb-4 flex-wrap">
@@ -29,6 +29,13 @@
         <MudChip T="string" Size="Size.Small" Color="@UiHelpers.GetStatusColor(_instance.Status)" Variant="Variant.Filled">@_instance.Status</MudChip>
     }
     <MudSpacer />
+    @if (HasUnsavedChanges)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                 Icon="@Icons.Material.Filled.Circle">
+            Unsaved changes
+        </MudChip>
+    }
     @if (!_isNew && _instances.Count > 1)
     {
         <MudSelect T="int"
@@ -151,12 +158,59 @@
     private int _missionCount;
 
     private bool _isDirty;
+    private string _cleanSnapshot = "";
     private IDisposable? _locationChangingRegistration;
+
+    // Many editor fields bind straight to _instance without an explicit change
+    // callback (ports, DLC switches, schedule…), so the explicit _isDirty flag
+    // alone misses them. A field snapshot taken at load/save time catches every
+    // scalar edit.
+    private bool HasUnsavedChanges => _isDirty || ComputeSnapshot() != _cleanSnapshot;
+
+    private string ComputeSnapshot()
+    {
+        var instanceFields = string.Join("|", typeof(ServerInstance).GetProperties()
+            .Where(p => p.CanWrite &&
+                        (p.PropertyType.IsPrimitive || p.PropertyType.IsEnum ||
+                         p.PropertyType == typeof(string) ||
+                         Nullable.GetUnderlyingType(p.PropertyType) is not null))
+            .Where(p => p.Name is not ("Status" or "ProcessId" or "StartedAt" or "CreatedAt"
+                        or "LastModified" or "InstalledAt" or "InstalledBuildId"
+                        or "ServerCfgContent" or "BasicCfgContent" or "ArmaProfileContent"))
+            .OrderBy(p => p.Name)
+            .Select(p => $"{p.Name}={p.GetValue(_instance)}"));
+
+        return $"{instanceFields}\n{_serverCfgRaw}\n{_basicCfgRaw}\n{_profileRaw}";
+    }
 
     protected override Task OnInitializedAsync()
     {
         _locationChangingRegistration = Nav.RegisterLocationChangingHandler(OnLocationChanging);
+        _ = WatchDirtyStateAsync(_dirtyWatchCts.Token);
         return Task.CompletedTask;
+    }
+
+    // Child tabs bind straight to _instance, which never re-renders this parent —
+    // poll the snapshot and repaint only when the unsaved-state flips.
+    private readonly CancellationTokenSource _dirtyWatchCts = new();
+    private bool _lastDirtyShown;
+
+    private async Task WatchDirtyStateAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                var dirty = HasUnsavedChanges;
+                if (dirty != _lastDirtyShown)
+                {
+                    _lastDirtyShown = dirty;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     protected override async Task OnParametersSetAsync()
@@ -198,6 +252,7 @@
         if (string.IsNullOrEmpty(_profileRaw)) _profileRaw = ConfigService.SerializeArma3Profile(_profileData);
 
         _isDirty = false;
+        _cleanSnapshot = ComputeSnapshot();
     }
 
     private void ResetEditorState()
@@ -280,10 +335,11 @@
 
             Snackbar.Add(
                 isRunning
-                    ? "Server saved in KAST. Stop or restart the server to apply config file changes."
+                    ? "Server saved in CASTER. Stop or restart the server to apply config file changes."
                     : "Server saved",
                 isRunning ? Severity.Warning : Severity.Success);
             _isDirty = false;
+            _cleanSnapshot = ComputeSnapshot();
 
             if (Id == null || Id == 0) Nav.NavigateTo($"/servers/{_instance.Id}", replace: true);
             return true;
@@ -385,7 +441,7 @@
 
     private async ValueTask OnLocationChanging(LocationChangingContext context)
     {
-        if (!_isDirty) return;
+        if (!HasUnsavedChanges) return;
 
         context.PreventNavigation();
 
@@ -394,10 +450,16 @@
         if (discard)
         {
             _isDirty = false;
+            _cleanSnapshot = ComputeSnapshot();
             Nav.NavigateTo(context.TargetLocation, forceLoad: false);
         }
     }
 
-    public void Dispose() => _locationChangingRegistration?.Dispose();
+    public void Dispose()
+    {
+        _locationChangingRegistration?.Dispose();
+        _dirtyWatchCts.Cancel();
+        _dirtyWatchCts.Dispose();
+    }
 
 }

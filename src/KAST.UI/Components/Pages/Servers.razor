@@ -8,7 +8,7 @@
 @inject ContentProgressTracker ContentProgress
 @inject IJSRuntime JS
 
-<PageTitle>KAST — Servers</PageTitle>
+<PageTitle>CASTER -- Servers</PageTitle>
 
 <div class="d-flex align-center justify-space-between mb-4">
     <MudText Typo="Typo.h5">Server Instances</MudText>
@@ -105,7 +105,7 @@ else
     </TitleContent>
     <DialogContent>
         <MudText>
-            Permanently delete @(_instancePendingDelete?.Name ?? "this instance") from KAST?
+            Permanently delete @(_instancePendingDelete?.Name ?? "this instance") from CASTER?
         </MudText>
         <MudCheckBox @bind-Value="_deleteInstanceFiles"
                      Label="Also delete server files from disk"

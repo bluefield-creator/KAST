@@ -46,7 +46,7 @@
                         <MudText Typo="Typo.subtitle2" Style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             @_user.Username
                         </MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">KAST administrator</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">CASTER administrator</MudText>
                     </div>
                 </div>
             </div>
@@ -56,6 +56,7 @@
                            StartIcon="@Icons.Material.Filled.ManageAccounts">
                     Account Settings
                 </MudButton>
+                @* artoria: raw mud classes — hand-rolled button markup, re-audit on MudBlazor upgrade *@
                 <form method="post" action="/auth/logout" data-enhance="false">
                     <button type="submit" class="mud-button-root mud-button mud-button-text mud-button-text-error mud-button-text-size-small mud-ripple"
                             style="width:100%;justify-content:flex-start;padding:4px 8px;text-transform:none;">

@@ -71,7 +71,7 @@
 }
 
 .mod-item:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--k-primary-wash);
 }
 
 .mod-item-name {

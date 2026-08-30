@@ -1,0 +1,597 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ARTORIA — MudBlazor de-Materialization layer (Blue Kepi edition)
+   ─────────────────────────────────────────────────────────────────────────
+   Loaded AFTER MudBlazor.min.css; consumes tokens from artoria-tokens.css.
+   Register: a rigid, correct uniform — flat cel fills, ink outlines, the
+   ladder motif, brass on every cool edge, crimson only as revealed
+   interior, aubergine as the hover bridge between rest and reveal.
+   No gloss, no glows, no blur. Sheen lives in lettering only.
+
+   ⚠ Couples to MudBlazor 9.5.0 internal class names (version pinned in
+   Directory.Packages.props). Re-audit this list on any MudBlazor upgrade:
+     .mud-ripple .mud-paper .mud-popover .mud-menu-list .mud-dialog
+     .mud-dialog-title .mud-appbar .mud-drawer .mud-nav-link
+     .mud-button-root .mud-button-filled .mud-button-outlined .mud-button-text
+     .mud-input .mud-input-control .mud-input-outlined .mud-input-underline
+     .mud-input-label .mud-table .mud-table-head .mud-table-cell
+     .mud-table-hover .mud-table-row .mud-simple-table .mud-table-container
+     .mud-chip .mud-tabs .mud-tab .mud-tab-slider .mud-switch
+     .mud-snackbar .mud-alert .mud-card .mud-breadcrumbs .mud-divider
+     .mud-overlay-scrim .mud-list .mud-list-item .mud-menu-item
+     .mud-progress-linear .mud-progress-linear-bar .mud-skeleton .mud-tooltip
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 0. Inside the coat at night ─────────────────────────────────────── */
+html {
+    background-color: var(--indigo-900);
+}
+
+body {
+    background: var(--indigo-900);
+    font-family: var(--k-font-sans);
+    color: var(--k-foreground);
+}
+
+.mud-layout,
+.mud-main-content {
+    background: transparent !important;
+}
+
+::selection {
+    background: var(--aubergine-2);
+    color: var(--tunic-0);
+}
+
+/* ── 1. Ripple kill — the single most Material thing there is ───────── */
+.mud-ripple::after,
+.mud-ripple-icon::after {
+    animation: none !important;
+    display: none !important;
+}
+
+/* ── 2. Surfaces — flat plates, crisp hairlines ──────────────────────── */
+.mud-paper:not(.mud-menu-list):not(.mud-popover):not(.mud-dialog):not(.mud-alert):not(.mud-snackbar):not(.mud-appbar):not(.mud-table) {
+    background-color: var(--indigo-850) !important;
+    background-image: none !important;
+    border: 1px solid var(--indigo-500);
+    border-radius: var(--k-radius-lg);
+    box-shadow: var(--k-shadow-ambient) !important;
+}
+
+.mud-card {
+    background-color: var(--indigo-850) !important;
+    background-image: none !important;
+    border: 1px solid var(--indigo-500);
+    border-radius: var(--k-radius-lg);
+    box-shadow: var(--k-shadow-ambient) !important;
+}
+
+.mud-table,
+.mud-simple-table {
+    background-color: var(--indigo-850) !important;
+    border: 1px solid var(--indigo-500);
+    border-radius: var(--k-radius-lg);
+    box-shadow: var(--k-shadow-ambient) !important;
+}
+
+/* Floating plates separate by plane shadow only. */
+.mud-popover,
+.mud-menu-list {
+    background-color: var(--indigo-700) !important;
+    border: 1px solid var(--indigo-400);
+    border-radius: var(--k-radius-lg);
+    box-shadow: var(--k-shadow-float) !important;
+}
+
+/* Dialogs are openings — the coat parts. Double gold piping (a cream
+   band with a thin hairline inboard, as on every coat edge) and the
+   crimson lining revealed as a band inside the top edge. */
+.mud-dialog {
+    background-color: var(--indigo-700) !important;
+    border: 1px solid rgb(200 154 94 / 0.8);
+    border-radius: var(--k-radius-xl);
+    box-shadow:
+        var(--k-shadow-float),
+        inset 0 0 0 3px var(--indigo-700),
+        inset 0 0 0 4px rgb(200 154 94 / 0.35),
+        inset 0 8px 0 -5px var(--crimson-2) !important;
+}
+
+/* ── 3. Buttons — the tunic does the work ────────────────────────────── */
+.mud-button-root {
+    text-transform: none;
+    letter-spacing: .01em;
+    font-weight: 600;
+    font-family: var(--k-font-sans);
+    border-radius: var(--k-radius);
+    transition: background-color var(--k-dur) var(--k-ease),
+                border-color var(--k-dur) var(--k-ease),
+                color var(--k-dur) var(--k-ease),
+                box-shadow var(--k-dur) var(--k-ease);
+}
+
+.mud-button-filled {
+    box-shadow: none !important;
+}
+
+/* Filled primary: tunic white, ink outline; on hover the lining shows
+   along the inner bottom edge — warmth revealed only in motion. */
+.mud-button-filled.mud-button-filled-primary {
+    background: var(--tunic-0) !important;
+    color: var(--indigo-800) !important;
+    border: 1px solid var(--outline-ink);
+}
+
+.mud-button-filled.mud-button-filled-primary:hover {
+    background: var(--tunic-0) !important;
+    box-shadow: inset 0 -2px 0 0 var(--crimson-2) !important;
+}
+
+.mud-button-filled.mud-button-filled-primary:active {
+    background: var(--tunic-2) !important;
+}
+
+/* Filled error: crimson is a reveal — brass-edged when it must fill. */
+.mud-button-filled.mud-button-filled-error {
+    background: transparent !important;
+    color: var(--crimson-1) !important;
+    border: 1px solid rgb(200 32 60 / 0.55);
+}
+
+.mud-button-filled.mud-button-filled-error:hover {
+    background: var(--crimson-2) !important;
+    color: var(--tunic-0) !important;
+    border-color: var(--brass-shadow);
+}
+
+.mud-button-outlined {
+    border-color: var(--indigo-400);
+}
+
+.mud-button-outlined:hover {
+    background-color: transparent;
+    border-color: var(--brass);
+    color: var(--tunic-0);
+}
+
+/* Pressing any uniform piece parts it — the lining shows. */
+.mud-button-outlined:active,
+.mud-button-text:active {
+    box-shadow: inset 0 -2px 0 0 var(--crimson-2) !important;
+}
+
+.mud-button-text:hover {
+    background-color: var(--aubergine-wash);
+}
+
+.mud-icon-button:hover {
+    background-color: var(--aubergine-wash) !important;
+}
+
+/* ── 4. Focus — one cream inscription, no halo ───────────────────────── */
+.mud-button-root:focus-visible,
+.mud-nav-link:focus-visible,
+.mud-input-control input:focus-visible,
+.mud-input-control textarea:focus-visible,
+.mud-chip:focus-visible,
+.mud-table-cell a:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--k-ring) !important;
+    outline-offset: 2px;
+}
+
+/* ── 5. Inputs — quiet structure, brass caret ────────────────────────── */
+.mud-input.mud-input-outlined .mud-input-outlined-border {
+    border-color: var(--k-input);
+    transition: border-color var(--k-dur) var(--k-ease);
+}
+
+.mud-input.mud-input-outlined:hover .mud-input-outlined-border {
+    border-color: var(--indigo-300);
+}
+
+.mud-input.mud-input-outlined:focus-within .mud-input-outlined-border {
+    border-width: 1px;
+    border-color: var(--tunic-3);
+}
+
+.mud-input-label {
+    color: var(--k-muted-foreground);
+    font-family: var(--k-font-sans);
+}
+
+.mud-input.mud-input-filled {
+    background-color: rgb(34 34 88 / 0.55);
+    border-radius: var(--k-radius) var(--k-radius) 0 0;
+}
+
+.mud-input.mud-input-underline:before {
+    border-bottom: 1px solid var(--indigo-400);
+}
+
+.mud-input input,
+.mud-input textarea {
+    caret-color: var(--brass);
+}
+
+/* ── 6. AppBar — the kepi: a flat indigo crown wearing the crimson band
+   with its two gold pinstripes. The app's hat. ───────────────────────── */
+.mud-appbar {
+    background: var(--indigo-950) !important;
+    border-bottom: 0;
+    box-shadow:
+        0 1px 0 0 var(--cream),
+        0 4px 0 0 var(--crimson-2),
+        0 5px 0 0 var(--cream) !important;
+}
+
+/* Brand wordmark — the one SVG (kepi-C, Cinzel ASTER in her hair
+   gradient, the staff with its lilac ribbon), embedded font and all. */
+.artoria-wordmark {
+    height: 34px;
+    width: auto;
+    display: block;
+    user-select: none;
+}
+
+/* ── 7. Drawer — the frogged capelet. The right edge is a ladder pair
+   (two parallel verticals); each nav item wears a domed button, and the
+   active item's button is brass, tied inward by its braid bar. ───────── */
+.mud-drawer {
+    background: var(--indigo-950) !important;
+    border-right: 1px solid var(--indigo-500);
+    box-shadow: inset -4px 0 0 -3px rgb(59 58 134 / 0.5) !important;
+}
+
+.mud-nav-link {
+    position: relative;
+    border-left: 2px solid transparent;
+    margin: 1px 8px;
+    padding-left: 14px;
+    border-radius: var(--k-radius);
+    transition: background-color var(--k-dur) var(--k-ease),
+                border-color var(--k-dur) var(--k-ease);
+}
+
+/* The button column: one domed fitting per item, drawn flat-cel —
+   body + crescent highlight, a hemisphere, never a disc. */
+.mud-nav-link::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--indigo-400);
+    box-shadow: inset 1px 1px 0 0 rgb(90 87 168 / 0.9);
+}
+
+.mud-nav-link:hover {
+    background-color: var(--aubergine-wash);
+}
+
+.mud-nav-link.active {
+    color: var(--tunic-0) !important;
+    background-color: var(--indigo-700) !important;
+    border-left: 2px solid var(--brass);
+    font-weight: 600;
+}
+
+.mud-nav-link.active::before {
+    background: var(--brass);
+    box-shadow: inset 1px 1px 0 0 var(--cream-lit);
+}
+
+.mud-nav-link.active .mud-nav-link-icon {
+    color: var(--cream) !important;
+}
+
+/* ── 8. Tables — the belt: gold pinstripes on navy ───────────────────── */
+.mud-table-head .mud-table-cell,
+.mud-simple-table thead th {
+    background-color: var(--indigo-800);
+    color: var(--tunic-2);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    box-shadow: inset 0 1px 0 var(--pinstripe), inset 0 -1px 0 var(--pinstripe);
+    border-bottom: 0;
+}
+
+.mud-table-cell,
+.mud-simple-table td {
+    border-bottom: 1px solid rgb(52 51 110 / 0.5);
+}
+
+.mud-table-hover .mud-table-row:hover,
+.mud-table-row:hover td {
+    background-color: var(--aubergine-wash);
+}
+
+/* ── 9. Chips — heraldic seals ───────────────────────────────────────── */
+.mud-chip {
+    border-radius: var(--k-radius-sm);
+    font-weight: 600;
+    box-shadow: none !important;
+}
+
+.mud-chip.mud-chip-color-success.mud-chip-filled {
+    background-color: var(--artoria-success-wash);
+    color: var(--k-success);
+    border: 1px solid rgb(78 140 126 / .45);
+}
+
+.mud-chip.mud-chip-color-warning.mud-chip-filled {
+    background-color: var(--artoria-warning-wash);
+    color: var(--k-warning);
+    border: 1px solid rgb(221 163 137 / .4);
+}
+
+.mud-chip.mud-chip-color-error.mud-chip-filled {
+    background-color: var(--indigo-700);
+    color: var(--tunic-1);
+    border: 1px solid rgb(200 32 60 / .55);
+    box-shadow: inset 0 -2px 0 0 var(--crimson-2) !important;
+}
+
+.mud-chip.mud-chip-color-info.mud-chip-filled {
+    background-color: var(--artoria-info-wash);
+    color: var(--k-info);
+    border: 1px solid rgb(145 189 224 / .4);
+}
+
+.mud-chip.mud-chip-color-primary.mud-chip-filled,
+.mud-chip.mud-chip-color-secondary.mud-chip-filled {
+    background-color: var(--indigo-700);
+    color: var(--tunic-2);
+    border: 1px solid var(--indigo-400);
+}
+
+.mud-chip.mud-chip-color-tertiary.mud-chip-filled {
+    background-color: rgb(200 154 94 / .12);
+    color: var(--cream);
+    border: 1px solid var(--brass);
+}
+
+.mud-chip.mud-chip-color-default.mud-chip-filled {
+    background-color: var(--indigo-700);
+    color: var(--mist-300);
+    border: 1px solid var(--indigo-500);
+}
+
+/* ── 10. Tabs — the kepi band: crimson between two gold pinstripes ───── */
+.mud-tabs-toolbar {
+    border-bottom: 1px solid transparent;
+    border-image: var(--rule-fade) 1;
+    background: transparent !important;
+}
+
+.mud-tab {
+    text-transform: none;
+    letter-spacing: .01em;
+    font-weight: 500;
+    transition: color var(--k-dur) var(--k-ease);
+}
+
+.mud-tab:hover {
+    background-color: var(--aubergine-wash);
+}
+
+.mud-tab.mud-tab-active {
+    font-weight: 600;
+    color: var(--tunic-0);
+}
+
+.mud-tab-slider {
+    height: 4px;
+    background: var(--crimson-2);
+    box-shadow: inset 0 1px 0 0 var(--cream), inset 0 -1px 0 0 var(--cream);
+}
+
+/* ── 11. Dialog titles — the sheen belongs to lettering ──────────────── */
+.mud-dialog .mud-dialog-title {
+    font-family: var(--k-font-display);
+    font-weight: 600;
+    font-size: var(--k-text-2xl);
+    background: var(--sheen-wheat);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    padding-bottom: 14px;
+    position: relative;
+}
+
+.mud-dialog .mud-dialog-title::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--rule-brass-fade);
+}
+
+.mud-overlay-scrim {
+    background-color: rgb(14 14 36 / .76) !important;
+}
+
+/* ── 12. Snackbar — sealed missives, flat ────────────────────────────── */
+.mud-snackbar {
+    background: var(--indigo-850) !important;
+    color: var(--k-card-foreground) !important;
+    border: 1px solid var(--indigo-500);
+    border-left-width: 3px;
+    border-radius: var(--k-radius);
+    box-shadow: var(--k-shadow-float) !important;
+    font-family: var(--k-font-sans);
+}
+
+.mud-snackbar .mud-snackbar-icon .mud-icon-root,
+.mud-snackbar .mud-snackbar-content-message {
+    color: var(--k-card-foreground);
+}
+
+.mud-snackbar.mud-alert-filled-success { border-left-color: var(--eye); }
+.mud-snackbar.mud-alert-filled-warning { border-left-color: var(--blonde-3); }
+.mud-snackbar.mud-alert-filled-error   { border-left-color: var(--crimson-2); }
+.mud-snackbar.mud-alert-filled-info    { border-left-color: var(--stone); }
+.mud-snackbar.mud-alert-filled-normal  { border-left-color: var(--indigo-400); }
+
+.mud-snackbar.mud-alert-filled-success .mud-snackbar-icon .mud-icon-root { color: var(--k-success); }
+.mud-snackbar.mud-alert-filled-warning .mud-snackbar-icon .mud-icon-root { color: var(--k-warning); }
+.mud-snackbar.mud-alert-filled-error   .mud-snackbar-icon .mud-icon-root { color: var(--k-destructive); }
+.mud-snackbar.mud-alert-filled-info    .mud-snackbar-icon .mud-icon-root { color: var(--k-info); }
+
+/* ── 13. Alerts — quiet washes, same-hue hairlines ───────────────────── */
+.mud-alert {
+    border-radius: var(--k-radius);
+    border: 1px solid var(--indigo-500);
+    box-shadow: none !important;
+}
+
+.mud-alert.mud-alert-filled-success,
+.mud-alert.mud-alert-text-success {
+    background-color: var(--artoria-success-wash);
+    color: var(--k-success);
+    border-color: rgb(78 140 126 / .4);
+}
+
+.mud-alert.mud-alert-filled-warning,
+.mud-alert.mud-alert-text-warning {
+    background-color: var(--artoria-warning-wash);
+    color: var(--k-warning);
+    border-color: rgb(221 163 137 / .35);
+}
+
+.mud-alert.mud-alert-filled-error,
+.mud-alert.mud-alert-text-error {
+    background-color: var(--artoria-error-wash);
+    color: var(--crimson-1);
+    border-color: rgb(200 32 60 / .4);
+}
+
+.mud-alert.mud-alert-filled-info,
+.mud-alert.mud-alert-text-info {
+    background-color: var(--artoria-info-wash);
+    color: var(--k-info);
+    border-color: rgb(145 189 224 / .35);
+}
+
+/* ── 14. Chrome details ──────────────────────────────────────────────── */
+.mud-breadcrumbs .mud-breadcrumb-item a,
+.mud-breadcrumbs .mud-breadcrumb-item {
+    font-size: var(--k-text-sm);
+    color: var(--k-muted-foreground);
+}
+
+.mud-breadcrumbs .mud-breadcrumb-item:last-child {
+    color: var(--k-foreground);
+    font-weight: 600;
+}
+
+.mud-divider {
+    border: 0;
+    height: 1px;
+    background: var(--rule-fade);
+}
+
+.mud-tooltip {
+    background-color: var(--indigo-700);
+    color: var(--k-foreground);
+    border: 1px solid var(--indigo-400);
+    font-family: var(--k-font-sans);
+    font-size: var(--k-text-xs);
+    border-radius: var(--k-radius-sm);
+    box-shadow: var(--k-shadow-float);
+}
+
+.mud-list-item:hover,
+.mud-menu-item:hover {
+    background-color: var(--aubergine-wash);
+}
+
+/* Progress is the staff: a near-black shaft, the moving fill its brass
+   collar — dark accents live on the moving parts. */
+.mud-progress-linear {
+    border-radius: 999px;
+    background-color: var(--staff) !important;
+    overflow: hidden;
+}
+
+.mud-progress-linear .mud-progress-linear-bar {
+    border-radius: 999px;
+}
+
+.mud-progress-linear.mud-progress-linear-color-primary .mud-progress-linear-bar {
+    background: var(--tunic-2) !important;
+}
+
+.mud-progress-linear.mud-progress-linear-color-tertiary .mud-progress-linear-bar {
+    background: var(--cream) !important;
+}
+
+.mud-skeleton {
+    border-radius: var(--k-radius-sm);
+}
+
+/* ── 15. Scrollbars — thin structure ─────────────────────────────────── */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--indigo-500) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--indigo-500);
+    border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--indigo-400);
+}
+
+/* ── 16. Motion discipline ───────────────────────────────────────────── */
+.mud-button-root,
+.mud-input,
+.mud-nav-link,
+.mud-chip,
+.mud-list-item,
+.mud-menu-item,
+.mud-switch,
+.mud-tab {
+    transition-duration: var(--k-dur);
+    transition-timing-function: var(--k-ease);
+}
+
+/* Stat counters — data is sans, even inside heading slots. */
+.artoria-stat {
+    font-family: var(--k-font-sans) !important;
+    font-weight: 700 !important;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+}
+
+/* Consoles are the terminals — glove charcoal, not uniform indigo.
+   The darkest values sit where the work happens. */
+.kast-log-console,
+.kast-console,
+code, kbd, pre {
+    font-family: var(--k-font-mono);
+}
+
+.kast-log-console,
+.kast-console {
+    background-color: var(--charcoal-2);
+    color: var(--tunic-2);
+}

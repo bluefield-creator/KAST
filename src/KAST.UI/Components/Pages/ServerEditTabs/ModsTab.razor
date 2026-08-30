@@ -313,7 +313,8 @@
                     <MudChip T="string" Size="Size.Small"
                              Color="@(context.Type == KAST.Core.Enums.ModPresetType.Kast ? Color.Primary : Color.Secondary)"
                              Variant="Variant.Filled">
-                        @context.Type
+                        @* Display label only — the stored enum member stays "Kast" *@
+                        @(context.Type == KAST.Core.Enums.ModPresetType.Kast ? "CASTER" : context.Type.ToString())
                     </MudChip>
                 </MudTd>
                 <MudTd DataLabel="Created">@context.CreatedAt.ToString("yyyy-MM-dd HH:mm")</MudTd>
@@ -346,7 +347,7 @@
         <MudTextField @bind-Value="_savePresetName" Label="Preset Name" Required="true"
                       Variant="Variant.Outlined" Margin="Margin.Dense" />
         <MudText Typo="Typo.caption" Color="Color.Secondary">
-            Saves the current mod layout (all 4 columns) as a KAST preset.
+            Saves the current mod layout (all 4 columns) as a CASTER preset.
         </MudText>
     </DialogContent>
     <DialogActions>

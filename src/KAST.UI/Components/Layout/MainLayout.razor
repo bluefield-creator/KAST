@@ -1,22 +1,21 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
+@using KAST.UI.Themes
 
 @inject ThemeService ThemeService
 @inject NavigationManager NavigationManager
 @inject KeyboardShortcutService KeyboardShortcuts
 
-<MudThemeProvider Theme="@_theme" IsDarkMode="_isDarkMode" />
+<MudThemeProvider Theme="@_theme" IsDarkMode="true" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@DrawerToggle" />
-        <MudText Typo="Typo.h6" Class="ml-2 kast-title" Style="@($"letter-spacing:.08em; font-weight:700; color: {ThemeService.AccentColor};")">
-            KAST
-        </MudText>
+        <img src="caster-wordmark.svg" alt="CASTER" class="ml-2 artoria-wordmark" draggable="false" />
         <MudText Typo="Typo.caption" Class="ml-1 mud-text-secondary" Style="opacity:.5">
-            Keelah's Arma Server Tool
+            Arma Server Tool — Enterprise Edition
         </MudText>
         <MudMenu>
             <ActivatorContent>
@@ -32,7 +31,6 @@
         <MudSpacer />
         <SteamAccountWidget />
         <AccountWidget />
-        <MudIconButton Icon="@(DarkLightModeButtonIcon)" Color="Color.Inherit" OnClick="@DarkModeToggle" aria-label="Toggle dark mode" />
     </MudAppBar>
     <MudDrawer id="nav-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2"
                Breakpoint="Breakpoint.Md">
@@ -80,7 +78,6 @@
 
 @code {
     private bool _drawerOpen = true;
-    private bool _isDarkMode = true;
     private MudTheme? _theme = null;
     private List<BreadcrumbItem> _breadcrumbItems = new();
 
@@ -94,22 +91,12 @@
         await base.OnInitializedAsync();
         await ThemeService.InitializeAsync();
 
-        _isDarkMode = ThemeService.IsDarkMode;
-        _lightPalette.Secondary = ThemeService.AccentColor;
-        _darkPalette.Secondary  = ThemeService.AccentColor;
-
-        _theme = new()
-        {
-            PaletteLight     = _lightPalette,
-            PaletteDark      = _darkPalette,
-            LayoutProperties = new LayoutProperties { DefaultBorderRadius = "4px" },
-        };
+        _theme = ArtoriaTheme.Build();
+        _theme.PaletteDark.Secondary = ThemeService.AccentColor;
 
         _themeChangeHandler = () =>
         {
-            _isDarkMode                  = ThemeService.IsDarkMode;
-            _lightPalette.Secondary      = ThemeService.AccentColor;
-            _darkPalette.Secondary       = ThemeService.AccentColor;
+            _theme.PaletteDark.Secondary = ThemeService.AccentColor;
             InvokeAsync(StateHasChanged);
         };
         ThemeService.OnChange += _themeChangeHandler;
@@ -203,90 +190,10 @@
 
     private void DrawerToggle() => _drawerOpen = !_drawerOpen;
 
-    private async Task DarkModeToggle()
-    {
-        await ThemeService.SetDarkModeAsync(!_isDarkMode);
-    }
-
     public void Dispose()
     {
         if (_themeChangeHandler != null)
             ThemeService.OnChange -= _themeChangeHandler;
         NavigationManager.LocationChanged -= OnLocationChanged;
     }
-
-    // ── Light palette — Material Design 700/600 tones ───────────────────────
-    private readonly PaletteLight _lightPalette = new()
-    {
-        Primary               = "#1976D2",  // Blue 700
-        PrimaryContrastText   = "#FFFFFF",
-        Secondary             = "#FF7043",  // Deep Orange 400 — overridden by ThemeService
-        SecondaryContrastText = "#FFFFFF",
-        Tertiary              = "#00897B",  // Teal 600
-        TertiaryContrastText  = "#FFFFFF",
-        Info                  = "#0288D1",  // Light Blue 700
-        InfoContrastText      = "#FFFFFF",
-        Success               = "#388E3C",  // Green 700
-        SuccessContrastText   = "#FFFFFF",
-        Warning               = "#F57C00",  // Orange 700
-        WarningContrastText   = "#FFFFFF",
-        Error                 = "#D32F2F",  // Red 700
-        ErrorContrastText     = "#FFFFFF",
-        Background            = "#FAFAFA",  // Grey 50
-        BackgroundGray        = "#F5F5F5",  // Grey 100
-        Surface               = "#FFFFFF",
-        AppbarBackground      = "rgba(255,255,255,0.92)",
-        AppbarText            = "#212121",  // Grey 900
-        DrawerBackground      = "#FAFAFA",
-        DrawerText            = "#212121",
-        DrawerIcon            = "#616161",  // Grey 700
-        Black                 = "#212121",
-        GrayLight             = "#E0E0E0",  // Grey 300
-        GrayLighter           = "#F5F5F5",  // Grey 100
-    };
-
-    // ── Dark palette — Material Design 400 tones on near-black backgrounds ──
-    private readonly PaletteDark _darkPalette = new()
-    {
-        Primary               = "#42A5F5",  // Blue 400
-        PrimaryContrastText   = "#000000",
-        Secondary             = "#FF7043",  // Deep Orange 400 — overridden by ThemeService
-        SecondaryContrastText = "#000000",
-        Tertiary              = "#4DB6AC",  // Teal 300
-        TertiaryContrastText  = "#000000",
-        Info                  = "#29B6F6",  // Light Blue 400
-        InfoContrastText      = "#000000",
-        Success               = "#66BB6A",  // Green 400
-        SuccessContrastText   = "#000000",
-        Warning               = "#FFA726",  // Orange 400
-        WarningContrastText   = "#000000",
-        Error                 = "#EF5350",  // Red 400
-        ErrorContrastText     = "#FFFFFF",
-        Background            = "#121212",  // Material dark spec
-        BackgroundGray        = "#1C1C1C",
-        Surface               = "#1E1E1E",
-        AppbarBackground      = "rgba(18,18,18,0.92)",
-        AppbarText            = "#E0E0E0",  // Grey 300
-        DrawerBackground      = "#1C1C1C",
-        DrawerText            = "#E0E0E0",
-        DrawerIcon            = "#9E9E9E",  // Grey 500
-        TextPrimary           = "#EEEEEE",  // Grey 200
-        TextSecondary         = "#9E9E9E",  // Grey 500
-        TextDisabled          = "#FFFFFF33",
-        ActionDefault         = "#BDBDBD",  // Grey 400
-        ActionDisabled        = "#9999994D",
-        ActionDisabledBackground = "#3A3A3A4D",
-        LinesDefault          = "#2E2E2E",
-        TableLines            = "#2E2E2E",
-        Divider               = "#2E2E2E",
-        OverlayLight          = "#12121280",
-        GrayLight             = "#2E2E2E",
-        GrayLighter           = "#242424",
-    };
-
-    public string DarkLightModeButtonIcon => _isDarkMode switch
-    {
-        true  => Icons.Material.Rounded.AutoMode,
-        false => Icons.Material.Outlined.DarkMode,
-    };
 }

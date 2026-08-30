@@ -29,8 +29,8 @@ public sealed class MonitoringStateService : IAsyncDisposable
     public IReadOnlyList<double> HostCpu => _hostCpu;
     private readonly List<double> _hostMem = new(MaxPoints);
     public IReadOnlyList<double> HostMem => _hostMem;
-    private readonly Dictionary<int, (List<double> Cpu, List<double> Mem)> _instanceHistory = [];
-    public IReadOnlyDictionary<int, (List<double> Cpu, List<double> Mem)> InstanceHistory => _instanceHistory;
+    private readonly Dictionary<int, (List<double> Cpu, List<double> Mem, List<double> Players)> _instanceHistory = [];
+    public IReadOnlyDictionary<int, (List<double> Cpu, List<double> Mem, List<double> Players)> InstanceHistory => _instanceHistory;
 
     // ── Notification ─────────────────────────────────────────────────────────
     public event Action? OnDataChanged;
@@ -85,12 +85,13 @@ public sealed class MonitoringStateService : IAsyncDisposable
         {
             if (!InstanceHistory.TryGetValue(id, out var hist))
             {
-                hist = (new List<double>(MaxPoints), new List<double>(MaxPoints));
+                hist = (new List<double>(MaxPoints), new List<double>(MaxPoints), new List<double>(MaxPoints));
                 _instanceHistory[id] = hist;
             }
-            if (hist.Cpu.Count >= MaxPoints) { hist.Cpu.RemoveAt(0); hist.Mem.RemoveAt(0); }
+            if (hist.Cpu.Count >= MaxPoints) { hist.Cpu.RemoveAt(0); hist.Mem.RemoveAt(0); hist.Players.RemoveAt(0); }
             hist.Cpu.Add(Math.Round(metrics.CpuUsagePercent, 1));
             hist.Mem.Add(Math.Round(metrics.MemoryUsageBytes / 1_048_576.0, 1));
+            hist.Players.Add(metrics.PlayerCount);
         }
     }
 

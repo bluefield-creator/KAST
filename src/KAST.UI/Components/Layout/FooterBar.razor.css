@@ -42,7 +42,7 @@
 .log-output {
     flex: 1;
     overflow-y: auto;
-    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-family: var(--k-font-mono);
     font-size: 11px;
     padding: 4px 8px;
     line-height: 1.6;

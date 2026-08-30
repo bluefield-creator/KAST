@@ -109,7 +109,7 @@ public class UserAccountService(
 
         var allowedGroups = GetConfiguredOidcAllowedGroups();
         if (!request.Groups.Any(group => allowedGroups.Contains(group)))
-            throw new InvalidOperationException("OIDC user is not a member of an allowed KAST administrator group.");
+            throw new InvalidOperationException("OIDC user is not a member of an allowed CASTER administrator group.");
 
         var issuer = request.Issuer.Trim();
         var subject = request.Subject.Trim();
@@ -125,7 +125,7 @@ public class UserAccountService(
         if (existing is not null)
         {
             // Keep the local username: renaming on every login from the IdP display
-            // name silently discarded any rename made in KAST.
+            // name silently discarded any rename made in CASTER.
             existing.AuthSource = KastUser.OidcAuthSource;
             existing.ExternalProvider = providerName;
             existing.LastLoginAt = DateTime.UtcNow;
@@ -280,7 +280,7 @@ public class UserAccountService(
             ?? throw new InvalidOperationException("User account was not found.");
 
         if (user.IsExternallyManaged)
-            throw new InvalidOperationException("Externally managed accounts cannot be edited in KAST.");
+            throw new InvalidOperationException("Externally managed accounts cannot be edited in CASTER.");
 
         var normalized = NormalizeUsername(username);
         ValidateUsername(username, normalized);

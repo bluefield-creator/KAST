@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kast-ui",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/KAST.UI", "--launch-profile", "http"],
+      "port": 5016
+    },
+    {
+      "name": "caster-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "P:/Repositories/CASTER/src/frontend", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

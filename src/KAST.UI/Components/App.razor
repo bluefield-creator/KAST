@@ -6,9 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500..700;1,500..600&family=Source+Sans+3:ital,wght@0,400..700;1,400..600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
     <link rel="stylesheet" href="@Assets["KAST.UI.styles.css"]" />
+    <link rel="stylesheet" href="@Assets["css/artoria-tokens.css"]" />
+    <link rel="stylesheet" href="@Assets["css/artoria.css"]" />
     <ImportMap />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="icon" type="image/ico" href="favicon.ico" />
@@ -16,15 +18,15 @@
     <style id="ks">
       #kast-splash {
         position:fixed;inset:0;z-index:10000;
-        background:radial-gradient(ellipse at 50% 55%, #1c1628 0%, #0a0912 70%);
+        background:radial-gradient(ellipse at 50% 55%, #1A1A3E 0%, #0E0E24 70%);
         display:flex;flex-direction:column;align-items:center;justify-content:center;
         transition:opacity .55s cubic-bezier(.4,0,1,1);
       }
       #kast-splash.ks-out { opacity:0; pointer-events:none; }
-      .ks-forge { position:relative; width:190px; height:168px; margin-bottom:14px; }
+      .ks-forge { position:relative; width:340px; height:150px; margin-bottom:14px; }
       .ks-spark {
         position:absolute; border-radius:50%;
-        width:var(--s,4px); height:var(--s,4px); background:var(--c,#ffaa44);
+        width:var(--s,4px); height:var(--s,4px); background:var(--c,#CFCEF0);
         animation:ks-rise var(--d,1.3s) ease-in var(--t,0s) infinite;
       }
       @@keyframes ks-rise {
@@ -35,19 +37,18 @@
 
       .ks-word {
         position:absolute;
-        left:8px;
-        top:18px;
+        left:0;
+        top:26px;
         display:flex;
         align-items:center;
-        transform-origin:28px 56px;
       }
 
       .ks-k-wrap {
-        width:86px;
-        height:86px;
+        width:340px;
+        height:92px;
         position:relative;
-        transform:rotate(-90deg);
-        transform-origin:50% 50%;
+        transform:scale(.94);
+        transform-origin:50% 60%;
         transition:transform .52s cubic-bezier(.2,.7,.2,1);
       }
 
@@ -58,12 +59,12 @@
         width:100%;
         height:100%;
         object-fit:contain;
-        filter:drop-shadow(0 0 10px rgba(255,120,0,.45));
+        filter:drop-shadow(0 0 10px rgba(90,87,168,.45));
       }
 
       .ks-k-base {
         opacity:.28;
-        filter:grayscale(.2) brightness(.62) drop-shadow(0 0 4px rgba(255,90,0,.25));
+        filter:grayscale(.2) brightness(.62) drop-shadow(0 0 4px rgba(90,87,168,.25));
       }
 
       .ks-k-fill {
@@ -76,52 +77,33 @@
         to   { clip-path:inset(0 0 0 0); }
       }
 
-      .ks-ast {
-        margin-left:-4px;
-        font-family:'Roboto',sans-serif;
-        font-size:54px;
-        font-weight:900;
-        letter-spacing:.16em;
-        line-height:1;
-        color:#f3c27a;
-        text-shadow:0 0 10px rgba(255,140,0,.35), 0 0 26px rgba(255,100,0,.2);
-        transform:translateX(-26px);
-        opacity:0;
-        transition:transform .42s ease, opacity .36s ease;
-      }
-
       #kast-splash.ks-ready .ks-k-wrap {
-        transform:rotate(0deg);
-      }
-
-      #kast-splash.ks-ready .ks-ast {
-        transform:translateX(0);
-        opacity:1;
+        transform:scale(1);
       }
 
       .ks-forge::after {
         content:'';
         position:absolute;
-        left:16px;
-        right:10px;
-        bottom:18px;
+        left:24px;
+        right:24px;
+        bottom:8px;
         height:24px;
         border-radius:20px;
-        background:radial-gradient(ellipse at 50% 50%, rgba(255,116,20,.28), rgba(255,116,20,0));
+        background:radial-gradient(ellipse at 50% 50%, rgba(90,87,168,.28), rgba(90,87,168,0));
         filter:blur(6px);
         pointer-events:none;
       }
 
       .ks-tagline {
-        font-family:'Roboto',sans-serif;
+        font-family:'Source Sans 3','Segoe UI',sans-serif;
         font-size:11px; letter-spacing:.28em; text-transform:uppercase;
         color:rgba(255,255,255,.22); margin-top:4px; margin-bottom:28px;
       }
       .ks-dots { display:flex; gap:10px; }
       .ks-dot  { width:7px; height:7px; border-radius:50%; animation:ks-pulse 1.4s ease-in-out infinite; }
-      .ks-dot:nth-child(1) { background:#c06010; animation-delay:0s;  }
-      .ks-dot:nth-child(2) { background:#ff8c2a; animation-delay:.2s; }
-      .ks-dot:nth-child(3) { background:#ffcc60; animation-delay:.4s; }
+      .ks-dot:nth-child(1) { background:#5A57A8; animation-delay:0s;  }
+      .ks-dot:nth-child(2) { background:#CFCEF0; animation-delay:.2s; }
+      .ks-dot:nth-child(3) { background:#C89A5E; animation-delay:.4s; }
       @@keyframes ks-pulse {
         0%,80%,100% { transform:scale(.45); opacity:.25; }
         40%         { transform:scale(1.15); opacity:1; }
@@ -176,11 +158,28 @@
         window._kastChartInstances = {};
 
         window.kastCharts = {
+            // Resolves "var(--token)suffix" strings against the live Artoria
+            // theme so chart colors follow the cape palette without hardcoding.
+            _resolveColors: function (node) {
+                if (typeof node === 'string') {
+                    var m = node.match(/^var\((--[\w-]+)\)(.*)$/);
+                    if (m) {
+                        var v = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
+                        return v ? v + m[2] : node;
+                    }
+                    return node;
+                }
+                if (Array.isArray(node)) return node.map(window.kastCharts._resolveColors);
+                if (node && typeof node === 'object') {
+                    for (var k in node) node[k] = window.kastCharts._resolveColors(node[k]);
+                }
+                return node;
+            },
             create: function (id, config) {
                 var ctx = document.getElementById(id);
                 if (!ctx) return;
                 if (window._kastChartInstances[id]) window._kastChartInstances[id].destroy();
-                window._kastChartInstances[id] = new Chart(ctx, config);
+                window._kastChartInstances[id] = new Chart(ctx, window.kastCharts._resolveColors(config));
             },
             update: function (id, labels, dataArrays) {
                 var chart = window._kastChartInstances[id];

@@ -137,7 +137,7 @@ public partial class AppUpdateService : IAppUpdateService
         var releaseVersion = ExtractReleaseVersion(release);
         var updateAvailable = IsUpdateAvailable(currentVersion, releaseVersion, release.TagName);
         var message = isDockerDeployment
-            ? "KAST is running in Docker. Download is available, but updates must be applied by changing the container image."
+            ? "CASTER is running in Docker. Download is available, but updates must be applied by changing the container image."
             : updateAvailable
                 ? "Update available."
                 : "Already on this release.";
@@ -167,7 +167,7 @@ public partial class AppUpdateService : IAppUpdateService
     {
         var check = await CheckForUpdatesAsync(channelId, ct);
         if (check.IsDocker)
-            return new(false, "Docker deployments are notify-only. Update the container image outside KAST.", null, null, false);
+            return new(false, "Docker deployments are notify-only. Update the container image outside CASTER.", null, null, false);
         if (!check.IsChannelAvailable || check.Asset is null)
             return new(false, check.Message, null, null, false);
 
@@ -264,16 +264,16 @@ public partial class AppUpdateService : IAppUpdateService
 
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(processPath))
-            return new AppUpdateApplyResult(false, "Could not resolve the current KAST executable path.");
+            return new AppUpdateApplyResult(false, "Could not resolve the current CASTER executable path.");
 
         var restartMode = GetRestartMode(isDockerDeployment: false);
         if (restartMode == AppUpdateRestartMode.WindowsService)
         {
             var serviceStatus = await hostServiceManager.GetStatusAsync(ct);
             if (!serviceStatus.IsSupported || serviceStatus.State == HostServiceRunState.Unsupported)
-                return new AppUpdateApplyResult(false, "KAST is running as a Windows service, but Windows service control is not supported from this process.");
+                return new AppUpdateApplyResult(false, "CASTER is running as a Windows service, but Windows service control is not supported from this process.");
             if (serviceStatus.State == HostServiceRunState.NotInstalled)
-                return new AppUpdateApplyResult(false, "KAST is running as a Windows service, but the KAST service is not installed.");
+                return new AppUpdateApplyResult(false, "CASTER is running as a Windows service, but the CASTER service is not installed.");
         }
 
         var scriptPath = isWindows()
@@ -291,9 +291,9 @@ public partial class AppUpdateService : IAppUpdateService
             File.WriteAllText(scriptPath, BuildLinuxApplyScript(pid, extractPath, AppContext.BaseDirectory, backupPath, processPath), Encoding.ASCII);
 
         startApplyScript(scriptPath);
-        logger.LogInformation("KAST update apply script started: {ScriptPath}", scriptPath);
+        logger.LogInformation("CASTER update apply script started: {ScriptPath}", scriptPath);
         applicationLifetime.StopApplication();
-        return new AppUpdateApplyResult(true, "KAST is stopping so the staged update can be applied.");
+        return new AppUpdateApplyResult(true, "CASTER is stopping so the staged update can be applied.");
     }
 
     public static string? GetCurrentRuntimeIdentifier()

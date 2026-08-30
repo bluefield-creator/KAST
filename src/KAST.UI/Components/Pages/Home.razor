@@ -11,7 +11,7 @@
 @inject ISteamService SteamService
 @inject ILogger<Home> Logger
 
-<PageTitle>KAST -- Dashboard</PageTitle>
+<PageTitle>CASTER -- Dashboard</PageTitle>
 
 @if (!_isLoading)
 {
@@ -19,12 +19,12 @@
     @if (_instances.Count == 0 && _mods.Count == 0)
     {
         <MudCard Elevation="4" Class="mb-6" Style="border:1px solid var(--mud-palette-lines-default); overflow:hidden;">
-            <div style="background:linear-gradient(135deg, rgba(224,101,24,.12) 0%, rgba(255,112,67,.06) 100%);
+            <div style="background:linear-gradient(135deg, rgba(59,82,196,.14) 0%, rgba(94,177,255,.06) 100%);
                         border-bottom:1px solid var(--mud-palette-divider);" class="pa-6">
                 <div class="d-flex align-center gap-3 mb-1">
                     <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" Style="font-size:36px; color:var(--mud-palette-warning);" />
                     <div>
-                        <MudText Typo="Typo.h5" Style="font-weight:700;">Welcome to KAST</MudText>
+                        <MudText Typo="Typo.h5" Style="font-weight:700;">Welcome to CASTER</MudText>
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
                             Follow these steps to get your first Arma 3 server running.
                         </MudText>
@@ -48,7 +48,7 @@
                     <div style="flex:1;">
                         <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Connect your Steam account</MudText>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
-                            KAST needs Steam to download Arma 3 server files and Workshop mods.
+                            CASTER needs Steam to download Arma 3 server files and Workshop mods.
                             You can sign in with a QR code or your username and password.
                         </MudText>
                         @if (steamOk)
@@ -117,7 +117,7 @@
                         <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Create a server instance</MudText>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
                             Configure your Arma 3 dedicated server — set the name, port, game mode, difficulty,
-                            and assign mods. KAST handles the rest.
+                            and assign mods. CASTER handles the rest.
                         </MudText>
                         @if (serverOk)
                         {
@@ -170,7 +170,7 @@
             <MudCard Elevation="2">
                 <MudCardContent>
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Server Instances</MudText>
-                    <MudText Typo="Typo.h4">@_instances.Count</MudText>
+                    <MudText Typo="Typo.h4" Class="artoria-stat">@_instances.Count</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">Total configured</MudText>
                 </MudCardContent>
             </MudCard>
@@ -179,7 +179,7 @@
             <MudCard Elevation="2">
                 <MudCardContent>
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Running</MudText>
-                    <MudText Typo="Typo.h4" Color="Color.Success">@_instances.Count(i => i.Status == ServerInstanceStatus.Running)</MudText>
+                    <MudText Typo="Typo.h4" Class="artoria-stat" Color="Color.Success">@_instances.Count(i => i.Status == ServerInstanceStatus.Running)</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">@GetPlayersOnlineCaption()</MudText>
                 </MudCardContent>
             </MudCard>
@@ -188,7 +188,7 @@
             <MudCard Elevation="2">
                 <MudCardContent>
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Installed Mods</MudText>
-                    <MudText Typo="Typo.h4">@_mods.Count</MudText>
+                    <MudText Typo="Typo.h4" Class="artoria-stat">@_mods.Count</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">Available for use</MudText>
                 </MudCardContent>
             </MudCard>
@@ -197,7 +197,7 @@
             <MudCard Elevation="2">
                 <MudCardContent>
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Updates Available</MudText>
-                    <MudText Typo="Typo.h4" Color="Color.Warning">@_mods.Count(m => m.Status == ModStatus.UpdateAvailable)</MudText>
+                    <MudText Typo="Typo.h4" Class="artoria-stat" Color="Color.Warning">@_mods.Count(m => m.Status == ModStatus.UpdateAvailable)</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">Mods needing update</MudText>
                 </MudCardContent>
             </MudCard>

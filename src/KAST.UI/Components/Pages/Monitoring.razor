@@ -5,8 +5,9 @@
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @inject IProcessManagerService ProcessManager
+@inject ThemeService ThemeService
 
-<PageTitle>KAST -- Monitoring</PageTitle>
+<PageTitle>CASTER -- Monitoring</PageTitle>
 
 <MudText Typo="Typo.h5" Class="mb-4">Monitoring</MudText>
 
@@ -154,13 +155,14 @@ else
                 <MudText Typo="Typo.caption" Color="Color.Secondary">Port @instance.Port</MudText>
                 @if (metrics != null)
                 {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
-                        @metrics.PlayerCount players
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
+                             Icon="@Icons.Material.Filled.Groups">
+                        @metrics.PlayerCount@(metrics.MaxPlayers > 0 ? $" / {metrics.MaxPlayers}" : "") players
                     </MudChip>
                 }
             </div>
             <MudGrid Spacing="3">
-                <MudItem xs="12" md="6">
+                <MudItem xs="12" md="4">
                     <MudCard Elevation="1">
                         <MudCardContent>
                             <MudText Typo="Typo.subtitle2" Class="mb-2">CPU</MudText>
@@ -170,12 +172,22 @@ else
                         </MudCardContent>
                     </MudCard>
                 </MudItem>
-                <MudItem xs="12" md="6">
+                <MudItem xs="12" md="4">
                     <MudCard Elevation="1">
                         <MudCardContent>
                             <MudText Typo="Typo.subtitle2" Class="mb-2">Memory</MudText>
                             <div style="position:relative; height:130px;">
                                 <canvas id="chart-inst-@(instance.Id)-mem"></canvas>
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudCard Elevation="1">
+                        <MudCardContent>
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Players</MudText>
+                            <div style="position:relative; height:130px;">
+                                <canvas id="chart-inst-@(instance.Id)-players"></canvas>
                             </div>
                         </MudCardContent>
                     </MudCard>
@@ -194,6 +206,14 @@ else
     {
         State.EnsureStarted();
         State.OnDataChanged += HandleDataChanged;
+        ThemeService.OnChange += HandleThemeChanged;
+    }
+
+    private void HandleThemeChanged()
+    {
+        // Chart axis chrome is baked in at creation time — rebuild on theme flips
+        if (_chartsInitialized)
+            _ = InvokeAsync(InitChartsAsync);
     }
 
     private void HandleDataChanged()
@@ -254,18 +274,24 @@ else
 
     private async Task InitChartsAsync()
     {
-        await CreateLineChart("chart-host-cpu", "CPU %", "#ff6b35", 100);
-        await CreateLineChart("chart-host-mem", "Memory %", "#4fc3f7", 100);
+        await CreateLineChart("chart-host-cpu", "CPU %", "var(--k-primary)", 100);
+        await CreateLineChart("chart-host-mem", "Memory %", "var(--k-accent)", 100);
         foreach (var id in State.Instances.Select(i => i.Id))
         {
-            await CreateLineChart($"chart-inst-{id}-cpu", "CPU %", "#ff6b35", 100);
-            await CreateLineChart($"chart-inst-{id}-mem", "Memory (MB)", "#4fc3f7", null);
+            await CreateLineChart($"chart-inst-{id}-cpu", "CPU %", "var(--k-primary)", 100);
+            await CreateLineChart($"chart-inst-{id}-mem", "Memory (MB)", "var(--k-accent)", null);
+            await CreateLineChart($"chart-inst-{id}-players", "Players", "var(--k-info)", null);
         }
         await UpdateChartsAsync();
     }
 
     private async Task CreateLineChart(string canvasId, string label, string color, int? maxY)
     {
+        // Axis chrome resolves from the Artoria tokens at creation time;
+        // kastCharts.create substitutes the live values per theme.
+        var tickColor = "var(--k-muted-foreground)";
+        var gridColor = "var(--k-border)";
+
         var config = new
         {
             type = "line",
@@ -277,8 +303,8 @@ else
                 plugins = new { legend = new { display = false }, tooltip = new { enabled = true } },
                 scales = new
                 {
-                    x = new { ticks = new { maxTicksLimit = 12, color = "#9e9e9e", font = new { size = 10 } }, grid = new { color = "#333" } },
-                    y = new { min = 0, max = maxY, ticks = new { color = "#9e9e9e", font = new { size = 10 } }, grid = new { color = "#333" } }
+                    x = new { ticks = new { maxTicksLimit = 12, color = tickColor, font = new { size = 10 } }, grid = new { color = gridColor } },
+                    y = new { min = 0, max = maxY, ticks = new { color = tickColor, font = new { size = 10 } }, grid = new { color = gridColor } }
                 }
             }
         };
@@ -297,6 +323,7 @@ else
                 {
                     await JS.InvokeVoidAsync("kastCharts.update", $"chart-inst-{id}-cpu", State.HostLabels, new[] { hist.Cpu });
                     await JS.InvokeVoidAsync("kastCharts.update", $"chart-inst-{id}-mem", State.HostLabels, new[] { hist.Mem });
+                    await JS.InvokeVoidAsync("kastCharts.update", $"chart-inst-{id}-players", State.HostLabels, new[] { hist.Players });
                 }
             }
         }
@@ -306,6 +333,7 @@ else
     public ValueTask DisposeAsync()
     {
         State.OnDataChanged -= HandleDataChanged;
+        ThemeService.OnChange -= HandleThemeChanged;
         return ValueTask.CompletedTask;
     }
 }

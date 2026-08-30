@@ -59,6 +59,7 @@
                             NavClass="kast-stepper-nav"
                             StepClass="kast-stepper-step">
                     <ConnectorTemplate Context="connStep">
+                        @* artoria: raw mud classes — re-audit on MudBlazor upgrade *@
                         <div class="mud-stepper-nav-connector">
                             <MudProgressLinear Value="@(connStep.Completed || connStep.Skipped ? 100 : 0)"
                                                Indeterminate="@(connStep.IsActive && !connStep.Completed && !connStep.HasError && (_installState?.IsDownloading == true))"

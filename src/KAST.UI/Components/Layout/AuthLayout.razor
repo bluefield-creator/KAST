@@ -1,35 +1,55 @@
 @inherits LayoutComponentBase
-@inject ThemeService ThemeService
+@using KAST.UI.Themes
 
 <MudThemeProvider Theme="@_theme" IsDarkMode="true" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--mud-palette-background);">
-    <div style="width:100%;max-width:420px;">
-        <div class="d-flex align-center justify-center gap-2 mb-4">
-            <MudText Typo="Typo.h4" Style="@($"font-weight:800;color:{ThemeService.AccentColor};")">KAST</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">Keelah's Arma Server Tool</MudText>
+<style>
+    .caster-auth-sky {
+        min-height:100vh; display:flex; align-items:center; justify-content:center;
+        padding:24px; position:relative; overflow:hidden;
+        background:radial-gradient(ellipse at 50% 30%, #1A1A3E 0%, #0E0E24 72%);
+    }
+    .caster-auth-star {
+        position:absolute; border-radius:50%;
+        width:var(--s,3px); height:var(--s,3px); background:var(--c,#EAE9FA);
+        opacity:.55; animation:caster-twinkle var(--d,3.2s) ease-in-out var(--t,0s) infinite;
+        pointer-events:none;
+    }
+    @@keyframes caster-twinkle {
+        0%,100% { opacity:.2; transform:scale(.8); }
+        50%      { opacity:.85; transform:scale(1.15); }
+    }
+    .caster-auth-mark {
+        height:60px; filter:drop-shadow(0 0 14px rgba(90,87,168,.35));
+        user-select:none;
+    }
+</style>
+
+<div class="caster-auth-sky">
+    <div class="caster-auth-star" style="left:12%;top:18%;--d:3.4s;--t:.2s;"></div>
+    <div class="caster-auth-star" style="left:22%;top:64%;--s:2px;--d:2.8s;--t:1.1s;"></div>
+    <div class="caster-auth-star" style="left:31%;top:34%;--s:4px;--d:4.1s;--t:.6s;--c:#C89A5E;"></div>
+    <div class="caster-auth-star" style="left:68%;top:22%;--d:3.0s;--t:1.6s;"></div>
+    <div class="caster-auth-star" style="left:78%;top:58%;--s:4px;--d:3.7s;--t:.4s;"></div>
+    <div class="caster-auth-star" style="left:87%;top:31%;--s:2px;--d:2.6s;--t:.9s;--c:#C89A5E;"></div>
+    <div class="caster-auth-star" style="left:56%;top:78%;--s:2px;--d:3.3s;--t:1.9s;"></div>
+    <div class="caster-auth-star" style="left:44%;top:12%;--s:2px;--d:2.9s;--t:1.4s;"></div>
+
+    <div style="width:100%; max-width:420px; position:relative;">
+        <div class="d-flex flex-column align-center mb-5">
+            <img src="caster-wordmark.svg" alt="CASTER" class="caster-auth-mark" draggable="false" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary"
+                     Style="letter-spacing:.22em; text-transform:uppercase; margin-top:8px; opacity:.7;">
+                Arma Server Tool — Enterprise Edition
+            </MudText>
         </div>
         @Body
     </div>
 </div>
 
 @code {
-    private readonly MudTheme _theme = new()
-    {
-        PaletteDark = new PaletteDark
-        {
-            Primary = "#42A5F5",
-            Secondary = "#FF7043",
-            Background = "#121212",
-            Surface = "#1E1E1E",
-            AppbarBackground = "#121212",
-            TextPrimary = "#EEEEEE",
-            TextSecondary = "#9E9E9E",
-            Divider = "#2E2E2E"
-        },
-        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "4px" }
-    };
+    private readonly MudTheme _theme = ArtoriaTheme.Build();
 }

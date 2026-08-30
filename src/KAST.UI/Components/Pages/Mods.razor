@@ -11,7 +11,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<PageTitle>KAST -- Mods</PageTitle>
+<PageTitle>CASTER -- Mods</PageTitle>
 
 @* ── Top bar ── *@
 <div class="d-flex justify-space-between align-center mb-3 flex-wrap gap-2">
@@ -737,7 +737,7 @@ else
         @if (_modPendingDelete is not null)
         {
             <MudText Typo="Typo.body1" Class="mb-2">
-                Delete <strong>@_modPendingDelete.Name</strong> from KAST?
+                Delete <strong>@_modPendingDelete.Name</strong> from CASTER?
             </MudText>
             <MudCheckBox @bind-Value="_deleteModFiles"
                          Label="Also delete mod files from disk"
@@ -746,7 +746,7 @@ else
         else if (_selectedMods?.Count > 0)
         {
             <MudText Typo="Typo.body1" Class="mb-2">
-                Delete <strong>@_selectedMods.Count selected mod(s)</strong> from KAST?
+                Delete <strong>@_selectedMods.Count selected mod(s)</strong> from CASTER?
             </MudText>
             <MudCheckBox @bind-Value="_deleteModFiles"
                          Label="Also delete mod files from disk"

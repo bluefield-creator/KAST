@@ -18,7 +18,7 @@
 @inject IHostEnvironment HostEnvironment
 @using MudBlazor.Utilities
 
-<PageTitle>KAST -- Settings</PageTitle>
+<PageTitle>CASTER -- Settings</PageTitle>
 
 <MudText Typo="Typo.h5" Class="mb-4">Settings</MudText>
 
@@ -29,11 +29,18 @@
         <MudCard Elevation="1" Class="mt-3">
             <MudCardContent>
                 <MudText Typo="Typo.subtitle1" Class="mb-3">Storage</MudText>
+                @* Sizing lives on wrapper divs: MudBlazor applies Style to an inner
+                   element inside a column-flex container, so a flex-basis there
+                   becomes a 320px HEIGHT instead of a width. *@
                 <div class="d-flex align-end gap-4 flex-wrap">
-                    <MudTextField @bind-Value="_modsDirectory" Label="Mods directory"
-                                  Variant="Variant.Outlined" Style="min-width:320px; flex:1 1 320px;" />
-                    <MudTextField @bind-Value="_serversDirectory" Label="Servers directory"
-                                  Variant="Variant.Outlined" Style="min-width:320px; flex:1 1 320px;" />
+                    <div style="min-width:320px; flex:1 1 320px;">
+                        <MudTextField @bind-Value="_modsDirectory" Label="Mods directory"
+                                      Variant="Variant.Outlined" />
+                    </div>
+                    <div style="min-width:320px; flex:1 1 320px;">
+                        <MudTextField @bind-Value="_serversDirectory" Label="Servers directory"
+                                      Variant="Variant.Outlined" />
+                    </div>
                 </div>
                 <MudSwitch @bind-Value="_migrateStorage"
                            Label="Copy existing servers and mods to the new directories"
@@ -108,18 +115,10 @@
 
                 <MudText Typo="Typo.subtitle1" Class="mb-3">Appearance</MudText>
 
-                @* ── Dark / Light mode ── *@
-                <MudText Typo="Typo.body2" Class="mb-1">Theme</MudText>
-                <div class="d-flex align-center gap-3 mb-4 flex-wrap">
-                    <MudIcon Icon="@(_isDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.WbSunny)" />
-                    <MudSwitch @bind-Value="_isDarkMode" Label="@(_isDarkMode ? "Dark" : "Light")" Color="Color.Primary" />
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="SaveDarkMode">Apply</MudButton>
-                </div>
-
-                @* ── Accent colour swatches ── *@
+                @* ── Accent colour swatches — curated Artoria accents ── *@
                 <MudText Typo="Typo.body2" Class="mb-2">Accent Color</MudText>
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    @foreach (var opt in _accentOptions)
+                    @foreach (var opt in ThemeService.CuratedAccents)
                     {
                         var selected = IsAccentSelected(opt.Value);
                         <MudTooltip Text="@opt.Label" Placement="Placement.Top">
@@ -129,12 +128,7 @@
                     }
                 </div>
 
-                @* ── Custom colour picker ── *@
                 <div class="d-flex align-center gap-3 flex-wrap">
-                    <MudColorPicker @bind-Value="_accentMud" ShowAlpha="false" ShowModeSwitch="false"
-                                    Label="Custom color" PickerVariant="PickerVariant.Dialog"
-                                    Style="max-width:220px;" />
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAccent">Apply Accent</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Default"
                                StartIcon="@Icons.Material.Filled.SettingsBackupRestore"
                                OnClick="ResetToDefaults">Reset Defaults</MudButton>
@@ -547,7 +541,7 @@
                     <div>
                         <MudText Typo="Typo.subtitle1">Windows Service</MudText>
                         <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            Install and control KAST as a background service.
+                            Install and control CASTER as a background service.
                         </MudText>
                     </div>
                     <MudButton Variant="Variant.Outlined"
@@ -687,7 +681,7 @@
             <MudCardContent>
                 <div class="d-flex align-center justify-space-between gap-3 flex-wrap mb-3">
                     <div>
-                        <MudText Typo="Typo.subtitle1">KAST Updates</MudText>
+                        <MudText Typo="Typo.subtitle1">CASTER Updates</MudText>
                         <MudText Typo="Typo.caption" Color="Color.Secondary">
                             Native updater for Windows and Linux executable installs.
                         </MudText>
@@ -742,7 +736,7 @@
                     @if (_updateCheck.IsDocker)
                     {
                         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-                            KAST is running in Docker. Pull the selected channel's image and recreate the container to update.
+                            CASTER is running in Docker. Pull the selected channel's image and recreate the container to update.
                         </MudAlert>
                     }
                     else if (!_updateCheck.IsChannelAvailable)
@@ -861,7 +855,7 @@
             @if (_migrateStorage)
             {
                 <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
-                    Migration will copy current data to the selected directories, verify the copy, then switch KAST to the new paths. Old files stay in place.
+                    Migration will copy current data to the selected directories, verify the copy, then switch CASTER to the new paths. Old files stay in place.
                 </MudAlert>
             }
         }
@@ -950,7 +944,6 @@
     private IReadOnlyList<BenchmarkResult>? _benchmarkResults;
 
     private int _activePanelIndex = 0;
-    private bool _isDarkMode;
 
     protected override async Task OnInitializedAsync()
     {
@@ -969,8 +962,7 @@
         _updateChannels = AppUpdateService.GetChannels();
         _updateChannelId = settings.UpdateChannelId;
         _autoUpdateCheckEnabled = settings.AutoUpdateCheckEnabled;
-        _accentMud  = ThemeService.AccentColor;
-        _isDarkMode = ThemeService.IsDarkMode;
+        _selectedAccent = ThemeService.AccentColor;
         await LoadServiceStatus();
         LoadCrashReports();
 
@@ -1516,12 +1508,12 @@
 
     private string ServiceStatusText =>
         _serviceStatus is null ? "Loading service status." :
-        _serviceStatus.State == HostServiceRunState.NotInstalled ? "KAST is not installed as a Windows service." :
-        $"KAST service is {_serviceStatus.State}.";
+        _serviceStatus.State == HostServiceRunState.NotInstalled ? "CASTER is not installed as a Windows service." :
+        $"CASTER service is {_serviceStatus.State}.";
 
     private string ApplyUpdateConfirmationText => _updateCheck?.RestartMode == AppUpdateRestartMode.WindowsService
-        ? "I understand KAST will stop and the Windows service will restart after the update is applied."
-        : "I understand KAST will stop and restart to apply the staged update.";
+        ? "I understand CASTER will stop and the Windows service will restart after the update is applied."
+        : "I understand CASTER will stop and restart to apply the staged update.";
 
     private HostServiceConfigureRequest CurrentServiceRequest()
         => new(
@@ -1711,67 +1703,28 @@
 
     private BenchmarkResult GetBestBenchmark() => _benchmarkResults!.OrderByDescending(r => r.MbPerSecond).First();
 
-    private MudColor _accentMud = "#FF7043";
+    private string _selectedAccent = ThemeService.DefaultAccent;
 
-    // Named Material Design 400/600 accent options
-    private static readonly (string Value, string Label)[] _accentOptions =
-    [
-        ("#FF7043", "Deep Orange 400"),
-        ("#FB8C00", "Orange 600"),
-        ("#FFA726", "Amber 400 / Orange 400"),
-        ("#FFCA28", "Amber 400"),
-        ("#D4E157", "Lime 400"),
-        ("#66BB6A", "Green 400"),
-        ("#26A69A", "Teal 400"),
-        ("#26C6DA", "Cyan 400"),
-        ("#29B6F6", "Light Blue 400"),
-        ("#42A5F5", "Blue 400"),
-        ("#5C6BC0", "Indigo 400"),
-        ("#7E57C2", "Deep Purple 400"),
-        ("#AB47BC", "Purple 400"),
-        ("#EC407A", "Pink 400"),
-        ("#EF5350", "Red 400"),
-        ("#78909C", "Blue Grey 400"),
-    ];
-
-    private void SelectAccent(string color)
+    private async Task SelectAccent(string color)
     {
-        _accentMud = color;
-    }
-
-    private bool IsAccentSelected(string color)
-    {
-        var current = $"#{_accentMud.R:X2}{_accentMud.G:X2}{_accentMud.B:X2}";
-        return string.Equals(current, color, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string SwatchStyle(string color, bool selected) =>
-        $"width:28px;height:28px;border-radius:50%;background:{color};cursor:pointer;" +
-        $"border:3px solid {(selected ? "var(--mud-palette-text-primary)" : "transparent")};" +
-        $"box-shadow:{(selected ? $"0 0 0 2px {color}" : "none")};" +
-        "transition:transform 120ms;";
-
-    private async Task SaveDarkMode()
-    {
-        await ThemeService.SetDarkModeAsync(_isDarkMode);
-        Snackbar.Add($"Switched to {(_isDarkMode ? "dark" : "light")} mode", Severity.Success);
-    }
-
-    private async Task SaveAccent()
-    {
-        var hex = $"#{_accentMud.R:X2}{_accentMud.G:X2}{_accentMud.B:X2}";
-        await ThemeService.SetAccentAsync(hex);
+        _selectedAccent = color;
+        await ThemeService.SetAccentAsync(color);
         Snackbar.Add("Accent color updated", Severity.Success);
     }
 
+    private bool IsAccentSelected(string color) =>
+        string.Equals(_selectedAccent, color, StringComparison.OrdinalIgnoreCase);
+
+    private static string SwatchStyle(string color, bool selected) =>
+        $"width:28px;height:28px;border-radius:50%;background:{color};cursor:pointer;" +
+        $"border:2px solid {(selected ? "var(--k-ring)" : "transparent")};" +
+        $"outline:{(selected ? "1px solid var(--k-border-strong)" : "none")};outline-offset:2px;" +
+        "transition:transform var(--k-dur-fast) var(--k-ease);";
+
     private async Task ResetToDefaults()
     {
-        const string defaultAccent = "#FF7043"; // Deep Orange 400
-        const bool   defaultDark   = true;
-        _accentMud  = defaultAccent;
-        _isDarkMode = defaultDark;
-        await ThemeService.SetAccentAsync(defaultAccent);
-        await ThemeService.SetDarkModeAsync(defaultDark);
+        _selectedAccent = ThemeService.DefaultAccent;
+        await ThemeService.SetAccentAsync(ThemeService.DefaultAccent);
         Snackbar.Add("Theme reset to defaults", Severity.Success);
     }
 

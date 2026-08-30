@@ -245,11 +245,11 @@ public class ServerInstaller(ISteamService steam, IFileSystemService fs, IHttpCl
 
             if (!isAdmin)
             {
-                // KAST runs as a web application — there is no interactive desktop session
+                // CASTER runs as a web application — there is no interactive desktop session
                 // for a UAC prompt to appear on. Fail early with a clear remediation message
                 // rather than hanging on a dialog the remote user can never see.
                 const string msg = "DirectX setup requires administrator privileges. "
-                                 + "Restart KAST as an administrator and re-run the server install.";
+                                 + "Restart CASTER as an administrator and re-run the server install.";
                 state.FailStep(stepIdx, msg);
                 state.AddLog($"⚠ {msg}");
                 logger.LogError("Server install [{Instance}]: DirectX setup aborted — process is not elevated", instance.Name);

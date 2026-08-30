@@ -5,12 +5,12 @@
 @inject IConfiguration Configuration
 @inject ISettingsService SettingsService
 
-<PageTitle>KAST -- Login</PageTitle>
+<PageTitle>CASTER -- Login</PageTitle>
 
 <MudPaper Elevation="3" Class="pa-5">
     <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:700;">Sign in</MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-        Enter your KAST administrator account.
+        Enter your CASTER administrator account.
     </MudText>
 
     @if (!string.IsNullOrWhiteSpace(_error))
@@ -61,28 +61,36 @@
 
     .kast-auth-field input {
         height: 46px;
-        border: 1px solid var(--mud-palette-lines-inputs);
-        border-radius: 4px;
+        border: 1px solid var(--k-input);
+        border-radius: var(--k-radius);
         background: transparent;
-        color: var(--mud-palette-text-primary);
+        color: var(--k-foreground);
         padding: 0 12px;
         outline: none;
         font: inherit;
     }
 
-    .kast-auth-field input:focus {
-        border-color: var(--mud-palette-primary);
+    .kast-auth-field input:focus-visible {
+        border-color: var(--k-primary);
+        outline: 2px solid var(--k-ring);
+        outline-offset: 2px;
     }
 
     .kast-auth-submit {
         height: 40px;
         border: 0;
-        border-radius: 4px;
-        background: var(--mud-palette-primary);
-        color: var(--mud-palette-primary-text);
+        border-radius: var(--k-radius);
+        background: var(--k-primary);
+        color: var(--k-primary-foreground);
         cursor: pointer;
+        font-family: var(--k-font-sans);
         font-weight: 600;
-        text-transform: uppercase;
+        letter-spacing: .01em;
+        transition: background-color var(--k-dur) var(--k-ease);
+    }
+
+    .kast-auth-submit:hover {
+        background: var(--k-primary-hover);
     }
 
     .kast-auth-link {

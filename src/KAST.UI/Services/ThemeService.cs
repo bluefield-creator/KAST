@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using System.Globalization;
 using System.Security.Cryptography;
 
 namespace KAST.UI.Services;
@@ -7,14 +8,32 @@ public class ThemeService(ProtectedLocalStorage storage) : IDisposable
 {
     private const string AccentKey = "kast_accent_color";
     private const string DarkModeKey = "kast_dark_mode";
+    private const string LegacyDefaultAccent = "#5EB1FF"; // pre-Artoria "Castoria azure" default
+    public const string DefaultAccent = "#DDA8D6";        // the Staff Ribbon
+
     private CancellationTokenSource? _cts;
     private bool _userAccentOverride;
 
-    /// <summary>Hex accent color applied as Secondary palette entry.</summary>
-    public string AccentColor { get; private set; } = "#FF7043"; // Deep Orange 400
+    /// <summary>
+    /// The ribbon system. Per the forensics dossier, the lilac staff
+    /// ribbon is "the one color the uniform did not issue ... the only
+    /// visible evidence of a person making a choice." The accent color is
+    /// exactly that: the one thing the operator ties on themselves. Every
+    /// option is sampled from her — light grades, readable as text on the
+    /// indigo canvas. Stored values remain plain hex.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Value, string Label)> CuratedAccents =
+    [
+        ("#DDA8D6", "Staff Ribbon"),
+        ("#91BDE0", "Cabochon"),
+        ("#D5ECB8", "Eye Light"),
+        ("#EBCB95", "Cream Braid"),
+        ("#FBC9A0", "Apricot"),
+        ("#E8A8AE", "Lining Blush"),
+    ];
 
-    /// <summary>Whether the dark theme is active.</summary>
-    public bool IsDarkMode { get; private set; } = true;
+    /// <summary>Hex accent color applied as Secondary palette entry.</summary>
+    public string AccentColor { get; private set; } = DefaultAccent;
 
     public event Action? OnChange;
 
@@ -25,13 +44,20 @@ public class ThemeService(ProtectedLocalStorage storage) : IDisposable
             var accentResult = await storage.GetAsync<string>(AccentKey);
             if (accentResult.Success && !string.IsNullOrEmpty(accentResult.Value))
             {
-                AccentColor = accentResult.Value;
-                _userAccentOverride = true;
+                if (string.Equals(accentResult.Value, LegacyDefaultAccent, StringComparison.OrdinalIgnoreCase))
+                {
+                    // User never left the old default — migrate them to the new one.
+                    try { await storage.DeleteAsync(AccentKey); } catch { }
+                }
+                else
+                {
+                    AccentColor = SnapToCurated(accentResult.Value);
+                    _userAccentOverride = true;
+                }
             }
 
-            var darkResult = await storage.GetAsync<bool>(DarkModeKey);
-            if (darkResult.Success)
-                IsDarkMode = darkResult.Value;
+            // The cape is the only theme — clear any stale dark-mode preference.
+            try { await storage.DeleteAsync(DarkModeKey); } catch { }
         }
         catch (CryptographicException)
         {
@@ -52,11 +78,38 @@ public class ThemeService(ProtectedLocalStorage storage) : IDisposable
         OnChange?.Invoke();
     }
 
-    public async Task SetDarkModeAsync(bool isDark)
+    /// <summary>
+    /// Maps a stored legacy accent to the nearest curated accent (RGB distance).
+    /// Applied only to persisted values, never to runtime cycling.
+    /// </summary>
+    private static string SnapToCurated(string hex)
     {
-        IsDarkMode = isDark;
-        try { await storage.SetAsync(DarkModeKey, isDark); } catch { }
-        OnChange?.Invoke();
+        if (!TryParseHex(hex, out var r, out var g, out var b))
+            return DefaultAccent;
+
+        var best = DefaultAccent;
+        var bestDist = int.MaxValue;
+        foreach (var (value, _) in CuratedAccents)
+        {
+            TryParseHex(value, out var cr, out var cg, out var cb);
+            var dist = (r - cr) * (r - cr) + (g - cg) * (g - cg) + (b - cb) * (b - cb);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = value;
+            }
+        }
+        return best;
+    }
+
+    private static bool TryParseHex(string hex, out int r, out int g, out int b)
+    {
+        r = g = b = 0;
+        var s = hex.TrimStart('#');
+        if (s.Length != 6) return false;
+        return int.TryParse(s[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r)
+            && int.TryParse(s[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g)
+            && int.TryParse(s[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b);
     }
 
     private void StartAprilFoolsIfNeeded()
@@ -72,19 +125,13 @@ public class ThemeService(ProtectedLocalStorage storage) : IDisposable
 
     private async Task AprilFoolsLoopAsync(CancellationToken ct)
     {
-        // Cycle through Material Design 400 hues on April Fools' Day
-        var palette = new[]
-        {
-            "#FF7043", "#FFA726", "#FFCA28", "#66BB6A",
-            "#26C6DA", "#42A5F5", "#5C6BC0", "#AB47BC",
-            "#EC407A", "#EF5350",
-        };
+        // Cycle through the curated Artoria accents on April Fools' Day
         var idx = 0;
         try
         {
             while (!ct.IsCancellationRequested && !_userAccentOverride)
             {
-                AccentColor = palette[idx % palette.Length];
+                AccentColor = CuratedAccents[idx % CuratedAccents.Count].Value;
                 OnChange?.Invoke();
                 idx++;
                 await Task.Delay(TimeSpan.FromMilliseconds(500), ct);

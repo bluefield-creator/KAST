@@ -11,15 +11,15 @@ namespace KAST.Infrastructure.Services;
 public sealed class WindowsHostServiceManager(ILogger<WindowsHostServiceManager> logger) : IHostServiceManager
 {
     public const string ServiceName = "KAST";
-    private const string DisplayName = "KAST Panel";
-    private const string Description = "Keelah Arma Server Tool web panel";
+    private const string DisplayName = "CASTER Panel";
+    private const string Description = "CASTER Arma server web panel";
     private const int DefaultRestartDelaySeconds = 60;
     private const int DefaultResetFailureDays = 1;
 
     public async Task<HostServiceStatus> GetStatusAsync(CancellationToken ct = default)
     {
         if (!OperatingSystem.IsWindows())
-            return Unsupported("KAST service management is only supported on Windows from inside the app.");
+            return Unsupported("CASTER service management is only supported on Windows from inside the app.");
 
         var isAdmin = IsAdministrator();
         var query = await RunScAsync(["query", ServiceName], ct);
@@ -34,7 +34,7 @@ public sealed class WindowsHostServiceManager(ILogger<WindowsHostServiceManager>
                 HostServiceStartupMode.Manual,
                 new HostServiceRecoveryOptions(false, DefaultRestartDelaySeconds, DefaultResetFailureDays),
                 ResolveServiceExecutablePath(),
-                "KAST is not installed as a Windows service.");
+                "CASTER is not installed as a Windows service.");
         }
 
         var qc = await RunScAsync(["qc", ServiceName], ct);
@@ -50,21 +50,21 @@ public sealed class WindowsHostServiceManager(ILogger<WindowsHostServiceManager>
             ResolveServiceExecutablePath(),
             isAdmin
                 ? null
-                : "Service changes require running KAST as Administrator.");
+                : "Service changes require running CASTER as Administrator.");
     }
 
     public async Task<HostServiceOperationResult> InstallAsync(HostServiceConfigureRequest request, CancellationToken ct = default)
     {
         if (!OperatingSystem.IsWindows())
-            return new(false, "KAST service install is only supported on Windows.", await GetStatusAsync(ct));
+            return new(false, "CASTER service install is only supported on Windows.", await GetStatusAsync(ct));
         if (!IsAdministrator())
-            return new(false, "Run KAST as Administrator to install the Windows service.", await GetStatusAsync(ct));
+            return new(false, "Run CASTER as Administrator to install the Windows service.", await GetStatusAsync(ct));
 
         var status = await GetStatusAsync(ct);
         if (status.State != HostServiceRunState.NotInstalled)
         {
             var configured = await ConfigureAsync(request, ct);
-            return configured with { Message = configured.Success ? "KAST service is already installed. Settings updated." : configured.Message };
+            return configured with { Message = configured.Success ? "CASTER service is already installed. Settings updated." : configured.Message };
         }
 
         var binPath = BuildServiceBinPath();
@@ -84,20 +84,20 @@ public sealed class WindowsHostServiceManager(ILogger<WindowsHostServiceManager>
         if (!configuredResult.Success)
             return configuredResult;
 
-        logger.LogInformation("Installed KAST Windows service at {BinPath}", binPath);
-        return new(true, "KAST Windows service installed.", await GetStatusAsync(ct));
+        logger.LogInformation("Installed CASTER Windows service at {BinPath}", binPath);
+        return new(true, "CASTER Windows service installed.", await GetStatusAsync(ct));
     }
 
     public async Task<HostServiceOperationResult> ConfigureAsync(HostServiceConfigureRequest request, CancellationToken ct = default)
     {
         if (!OperatingSystem.IsWindows())
-            return new(false, "KAST service configuration is only supported on Windows.", await GetStatusAsync(ct));
+            return new(false, "CASTER service configuration is only supported on Windows.", await GetStatusAsync(ct));
         if (!IsAdministrator())
-            return new(false, "Run KAST as Administrator to configure the Windows service.", await GetStatusAsync(ct));
+            return new(false, "Run CASTER as Administrator to configure the Windows service.", await GetStatusAsync(ct));
 
         var status = await GetStatusAsync(ct);
         if (status.State == HostServiceRunState.NotInstalled)
-            return new(false, "KAST is not installed as a Windows service.", status);
+            return new(false, "CASTER is not installed as a Windows service.", status);
 
         var config = await RunScAsync(["config", ServiceName, "start=", ToScStartupMode(request.StartupMode)], ct);
         if (config.ExitCode != 0)
@@ -109,39 +109,39 @@ public sealed class WindowsHostServiceManager(ILogger<WindowsHostServiceManager>
     public async Task<HostServiceOperationResult> UninstallAsync(CancellationToken ct = default)
     {
         if (!OperatingSystem.IsWindows())
-            return new(false, "KAST service uninstall is only supported on Windows.", await GetStatusAsync(ct));
+            return new(false, "CASTER service uninstall is only supported on Windows.", await GetStatusAsync(ct));
         if (!IsAdministrator())
-            return new(false, "Run KAST as Administrator to uninstall the Windows service.", await GetStatusAsync(ct));
+            return new(false, "Run CASTER as Administrator to uninstall the Windows service.", await GetStatusAsync(ct));
 
         var status = await GetStatusAsync(ct);
         if (status.State == HostServiceRunState.NotInstalled)
-            return new(true, "KAST service is not installed.", status);
+            return new(true, "CASTER service is not installed.", status);
 
         if (status.State is HostServiceRunState.Running or HostServiceRunState.StartPending)
             await RunScAsync(["stop", ServiceName], ct);
 
         var delete = await RunScAsync(["delete", ServiceName], ct);
         return delete.ExitCode == 0
-            ? new HostServiceOperationResult(true, "KAST Windows service removed.", await GetStatusAsync(ct))
+            ? new HostServiceOperationResult(true, "CASTER Windows service removed.", await GetStatusAsync(ct))
             : new HostServiceOperationResult(false, $"Failed to remove service: {delete.Output}", await GetStatusAsync(ct));
     }
 
     public async Task<HostServiceOperationResult> StartAsync(CancellationToken ct = default)
-        => await RunSimpleServiceCommandAsync("start", "KAST Windows service started.", ct);
+        => await RunSimpleServiceCommandAsync("start", "CASTER Windows service started.", ct);
 
     public async Task<HostServiceOperationResult> StopAsync(CancellationToken ct = default)
-        => await RunSimpleServiceCommandAsync("stop", "KAST Windows service stop requested.", ct);
+        => await RunSimpleServiceCommandAsync("stop", "CASTER Windows service stop requested.", ct);
 
     private async Task<HostServiceOperationResult> RunSimpleServiceCommandAsync(string command, string successMessage, CancellationToken ct)
     {
         if (!OperatingSystem.IsWindows())
-            return new(false, "KAST service control is only supported on Windows.", await GetStatusAsync(ct));
+            return new(false, "CASTER service control is only supported on Windows.", await GetStatusAsync(ct));
         if (!IsAdministrator())
-            return new(false, "Run KAST as Administrator to control the Windows service.", await GetStatusAsync(ct));
+            return new(false, "Run CASTER as Administrator to control the Windows service.", await GetStatusAsync(ct));
 
         var status = await GetStatusAsync(ct);
         if (status.State == HostServiceRunState.NotInstalled)
-            return new(false, "KAST is not installed as a Windows service.", status);
+            return new(false, "CASTER is not installed as a Windows service.", status);
 
         var result = await RunScAsync([command, ServiceName], ct);
         return result.ExitCode == 0
@@ -170,7 +170,7 @@ public sealed class WindowsHostServiceManager(ILogger<WindowsHostServiceManager>
         if (flag.ExitCode != 0)
             logger.LogWarning("Failed to configure service failure flag: {Output}", flag.Output);
 
-        return new(true, "KAST Windows service configuration updated.", await GetStatusAsync(ct));
+        return new(true, "CASTER Windows service configuration updated.", await GetStatusAsync(ct));
     }
 
     private static HostServiceStatus Unsupported(string message)
@@ -259,7 +259,7 @@ public sealed class WindowsHostServiceManager(ILogger<WindowsHostServiceManager>
         var processPath = Environment.ProcessPath;
         var entryAssembly = Assembly.GetEntryAssembly()?.Location;
         if (string.IsNullOrWhiteSpace(processPath))
-            throw new InvalidOperationException("Could not resolve current KAST executable path.");
+            throw new InvalidOperationException("Could not resolve current CASTER executable path.");
 
         if (Path.GetFileNameWithoutExtension(processPath).Equals("dotnet", StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(entryAssembly))

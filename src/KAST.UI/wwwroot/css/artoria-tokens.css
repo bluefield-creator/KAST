@@ -1,0 +1,158 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ARTORIA DESIGN TOKENS — BLUE KEPI DRESS REGULATIONS
+   ─────────────────────────────────────────────────────────────────────────
+   Built from the visual-forensics dossier of Artoria Caster (2nd Asc.):
+   region-mode pixel samples across four plates. The soul, per the dossier:
+
+     "Push every expressive element outboard onto free-moving material,
+      keep the body small and quiet, and let a rigid, correct, borrowed
+      uniform sit on a soft, round, uncertain face."
+
+   Laws with zero violations in the source:
+     · Crimson is lining — a revealed interior, never an outer surface.
+     · Every cool edge is outlined in gold (the brass ladder mediates
+       every cool/warm boundary).
+     · The ladder motif — paired verticals crossed by rungs — recurs at
+       every scale.
+     · Circles exist only as repetition; two may be singular per view.
+     · Shadows on white lean violet, never neutral grey.
+     · One color belongs to no system: the lilac ribbon. It is the only
+       thing that was chosen rather than issued — in this app, that is
+       the user's accent.
+
+   Dark UI = inside the coat at night: the indigo registers are derived
+   downward from the sampled exterior #3b3a86 without leaving its hue.
+   Companion: src/KAST.UI/Themes/ArtoriaTheme.cs (keep in sync).
+   Spec: docs/DESIGN.md
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Uniform indigo (sampled #24225e/#3b3a86/#5a57a8, violet-shifted) ── */
+  --indigo-950: #0e0e24;
+  --indigo-900: #131331;   /* canvas                                      */
+  --indigo-850: #191940;   /* card / plate                                */
+  --indigo-800: #1c1c4a;   /* the belt — toolbars, table headers          */
+  --indigo-700: #222258;   /* raised tint, active wash                    */
+  --indigo-600: #2c2b6b;   /* deep structure                              */
+  --indigo-500: #34336e;   /* hairline border                             */
+  --indigo-400: #3b3a86;   /* THE sampled exterior — lit borders          */
+  --indigo-300: #5a57a8;   /* lit indigo, interactive cool                */
+  --outline-ink: #101022;
+
+  /* ── Tunic white (fold #e4e4e4, deep fold violet-leaning #c3b0be) ───── */
+  --tunic-0: #ffffff;
+  --tunic-1: #f7f6fa;      /* primary text on dark                        */
+  --tunic-2: #e4e4e4;      /* fold                                        */
+  --tunic-3: #c3b0be;      /* deep fold — violet-leaning, never grey      */
+
+  /* ── Regimental crimson — lining only, revealed on state change ─────── */
+  --crimson-1: #dd4f4d;    /* lit                                         */
+  --crimson-2: #c8203c;    /* body                                        */
+  --crimson-3: #7c0f1b;    /* shadow                                      */
+
+  /* ── Brass & cream piping (four-value metal ladder) ────────────────── */
+  --brass-shadow: #8a5f2e; /* hardware shadow                             */
+  --brass:        #c89a5e; /* hardware body — buttons, ring, crest        */
+  --cream:        #ebcb95; /* trim — piping, braid                        */
+  --cream-lit:    #f0dcb4; /* trim highlight                              */
+
+  /* ── Blonde gradient (crown cool-gold → tip apricot) ────────────────── */
+  --blonde-0: #fff3d9;
+  --blonde-1: #f5d8a8;
+  --blonde-2: #fbc9a0;
+  --blonde-3: #dda389;
+
+  /* ── Aubergine hosiery — the bridge between indigo and crimson ─────── */
+  --aubergine-1: #7a5a7c;
+  --aubergine-2: #5a3a5c;
+  --aubergine-3: #3a2440;
+  --aubergine-wash: rgb(90 58 92 / 0.32);
+
+  /* ── The focal pair: eye green and cabochon stone ───────────────────── */
+  --eye-dark: #374f37;
+  --eye:      #4e8c7e;
+  --eye-lit:  #d5ecb8;
+  --stone:    #91bde0;
+
+  /* ── Terminals & the odd one ─────────────────────────────────────────── */
+  --charcoal-1: #545454;
+  --charcoal-2: #303030;
+  --staff:      #35343f;
+  --ribbon:     #dda8d6;   /* the one unissued color — the user's accent  */
+
+  /* ── Text mists (violet-cooled) ──────────────────────────────────────── */
+  --mist-300: #aaa6c9;
+  --mist-500: #71738d;
+
+  /* ── Semantic slots (kept stable for scoped .razor.css consumers) ───── */
+  --k-background:         var(--indigo-900);
+  --k-foreground:         var(--tunic-1);
+  --k-card:               var(--indigo-850);
+  --k-card-foreground:    var(--tunic-1);
+  --k-muted:              var(--indigo-700);
+  --k-muted-foreground:   var(--mist-300);
+  --k-border:             var(--indigo-500);
+  --k-border-strong:      var(--indigo-400);
+  --k-input:              var(--indigo-500);
+  --k-primary:            var(--tunic-0);
+  --k-primary-hover:      var(--tunic-0);
+  --k-primary-foreground: var(--indigo-800);
+  --k-primary-wash:       var(--aubergine-wash);
+  --k-primary-tint:       var(--aubergine-2);
+  --k-accent:             var(--brass);
+  --k-accent-decor:       var(--cream);
+  --k-accent-text:        var(--cream);
+  --k-ring:               var(--cream);
+  --k-destructive:        var(--crimson-1);
+  --k-destructive-foreground: var(--tunic-0);
+  --k-success:            #8fc3a8;  /* eye-green, lifted to text grade    */
+  --k-warning:            var(--blonde-3);
+  --k-info:               var(--stone);
+  --k-disabled:           var(--mist-500);
+  --artoria-success: #8fc3a8;
+  --artoria-warning: var(--blonde-3);
+  --artoria-error:   var(--crimson-1);
+  --artoria-info:    var(--stone);
+  --artoria-success-wash: rgb(78 140 126 / .16);
+  --artoria-warning-wash: rgb(221 163 137 / .13);
+  --artoria-error-wash:   rgb(200 32 60 / .14);
+  --artoria-info-wash:    rgb(145 189 224 / .12);
+
+  /* ── The engraving ───────────────────────────────────────────────────── */
+  /* Her hair, clipped to lettering: crown cool-gold → tip warm apricot.  */
+  --sheen-wheat: linear-gradient(168deg, var(--blonde-0) 8%, var(--blonde-1) 42%, var(--blonde-2) 72%, var(--blonde-3) 100%);
+  --rule-fade: linear-gradient(90deg, transparent, var(--indigo-400) 18%, var(--indigo-400) 82%, transparent);
+  --rule-brass-fade: linear-gradient(90deg, transparent, rgb(200 154 94 / 0.75) 30%, rgb(200 154 94 / 0.75) 70%, transparent);
+  --pinstripe: rgb(240 220 180 / 0.28);  /* the belt's gold pinstripes    */
+
+  /* Shadows separate planes; they never glow. */
+  --k-shadow-ambient: 0 1px 0 rgb(0 0 0 / 0.4);
+  --k-shadow-float:   0 16px 40px rgb(0 0 0 / 0.5);
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --k-font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --k-font-sans:    "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --k-font-mono:    "JetBrains Mono", Consolas, "Courier New", monospace;
+
+  --k-text-xs:   .75rem;
+  --k-text-sm:   .8125rem;
+  --k-text-base: .875rem;
+  --k-text-lg:   1rem;
+  --k-text-xl:   1.25rem;
+  --k-text-2xl:  1.625rem;
+  --k-text-3xl:  2.125rem;
+
+  /* ── Space / radius / motion — tailored, squared away ────────────────── */
+  --k-space-1: 4px;  --k-space-2: 8px;  --k-space-3: 12px;
+  --k-space-4: 16px; --k-space-6: 24px; --k-space-8: 32px;
+
+  --k-radius-sm: 2px;
+  --k-radius:    3px;
+  --k-radius-lg: 4px;
+  --k-radius-xl: 8px;
+
+  --k-ease:     cubic-bezier(.25, .46, .45, .94);
+  --k-dur-fast: 120ms;
+  --k-dur:      160ms;
+  --k-dur-slow: 240ms;
+}

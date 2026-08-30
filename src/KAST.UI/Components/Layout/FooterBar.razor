@@ -26,17 +26,17 @@
         </div>
         @* DB *@
         <div class="d-flex align-center gap-1">
-            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(MonitoringState.IsDbOk ? "#3dcb6c" : "#ff3f5f")};" )" />
+            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(MonitoringState.IsDbOk ? "var(--k-success)" : "var(--k-destructive)")};" )" />
             <MudText Typo="Typo.caption" HtmlTag="span" Style="color:var(--mud-palette-text-secondary); font-size:11px;">DB</MudText>
         </div>
         @* Steam *@
         <div class="d-flex align-center gap-1">
-            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(SteamService.IsAuthenticated ? "#3dcb6c" : SteamService.IsConnected ? "#ffb545" : "#ff3f5f")};" )" />
+            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(SteamService.IsAuthenticated ? "var(--k-success)" : SteamService.IsConnected ? "var(--k-warning)" : "var(--k-destructive)")};" )" />
             <MudText Typo="Typo.caption" HtmlTag="span" Style="color:var(--mud-palette-text-secondary); font-size:11px;">Steam@(SteamService.IsAuthenticated && SteamService.Profile?.PersonaName != null ? $" · {SteamService.Profile.PersonaName}" : "")</MudText>
         </div>
         @* Monitoring *@
         <div class="d-flex align-center gap-1">
-            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(MonitoringState.IsMonitoringOk ? "#3dcb6c" : "#ff3f5f")};" )" />
+            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(MonitoringState.IsMonitoringOk ? "var(--k-success)" : "var(--k-destructive)")};" )" />
             <MudText Typo="Typo.caption" HtmlTag="span" Style="color:var(--mud-palette-text-secondary); font-size:11px;">Monitor</MudText>
         </div>
         @* Error badge *@
@@ -256,9 +256,9 @@
 
     private static string GetApiColor(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus status) => status switch
     {
-        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "#3dcb6c",
-        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "#ffb545",
-        _ => "#ff3f5f"
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "var(--k-success)",
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "var(--k-warning)",
+        _ => "var(--k-destructive)"
     };
 
     public void Dispose()

@@ -271,7 +271,7 @@ public sealed class ModDownloadQueueService(
             task.Status = task.RetryCount < task.MaxRetries
                 ? DownloadStatus.Queued
                 : DownloadStatus.Failed;
-            task.ErrorMessage = "Recovered after KAST restart.";
+            task.ErrorMessage = "Recovered after CASTER restart.";
             task.UpdatedAt = DateTime.UtcNow;
             if (task.Status == DownloadStatus.Failed)
                 task.CompletedAt = DateTime.UtcNow;

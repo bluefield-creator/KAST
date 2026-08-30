@@ -7,19 +7,43 @@
 
 <div class="d-flex flex-column gap-3" style="height:100%;">
 
-    @* ── Toolbar ── *@
+    @* ── Workspace header: view switcher + upload ── *@
     <div class="d-flex align-center gap-2 mt-2 flex-wrap">
-        <MudTextField T="string"
-                      Value="_searchQuery"
-                      ValueChanged="@((string value) => OnMissionSearchChanged(value))"
-                      Placeholder="Search missions… (use #tag to filter)"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      Clearable="true" Immediate="true"
-                      Margin="Margin.Dense"
-                      Variant="Variant.Outlined"
-                      Style="max-width:320px;" />
+        <MudButtonGroup OverrideStyles="false" Size="Size.Small">
+            <MudButton Variant="@(_view == ViewLibrary ? Variant.Filled : Variant.Outlined)"
+                       Color="@(_view == ViewLibrary ? Color.Primary : Color.Default)"
+                       StartIcon="@Icons.Material.Filled.VideoLibrary"
+                       OnClick="@(() => _view = ViewLibrary)">
+                Library&nbsp;<MudText Typo="Typo.caption" Style="opacity:.75;">(@_missions.Count)</MudText>
+            </MudButton>
+            <MudButton Variant="@(_view == ViewCampaigns ? Variant.Filled : Variant.Outlined)"
+                       Color="@(_view == ViewCampaigns ? Color.Tertiary : Color.Default)"
+                       StartIcon="@Icons.Material.Filled.AutoStories"
+                       OnClick="@(() => _view = ViewCampaigns)">
+                Campaigns&nbsp;<MudText Typo="Typo.caption" Style="opacity:.75;">(@_campaigns.Count)</MudText>
+            </MudButton>
+            <MudButton Variant="@(_view == ViewCollections ? Variant.Filled : Variant.Outlined)"
+                       Color="@(_view == ViewCollections ? Color.Secondary : Color.Default)"
+                       StartIcon="@Icons.Material.Filled.Collections"
+                       OnClick="@(() => _view = ViewCollections)">
+                Collections&nbsp;<MudText Typo="Typo.caption" Style="opacity:.75;">(@_sets.Count)</MudText>
+            </MudButton>
+        </MudButtonGroup>
         <MudSpacer />
+        @if (_view == ViewCampaigns)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Tertiary" Variant="Variant.Filled"
+                       Size="Size.Small" OnClick="@(() => _showCampaignDialog = true)">
+                New Campaign
+            </MudButton>
+        }
+        else if (_view == ViewCollections)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Secondary" Variant="Variant.Filled"
+                       Size="Size.Small" OnClick="@(() => _showSetDialog = true)">
+                New Collection
+            </MudButton>
+        }
         <MudButton StartIcon="@Icons.Material.Filled.UploadFile"
                    Color="Color.Primary" Variant="Variant.Filled"
                    Size="Size.Small"
@@ -28,44 +52,51 @@
         </MudButton>
     </div>
 
-    <div class="d-flex align-center gap-1 flex-wrap">
-        <MudChip T="string" Size="Size.Small"
-                 Variant="@(string.IsNullOrWhiteSpace(_activeMapFilter) ? Variant.Filled : Variant.Outlined)"
-                 Color="Color.Default"
-                 OnClick="@(() => SetMapFilter(null))">
-            All maps (@_missions.Count)
-        </MudChip>
-        @foreach (var map in AvailableMaps.Take(12))
-        {
-            <MudChip T="string" Size="Size.Small"
-                     Variant="@(_activeMapFilter == map ? Variant.Filled : Variant.Outlined)"
-                     Color="@(_activeMapFilter == map ? Color.Primary : Color.Default)"
-                     OnClick="@(() => SetMapFilter(map))">
-                @map (@CountMissionsOnMap(map))
+    @* ════════════════════ LIBRARY VIEW ════════════════════ *@
+    @if (_view == ViewLibrary)
+    {
+        <div class="d-flex align-center gap-2 flex-wrap">
+            <MudTextField T="string"
+                          Value="_searchQuery"
+                          ValueChanged="@((string value) => OnMissionSearchChanged(value))"
+                          Placeholder="Search missions… (use #tag to filter)"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Clearable="true" Immediate="true"
+                          Margin="Margin.Dense"
+                          Variant="Variant.Outlined"
+                          Style="max-width:320px;" />
+            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                @AvailableMaps.Count maps
             </MudChip>
-        }
-        @if (AvailableMaps.Count > 12)
-        {
-            <MudText Typo="Typo.caption" Color="Color.Secondary">+@(AvailableMaps.Count - 12) more maps</MudText>
-        }
-    </div>
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">
+                @_missions.Count(m => m.TagAssignments.Count == 0) untagged
+            </MudChip>
+        </div>
 
-    <div class="d-flex gap-3" style="flex:1; min-height:0;">
-        @* ── Mission List (Left) ── *@
-        <div class="mud-paper mud-elevation-1 pa-3" style="flex:3; overflow-y:auto;">
-            <div class="d-flex align-center gap-2 mb-2">
-                <MudText Typo="Typo.subtitle1">Missions</MudText>
-                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
-                    @_filteredMissions.Count total
+        <div class="d-flex align-center gap-1 flex-wrap">
+            <MudChip T="string" Size="Size.Small"
+                     Variant="@(string.IsNullOrWhiteSpace(_activeMapFilter) ? Variant.Filled : Variant.Outlined)"
+                     Color="Color.Default"
+                     OnClick="@(() => SetMapFilter(null))">
+                All maps (@_missions.Count)
+            </MudChip>
+            @foreach (var map in AvailableMaps.Take(12))
+            {
+                <MudChip T="string" Size="Size.Small"
+                         Variant="@(_activeMapFilter == map ? Variant.Filled : Variant.Outlined)"
+                         Color="@(_activeMapFilter == map ? Color.Primary : Color.Default)"
+                         OnClick="@(() => SetMapFilter(map))">
+                    @map (@CountMissionsOnMap(map))
                 </MudChip>
-                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
-                    @AvailableMaps.Count maps
-                </MudChip>
-                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">
-                    @_missions.Count(m => m.TagAssignments.Count == 0) untagged
-                </MudChip>
-            </div>
+            }
+            @if (AvailableMaps.Count > 12)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">+@(AvailableMaps.Count - 12) more maps</MudText>
+            }
+        </div>
 
+        <div class="mud-paper mud-elevation-1 pa-3" style="flex:1; min-height:0; overflow-y:auto;">
             @* Active tag filter chips *@
             @if (_activeFilterTags.Count > 0)
             {
@@ -102,7 +133,8 @@
                         <MudTh>Size</MudTh>
                         <MudTh>Tags</MudTh>
                         <MudTh>Preset</MudTh>
-                        <MudTh Style="width:120px;">Actions</MudTh>
+                        <MudTh>In</MudTh>
+                        <MudTh Style="width:150px;">Actions</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="Name">
@@ -151,7 +183,66 @@
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">None</MudText>
                             }
                         </MudTd>
+                        <MudTd DataLabel="In">
+                            @{
+                                var inCampaigns = CountCampaignsContaining(context.Id);
+                                var inSets = CountSetsContaining(context.Id);
+                            }
+                            <div class="d-flex gap-1">
+                                @if (inCampaigns > 0)
+                                {
+                                    <MudTooltip Text="@($"In {inCampaigns} campaign(s)")">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Tertiary" Variant="Variant.Text"
+                                                 Icon="@Icons.Material.Filled.AutoStories">@inCampaigns</MudChip>
+                                    </MudTooltip>
+                                }
+                                @if (inSets > 0)
+                                {
+                                    <MudTooltip Text="@($"In {inSets} collection(s)")">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Text"
+                                                 Icon="@Icons.Material.Filled.Collections">@inSets</MudChip>
+                                    </MudTooltip>
+                                }
+                            </div>
+                        </MudTd>
                         <MudTd DataLabel="Actions">
+                            <MudMenu Icon="@Icons.Material.Filled.PlaylistAdd" Size="Size.Small"
+                                     AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+                                     Dense="true">
+                                @if (_campaigns.Count == 0 && _sets.Count == 0)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.AutoStories"
+                                                 OnClick="@(() => { _view = ViewCampaigns; _showCampaignDialog = true; })">
+                                        Create a campaign…
+                                    </MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Collections"
+                                                 OnClick="@(() => { _view = ViewCollections; _showSetDialog = true; })">
+                                        Create a collection…
+                                    </MudMenuItem>
+                                }
+                                @foreach (var campaign in _campaigns)
+                                {
+                                    var alreadyIn = campaign.CampaignMissions.Any(cm => cm.MissionId == context.Id);
+                                    <MudMenuItem Icon="@Icons.Material.Filled.AutoStories"
+                                                 Disabled="@alreadyIn"
+                                                 OnClick="@(() => AddMissionToCampaignInline(campaign, context))">
+                                        @campaign.Title @(alreadyIn ? " ✓" : "")
+                                    </MudMenuItem>
+                                }
+                                @if (_campaigns.Count > 0 && _sets.Count > 0)
+                                {
+                                    <MudDivider />
+                                }
+                                @foreach (var set in _sets)
+                                {
+                                    var alreadyIn = set.SetMissions.Any(sm => sm.MissionId == context.Id);
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Collections"
+                                                 Disabled="@alreadyIn"
+                                                 OnClick="@(() => AddMissionToSetInline(set, context))">
+                                        @set.Title @(alreadyIn ? " ✓" : "")
+                                    </MudMenuItem>
+                                }
+                            </MudMenu>
                             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                            OnClick="@(() => OpenMissionEditDialog(context))" />
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
@@ -165,176 +256,189 @@
                 </MudTable>
             }
         </div>
-    </div>
+    }
 
-    @* ── Campaigns & Sets Section ── *@
-    <MudTabs Elevation="1" Rounded="true" Class="mt-2" Style="flex:1; min-height:200px;">
-
-        @* ── Campaigns Tab ── *@
-        <MudTabPanel Text="Campaigns" BadgeData="@(_campaigns.Count > 0 ? _campaigns.Count.ToString() : null)" BadgeColor="Color.Warning">
-            <div class="d-flex align-center gap-2 mb-3 mt-2">
-                <MudText Typo="Typo.h6" Style="flex:1;">Campaigns</MudText>
-                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">
-                    @_campaigns.Sum(c => c.CampaignMissions.Count) total missions
-                </MudChip>
-                <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled"
-                           Size="Size.Small" OnClick="@(() => _showCampaignDialog = true)">
-                    New Campaign
-                </MudButton>
-            </div>
-
+    @* ════════════════════ CAMPAIGNS VIEW ════════════════════ *@
+    @if (_view == ViewCampaigns)
+    {
+        <div style="flex:1; min-height:0; overflow-y:auto;">
             @if (_campaigns.Count == 0)
             {
-                <div class="d-flex flex-column align-center gap-2" style="padding:40px 0;">
-                    <MudIcon Icon="@Icons.Material.Filled.Campaign" Size="Size.Large" Color="Color.Default" />
-                    <MudText Typo="Typo.body1" Color="Color.Default">No campaigns yet</MudText>
-                    <MudText Typo="Typo.caption">Create a campaign to organize missions sequentially with ordered playlists.</MudText>
+                <div class="d-flex flex-column align-center gap-2" style="padding:70px 0;">
+                    <MudIcon Icon="@Icons.Material.Filled.AutoStories" Style="font-size:56px; color:var(--mud-palette-tertiary); opacity:.7;" />
+                    <MudText Typo="Typo.h6">No campaigns yet</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        A campaign is an ordered playlist — mission 1 leads to mission 2. Perfect for multi-session operations.
+                    </MudText>
+                    <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Tertiary" Variant="Variant.Filled"
+                               Class="mt-2" OnClick="@(() => _showCampaignDialog = true)">
+                        Create your first campaign
+                    </MudButton>
                 </div>
             }
             else
             {
-                <div class="d-flex flex-column gap-3">
+                <MudGrid Spacing="3">
                     @foreach (var campaign in _campaigns)
                     {
-                        <MudExpansionPanel>
-                            <TitleContent>
-                                <div class="d-flex align-center gap-3 w-100">
-                                    <MudIcon Icon="@Icons.Material.Filled.Campaign" Size="Size.Medium" Color="Color.Warning" />
-                                    <div style="flex:1; min-width:0;">
-                                        <MudText Typo="Typo.body1" Style="font-weight:600;">@campaign.Title</MudText>
-                                        @if (!string.IsNullOrEmpty(campaign.Description))
-                                        {
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@campaign.Description</MudText>
-                                        }
-                                    </div>
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning">
-                                        @campaign.CampaignMissions.Count
-                                    </MudChip>
-                                    <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
-                                               Variant="Variant.Text" Color="Color.Primary"
-                                               OnClick="@(() => OpenAddMissionToCampaignDialog(campaign))"
-                                               StopPropagation="true">
-                                        Add
-                                    </MudButton>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                                   Color="Color.Error" OnClick="@(() => DeleteCampaign(campaign))"
-                                                   StopPropagation="true" />
-                                </div>
-                            </TitleContent>
-                            <ChildContent>
-                                @if (campaign.CampaignMissions.Count == 0)
-                                {
-                                    <MudText Typo="Typo.caption" Color="Color.Default" Class="mb-2">No missions yet. Click "Add" to include missions in this campaign.</MudText>
-                                }
-                                else
-                                {
-                                    <div class="d-flex flex-column gap-1">
-                                        @foreach (var cm in campaign.CampaignMissions.OrderBy(cm => cm.OrderIndex))
-                                        {
-                                            <div class="d-flex align-center gap-2 pa-2 mud-paper mud-elevation-0"
-                                                 style="border:1px solid var(--mud-palette-divider); border-radius:4px;">
-                                                <MudText Typo="Typo.body2" Color="Color.Primary" Style="min-width:24px; font-weight:600;">@(cm.OrderIndex + 1).</MudText>
-                                                <div style="flex:1; min-width:0;">
-                                                    <MudText Typo="Typo.body2">@cm.Mission?.DisplayName</MudText>
-                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@cm.Mission?.MapName · @cm.Mission?.FileName</MudText>
+                        <MudItem xs="12" md="6" xl="4">
+                            <MudCard Elevation="2" Style="height:100%; display:flex; flex-direction:column; border-top:3px solid var(--mud-palette-tertiary);">
+                                <MudCardHeader Class="pb-0">
+                                    <CardHeaderAvatar>
+                                        <MudAvatar Color="Color.Tertiary" Variant="Variant.Outlined">
+                                            <MudIcon Icon="@Icons.Material.Filled.AutoStories" />
+                                        </MudAvatar>
+                                    </CardHeaderAvatar>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@campaign.Title</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @campaign.CampaignMissions.Count mission(s), played in order
+                                        </MudText>
+                                    </CardHeaderContent>
+                                    <CardHeaderActions>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                       Color="Color.Error" OnClick="@(() => DeleteCampaign(campaign))" />
+                                    </CardHeaderActions>
+                                </MudCardHeader>
+                                <MudCardContent Style="flex:1;">
+                                    @if (!string.IsNullOrEmpty(campaign.Description))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@campaign.Description</MudText>
+                                    }
+                                    @if (campaign.CampaignMissions.Count == 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Empty — add missions below or from the Library.</MudText>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-flex flex-column gap-1">
+                                            @{
+                                                var ordered = campaign.CampaignMissions.OrderBy(cm => cm.OrderIndex).ToList();
+                                            }
+                                            @for (var i = 0; i < ordered.Count; i++)
+                                            {
+                                                var cm = ordered[i];
+                                                var index = i;
+                                                <div class="d-flex align-center gap-2 pa-1 rounded"
+                                                     style="border:1px solid var(--mud-palette-divider);">
+                                                    <MudText Typo="Typo.body2" Color="Color.Tertiary" Style="min-width:22px; text-align:right; font-weight:700;">@(index + 1)</MudText>
+                                                    <div style="flex:1; min-width:0;">
+                                                        <MudText Typo="Typo.body2" Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@cm.Mission?.DisplayName</MudText>
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@cm.Mission?.MapName</MudText>
+                                                    </div>
+                                                    <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small"
+                                                                   Disabled="@(index == 0)"
+                                                                   OnClick="@(() => MoveCampaignMission(campaign, index, -1))" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small"
+                                                                   Disabled="@(index == ordered.Count - 1)"
+                                                                   OnClick="@(() => MoveCampaignMission(campaign, index, +1))" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                                                   OnClick="@(() => RemoveMissionFromCampaign(campaign.Id, cm.MissionId))" />
                                                 </div>
-                                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
-                                                               Size="Size.Small" Color="Color.Error"
-                                                               OnClick="@(() => RemoveMissionFromCampaign(campaign.Id, cm.MissionId))" />
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </ChildContent>
-                        </MudExpansionPanel>
+                                            }
+                                        </div>
+                                    }
+                                </MudCardContent>
+                                <MudCardActions Class="pt-0">
+                                    <MudAutocomplete T="Mission" @key="@($"c{campaign.Id}-{campaign.CampaignMissions.Count}")"
+                                                     Placeholder="Add mission…"
+                                                     SearchFunc="@((s, ct) => SearchMissionsNotInCampaign(campaign, s, ct))"
+                                                     ValueChanged="@(async m => await AddMissionToCampaignInline(campaign, m))"
+                                                     ToStringFunc="@(m => m is not null ? $"{m.DisplayName} ({m.MapName})" : "")"
+                                                     ResetValueOnEmptyText="false"
+                                                     Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                                     Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Add"
+                                                     Style="width:100%;" />
+                                </MudCardActions>
+                            </MudCard>
+                        </MudItem>
                     }
-                </div>
+                </MudGrid>
             }
-        </MudTabPanel>
+        </div>
+    }
 
-        @* ── Sets Tab ── *@
-        <MudTabPanel Text="Sets" BadgeData="@(_sets.Count > 0 ? _sets.Count.ToString() : null)" BadgeColor="Color.Info">
-            <div class="d-flex align-center gap-2 mb-3 mt-2">
-                <MudText Typo="Typo.h6" Style="flex:1;">Sets</MudText>
-                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
-                    @_sets.Sum(s => s.SetMissions.Count) total missions
-                </MudChip>
-                <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled"
-                           Size="Size.Small" OnClick="@(() => _showSetDialog = true)">
-                    New Set
-                </MudButton>
-            </div>
-
+    @* ════════════════════ COLLECTIONS VIEW ════════════════════ *@
+    @if (_view == ViewCollections)
+    {
+        <div style="flex:1; min-height:0; overflow-y:auto;">
             @if (_sets.Count == 0)
             {
-                <div class="d-flex flex-column align-center gap-2" style="padding:40px 0;">
-                    <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Large" Color="Color.Default" />
-                    <MudText Typo="Typo.body1" Color="Color.Default">No sets yet</MudText>
-                    <MudText Typo="Typo.caption">Create a set to group related missions together for quick browsing.</MudText>
+                <div class="d-flex flex-column align-center gap-2" style="padding:70px 0;">
+                    <MudIcon Icon="@Icons.Material.Filled.Collections" Style="font-size:56px; color:var(--mud-palette-secondary); opacity:.7;" />
+                    <MudText Typo="Typo.h6">No collections yet</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        A collection is an unordered group of related missions — a theme night, a map pack, a rotation pool.
+                    </MudText>
+                    <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Secondary" Variant="Variant.Filled"
+                               Class="mt-2" OnClick="@(() => _showSetDialog = true)">
+                        Create your first collection
+                    </MudButton>
                 </div>
             }
             else
             {
-                <div class="d-flex flex-column gap-3">
+                <MudGrid Spacing="3">
                     @foreach (var set in _sets)
                     {
-                        <MudExpansionPanel>
-                            <TitleContent>
-                                <div class="d-flex align-center gap-3 w-100">
-                                    <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Medium" Color="Color.Info" />
-                                    <div style="flex:1; min-width:0;">
-                                        <MudText Typo="Typo.body1" Style="font-weight:600;">@set.Title</MudText>
-                                        @if (!string.IsNullOrEmpty(set.Description))
-                                        {
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@set.Description</MudText>
-                                        }
-                                    </div>
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Info">
-                                        @set.SetMissions.Count
-                                    </MudChip>
-                                    <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
-                                               Variant="Variant.Text" Color="Color.Primary"
-                                               OnClick="@(() => OpenAddMissionToSetDialog(set))"
-                                               StopPropagation="true">
-                                        Add
-                                    </MudButton>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                                   Color="Color.Error" OnClick="@(() => DeleteSet(set))"
-                                                   StopPropagation="true" />
-                                </div>
-                            </TitleContent>
-                            <ChildContent>
-                                @if (set.SetMissions.Count == 0)
-                                {
-                                    <MudText Typo="Typo.caption" Color="Color.Default" Class="mb-2">No missions yet. Click "Add" to include missions in this set.</MudText>
-                                }
-                                else
-                                {
-                                    <div class="d-flex flex-column gap-1">
-                                        @foreach (var sm in set.SetMissions)
-                                        {
-                                            <div class="d-flex align-center gap-2 pa-2 mud-paper mud-elevation-0"
-                                                 style="border:1px solid var(--mud-palette-divider); border-radius:4px;">
-                                                <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Small" Color="Color.Secondary" />
-                                                <div style="flex:1; min-width:0;">
-                                                    <MudText Typo="Typo.body2">@sm.Mission?.DisplayName</MudText>
-                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@sm.Mission?.MapName · @sm.Mission?.FileName</MudText>
-                                                </div>
-                                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
-                                                               Size="Size.Small" Color="Color.Error"
-                                                               OnClick="@(() => RemoveMissionFromSet(set.Id, sm.MissionId))" />
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </ChildContent>
-                        </MudExpansionPanel>
+                        <MudItem xs="12" md="6" xl="4">
+                            <MudCard Elevation="2" Style="height:100%; display:flex; flex-direction:column; border-top:3px solid var(--mud-palette-secondary);">
+                                <MudCardHeader Class="pb-0">
+                                    <CardHeaderAvatar>
+                                        <MudAvatar Color="Color.Secondary" Variant="Variant.Outlined">
+                                            <MudIcon Icon="@Icons.Material.Filled.Collections" />
+                                        </MudAvatar>
+                                    </CardHeaderAvatar>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@set.Title</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@set.SetMissions.Count mission(s)</MudText>
+                                    </CardHeaderContent>
+                                    <CardHeaderActions>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                       Color="Color.Error" OnClick="@(() => DeleteSet(set))" />
+                                    </CardHeaderActions>
+                                </MudCardHeader>
+                                <MudCardContent Style="flex:1;">
+                                    @if (!string.IsNullOrEmpty(set.Description))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@set.Description</MudText>
+                                    }
+                                    @if (set.SetMissions.Count == 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Empty — add missions below or from the Library.</MudText>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-flex gap-1 flex-wrap">
+                                            @foreach (var sm in set.SetMissions)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                                         Icon="@Icons.Material.Filled.Map"
+                                                         OnClose="@(() => RemoveMissionFromSet(set.Id, sm.MissionId))">
+                                                    @sm.Mission?.DisplayName
+                                                </MudChip>
+                                            }
+                                        </div>
+                                    }
+                                </MudCardContent>
+                                <MudCardActions Class="pt-0">
+                                    <MudAutocomplete T="Mission" @key="@($"s{set.Id}-{set.SetMissions.Count}")"
+                                                     Placeholder="Add mission…"
+                                                     SearchFunc="@((s, ct) => SearchMissionsNotInSet(set, s, ct))"
+                                                     ValueChanged="@(async m => await AddMissionToSetInline(set, m))"
+                                                     ToStringFunc="@(m => m is not null ? $"{m.DisplayName} ({m.MapName})" : "")"
+                                                     ResetValueOnEmptyText="false"
+                                                     Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                                     Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Add"
+                                                     Style="width:100%;" />
+                                </MudCardActions>
+                            </MudCard>
+                        </MudItem>
                     }
-                </div>
+                </MudGrid>
             }
-        </MudTabPanel>
-
-    </MudTabs>
+        </div>
+    }
 </div>
 
 @* ════════════ Upload Dialog ════════════ *@
@@ -402,11 +506,11 @@
     </DialogActions>
 </MudDialog>
 
-@* ════════════ Set Creation Dialog ════════════ *@
+@* ════════════ Collection Creation Dialog ════════════ *@
 <MudDialog @bind-Visible="_showSetDialog"
            Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true })">
     <TitleContent>
-        <MudText Typo="Typo.h6">Create Set</MudText>
+        <MudText Typo="Typo.h6">Create Collection</MudText>
     </TitleContent>
     <DialogContent>
         <MudTextField @bind-Value="_newSetTitle" Label="Title" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -448,54 +552,6 @@
     </DialogActions>
 </MudDialog>
 
-@* ════════════ Add Mission to Campaign Dialog ════════════ *@
-<MudDialog @bind-Visible="_showAddToCampaignDialog"
-           Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true })">
-    <TitleContent>
-        <MudText Typo="Typo.h6">Add Mission to Campaign</MudText>
-    </TitleContent>
-    <DialogContent>
-        @if (_addToCampaignTarget != null)
-        {
-            <MudText Typo="Typo.subtitle2" Class="mb-2">Campaign: @_addToCampaignTarget.Title</MudText>
-            <MudAutocomplete T="Mission"
-                             Label="Search missions…"
-                             SearchFunc="@SearchMissionsForAdd"
-                             ValueChanged="@(async m => await AddMissionToCampaignFromPicker(_addToCampaignTarget!, m))"
-                             ToStringFunc="@(m => m is not null ? $"{m.DisplayName} ({m.MapName})" : "")"
-                             ResetValueOnEmptyText="false"
-                             Variant="Variant.Outlined" />
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="@(() => _showAddToCampaignDialog = false)">Close</MudButton>
-    </DialogActions>
-</MudDialog>
-
-@* ════════════ Add Mission to Set Dialog ════════════ *@
-<MudDialog @bind-Visible="_showAddToSetDialog"
-           Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true })">
-    <TitleContent>
-        <MudText Typo="Typo.h6">Add Mission to Set</MudText>
-    </TitleContent>
-    <DialogContent>
-        @if (_addToSetTarget != null)
-        {
-            <MudText Typo="Typo.subtitle2" Class="mb-2">Set: @_addToSetTarget.Title</MudText>
-            <MudAutocomplete T="Mission"
-                             Label="Search missions…"
-                             SearchFunc="@SearchMissionsForAdd"
-                             ValueChanged="@(async m => await AddMissionToSetFromPicker(_addToSetTarget!, m))"
-                             ToStringFunc="@(m => m is not null ? $"{m.DisplayName} ({m.MapName})" : "")"
-                             ResetValueOnEmptyText="false"
-                             Variant="Variant.Outlined" />
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="@(() => _showAddToSetDialog = false)">Close</MudButton>
-    </DialogActions>
-</MudDialog>
-
 @* ════════════ Tag Editor Dialog ════════════ *@
 <MudDialog @bind-Visible="_showTagDialog"
            Options="@(new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true })">
@@ -532,6 +588,11 @@
 @code {
     [Parameter, EditorRequired] public ServerInstance Instance { get; set; } = default!;
 
+    private const string ViewLibrary = "library";
+    private const string ViewCampaigns = "campaigns";
+    private const string ViewCollections = "collections";
+    private string _view = ViewLibrary;
+
     private List<Mission> _missions = [];
     private List<Mission> _filteredMissions = [];
     private List<Campaign> _campaigns = [];
@@ -556,16 +617,10 @@
     private string _newCampaignTitle = "";
     private string _newCampaignDescription = "";
 
-    // Set
+    // Collection (Set)
     private bool _showSetDialog;
     private string _newSetTitle = "";
     private string _newSetDescription = "";
-
-    // Add to campaign/set dialogs
-    private bool _showAddToCampaignDialog;
-    private Campaign? _addToCampaignTarget;
-    private bool _showAddToSetDialog;
-    private Set? _addToSetTarget;
 
     // Edit
     private bool _showEditDialog;
@@ -625,6 +680,12 @@
         !string.IsNullOrWhiteSpace(_searchQuery) ||
         !string.IsNullOrWhiteSpace(_activeMapFilter) ||
         _activeFilterTags.Count > 0;
+
+    private int CountCampaignsContaining(int missionId)
+        => _campaigns.Count(c => c.CampaignMissions.Any(cm => cm.MissionId == missionId));
+
+    private int CountSetsContaining(int missionId)
+        => _sets.Count(s => s.SetMissions.Any(sm => sm.MissionId == missionId));
 
     private void OnMissionSearchChanged(string value)
     {
@@ -798,6 +859,10 @@
         {
             Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
         }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
+        }
         catch (IOException ex)
         {
             Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
@@ -806,43 +871,62 @@
         {
             Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
         }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
-        {
-            Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
-        }
     }
 
     // ── Campaigns ─────────────────────────────────────────────────────────────
 
-    private async Task<IEnumerable<Mission>> SearchMissionsForAdd(string search, CancellationToken ct)
+    private async Task<IEnumerable<Mission>> SearchMissionsNotInCampaign(Campaign campaign, string search, CancellationToken ct)
     {
         await Task.CompletedTask;
+        var assigned = campaign.CampaignMissions.Select(cm => cm.MissionId).ToHashSet();
         return _missions.Where(m =>
-            string.IsNullOrEmpty(search) ||
-            m.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-            m.FileName.Contains(search, StringComparison.OrdinalIgnoreCase));
+            !assigned.Contains(m.Id) &&
+            (string.IsNullOrEmpty(search) ||
+             m.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+             m.FileName.Contains(search, StringComparison.OrdinalIgnoreCase)));
     }
 
-    private void OpenAddMissionToCampaignDialog(Campaign campaign)
-    {
-        _addToCampaignTarget = campaign;
-        _showAddToCampaignDialog = true;
-    }
-
-    private async Task AddMissionToCampaignFromPicker(Campaign campaign, Mission? mission)
+    private async Task AddMissionToCampaignInline(Campaign campaign, Mission? mission)
     {
         if (mission == null) return;
+        if (campaign.CampaignMissions.Any(cm => cm.MissionId == mission.Id)) return;
         try
         {
             var nextOrder = campaign.CampaignMissions.Count;
             await MissionService.AddMissionToCampaignAsync(campaign.Id, mission.Id, nextOrder);
             Snackbar.Add($"Added '{mission.DisplayName}' to '{campaign.Title}'", Severity.Success);
-            _showAddToCampaignDialog = false;
             await RefreshAll();
         }
         catch (InvalidOperationException ex)
         {
             Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task MoveCampaignMission(Campaign campaign, int index, int delta)
+    {
+        var ordered = campaign.CampaignMissions.OrderBy(cm => cm.OrderIndex).Select(cm => cm.MissionId).ToList();
+        var target = index + delta;
+        if (target < 0 || target >= ordered.Count) return;
+
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
+
+        try
+        {
+            await MissionService.ReorderCampaignMissionsAsync(campaign.Id, ordered);
+            await RefreshAll();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add($"Reorder failed: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Reorder failed: {ex.Message}", Severity.Error);
         }
     }
 
@@ -858,11 +942,20 @@
         {
             Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
         }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task CreateCampaign()
     {
         if (string.IsNullOrWhiteSpace(_newCampaignTitle)) return;
+        if (Instance.Id <= 0)
+        {
+            Snackbar.Add("Save the server first, then create campaigns.", Severity.Warning);
+            return;
+        }
 
         try
         {
@@ -877,9 +970,14 @@
             _showCampaignDialog = false;
             _newCampaignTitle = "";
             _newCampaignDescription = "";
+            _view = ViewCampaigns;
             await RefreshAll();
         }
         catch (InvalidOperationException ex)
+        {
+            Snackbar.Add($"Failed to create campaign: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
             Snackbar.Add($"Failed to create campaign: {ex.Message}", Severity.Error);
         }
@@ -900,27 +998,40 @@
         {
             Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
         }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
+        }
     }
 
-    // ── Sets ──────────────────────────────────────────────────────────────────
+    // ── Collections (Sets) ────────────────────────────────────────────────────
 
-    private void OpenAddMissionToSetDialog(Set set)
+    private async Task<IEnumerable<Mission>> SearchMissionsNotInSet(Set set, string search, CancellationToken ct)
     {
-        _addToSetTarget = set;
-        _showAddToSetDialog = true;
+        await Task.CompletedTask;
+        var assigned = set.SetMissions.Select(sm => sm.MissionId).ToHashSet();
+        return _missions.Where(m =>
+            !assigned.Contains(m.Id) &&
+            (string.IsNullOrEmpty(search) ||
+             m.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+             m.FileName.Contains(search, StringComparison.OrdinalIgnoreCase)));
     }
 
-    private async Task AddMissionToSetFromPicker(Set set, Mission? mission)
+    private async Task AddMissionToSetInline(Set set, Mission? mission)
     {
         if (mission == null) return;
+        if (set.SetMissions.Any(sm => sm.MissionId == mission.Id)) return;
         try
         {
             await MissionService.AddMissionToSetAsync(set.Id, mission.Id);
             Snackbar.Add($"Added '{mission.DisplayName}' to '{set.Title}'", Severity.Success);
-            _showAddToSetDialog = false;
             await RefreshAll();
         }
         catch (InvalidOperationException ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
             Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
         }
@@ -931,10 +1042,14 @@
         try
         {
             await MissionService.RemoveMissionFromSetAsync(setId, missionId);
-            Snackbar.Add("Mission removed from set", Severity.Success);
+            Snackbar.Add("Mission removed from collection", Severity.Success);
             await RefreshAll();
         }
         catch (InvalidOperationException ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
             Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
         }
@@ -943,6 +1058,11 @@
     private async Task CreateSet()
     {
         if (string.IsNullOrWhiteSpace(_newSetTitle)) return;
+        if (Instance.Id <= 0)
+        {
+            Snackbar.Add("Save the server first, then create collections.", Severity.Warning);
+            return;
+        }
 
         try
         {
@@ -953,30 +1073,39 @@
                 Description = string.IsNullOrWhiteSpace(_newSetDescription) ? null : _newSetDescription.Trim()
             };
             await MissionService.CreateSetAsync(set);
-            Snackbar.Add($"Set '{set.Title}' created", Severity.Success);
+            Snackbar.Add($"Collection '{set.Title}' created", Severity.Success);
             _showSetDialog = false;
             _newSetTitle = "";
             _newSetDescription = "";
+            _view = ViewCollections;
             await RefreshAll();
         }
         catch (InvalidOperationException ex)
         {
-            Snackbar.Add($"Failed to create set: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Failed to create collection: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Failed to create collection: {ex.Message}", Severity.Error);
         }
     }
 
     private async Task DeleteSet(Set set)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete set '{set.Title}'?");
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete collection '{set.Title}'?");
         if (!confirmed) return;
 
         try
         {
             await MissionService.DeleteSetAsync(set.Id);
-            Snackbar.Add($"Set '{set.Title}' deleted", Severity.Success);
+            Snackbar.Add($"Collection '{set.Title}' deleted", Severity.Success);
             await RefreshAll();
         }
         catch (InvalidOperationException ex)
+        {
+            Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
             Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
         }
@@ -1070,6 +1199,10 @@
                 {
                     Snackbar.Add($"Failed to create tag: {ex.Message}", Severity.Error);
                 }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Failed to create tag: {ex.Message}", Severity.Error);
+        }
             }
         }
     }
@@ -1088,6 +1221,10 @@
         {
             Snackbar.Add($"Failed to add tag: {ex.Message}", Severity.Error);
         }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            Snackbar.Add($"Failed to add tag: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task RemoveTagFromMission(MissionTag tag)
@@ -1101,6 +1238,10 @@
             StateHasChanged();
         }
         catch (InvalidOperationException ex)
+        {
+            Snackbar.Add($"Failed to remove tag: {ex.Message}", Severity.Error);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
             Snackbar.Add($"Failed to remove tag: {ex.Message}", Severity.Error);
         }

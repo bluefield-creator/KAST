@@ -59,7 +59,7 @@ public class SettingsServiceTests : IDisposable
         Assert.Equal(233780, settings.Arma3ServerAppId);
         Assert.Equal("dark", settings.ThemeMode);
         Assert.Equal(5, settings.MetricsIntervalSeconds);
-        Assert.Equal("stable", settings.UpdateChannelId);
+        Assert.Equal("caster", settings.UpdateChannelId);
         Assert.True(settings.AutoUpdateCheckEnabled);
         Assert.False(settings.SystemAuthEnabled);
         Assert.Null(settings.SystemAuthDomain);

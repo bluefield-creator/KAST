@@ -44,7 +44,7 @@ public class SettingsService(KastDbContext db, IConfiguration configuration, IHo
                 ModsDirectory = configuration["Kast:ModsDirectory"] ?? "./mods",
                 ServersDirectory = configuration["Kast:ServersDirectory"] ?? "./servers",
                 Arma3ServerAppId = int.TryParse(configuration["Kast:Arma3AppId"], out var appId) ? appId : 233780,
-                UpdateChannelId = configuration["Kast:UpdateChannelId"] ?? "stable",
+                UpdateChannelId = configuration["Kast:UpdateChannelId"] ?? "caster",
                 AutoUpdateCheckEnabled = !bool.TryParse(configuration["Kast:AutoUpdateCheckEnabled"], out var autoCheck)
                     || autoCheck,
                 SystemAuthEnabled = bool.TryParse(configuration["Auth:System:Enabled"], out var systemEnabled) && systemEnabled,

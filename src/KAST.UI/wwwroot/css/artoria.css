@@ -29,6 +29,10 @@ html {
 body {
     background: var(--indigo-900);
     font-family: var(--k-font-sans);
+    font-feature-settings: var(--k-font-feat);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     color: var(--k-foreground);
 }
 
@@ -394,8 +398,9 @@ a:focus-visible {
 /* ── 11. Dialog titles — the sheen belongs to lettering ──────────────── */
 .mud-dialog .mud-dialog-title {
     font-family: var(--k-font-display);
-    font-weight: 600;
-    font-size: var(--k-text-2xl);
+    font-weight: 700;
+    font-size: var(--k-text-xl);
+    letter-spacing: var(--k-tracking-title);
     background: var(--sheen-wheat);
     -webkit-background-clip: text;
     background-clip: text;

@@ -8,112 +8,119 @@
 @inject KAST.UI.Services.MonitoringSnapshotService Snapshots
 @implements IAsyncDisposable
 
-@* Themed banner navigation — each destination is a skewed banner plate:
-   kicker, serif title, one domed fitting. The active banner wears the
-   brass rail and the crimson hem. *@
-<nav class="fgo-nav" aria-label="Main navigation">
+@* Dense, edge-to-edge navigation: grouped sections, one 32px row per
+   destination, icon + label + trailing meta, in-place sub-rows for
+   instances and Settings tabs. Active rows wear the brass rail. *@
+<nav class="k-nav" aria-label="Main navigation">
 
-    <NavLink href="" Match="NavLinkMatch.All" class="fgo-banner" ActiveClass="active">
-        <span class="fgo-banner-inner">
-            <span class="fgo-banner-text">
-                <span class="fgo-kicker">Terminal</span>
-                <span class="fgo-title">Dashboard</span>
+    <div class="k-nav-group">
+        <div class="k-nav-group-label">Terminal</div>
+        <NavLink href="" Match="NavLinkMatch.All" class="k-nav-row" ActiveClass="active">
+            <MudIcon Icon="@Icons.Material.Outlined.SpaceDashboard" Class="k-nav-icon" />
+            <span class="k-nav-label">Dashboard</span>
+        </NavLink>
+    </div>
+
+    <div class="k-nav-group">
+        <div class="k-nav-group-label">Garrison</div>
+        <NavLink href="servers" Match="NavLinkMatch.All" class="k-nav-row" ActiveClass="active">
+            <MudIcon Icon="@Icons.Material.Outlined.Dns" Class="k-nav-icon" />
+            <span class="k-nav-label">Servers</span>
+            <span class="k-nav-meta">
+                @if (RunningCount > 0)
+                {
+                    <span class="k-nav-badge k-nav-badge-live" title="@RunningCount running">@RunningCount</span>
+                }
+                <span class="k-nav-count">@_servers.Count</span>
             </span>
-            <span class="fgo-fitting" aria-hidden="true"></span>
-        </span>
-    </NavLink>
+        </NavLink>
 
-    <NavLink href="servers" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
-        <span class="fgo-banner-inner">
-            <span class="fgo-banner-text">
-                <span class="fgo-kicker">Garrison</span>
-                <span class="fgo-title">Servers</span>
-            </span>
-            @if (RunningCount > 0)
-            {
-                <span class="fgo-badge fgo-badge-live">@RunningCount</span>
-            }
-            <span class="fgo-fitting" aria-hidden="true"></span>
-        </span>
-    </NavLink>
-
-    @if (_servers.Count > 0)
-    {
-        <div class="fgo-sub-nav">
-            @if (_servers.Count > 5)
-            {
+        @if (_servers.Count > 5)
+        {
+            <div class="k-nav-filter">
                 <MudTextField @bind-Value="_serverFilter"
-                              Placeholder="Filter servers..."
+                              Placeholder="Filter instances"
                               Immediate="true"
                               Margin="Margin.Dense"
                               Variant="Variant.Outlined"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Filled.Search"
-                              AdornmentColor="Color.Default"
-                              Class="pa-2" />
-            }
-            @foreach (var s in GetFilteredServers())
-            {
-                <NavLink href="@($"servers/{s.Id}")" Match="NavLinkMatch.All" class="fgo-banner fgo-banner-sub" ActiveClass="active">
-                    <span class="fgo-banner-inner">
-                        <span class="fgo-status fgo-status-@s.Status.ToString().ToLowerInvariant()" aria-hidden="true"></span>
-                        <span class="fgo-sub-name">@s.Name</span>
-                        <span class="fgo-sub-players">@GetPlayerSuffix(s)</span>
-                    </span>
-                </NavLink>
-            }
-        </div>
-    }
+                              AdornmentColor="Color.Default" />
+            </div>
+        }
+        @foreach (var s in GetFilteredServers())
+        {
+            <NavLink href="@($"servers/{s.Id}")" Match="NavLinkMatch.All" class="k-nav-row k-nav-row-sub" ActiveClass="active">
+                <span class="k-nav-status k-nav-status-@s.Status.ToString().ToLowerInvariant()" aria-hidden="true"></span>
+                <span class="k-nav-label">@s.Name</span>
+                <span class="k-nav-meta k-nav-mono">@GetPlayerSuffix(s)</span>
+            </NavLink>
+        }
+        <NavLink href="servers/new" Match="NavLinkMatch.All" class="k-nav-row k-nav-row-sub k-nav-row-action" ActiveClass="active">
+            <MudIcon Icon="@Icons.Material.Outlined.Add" Class="k-nav-icon k-nav-icon-sm" />
+            <span class="k-nav-label">New instance</span>
+        </NavLink>
+    </div>
 
-    <NavLink href="mods" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
-        <span class="fgo-banner-inner">
-            <span class="fgo-banner-text">
-                <span class="fgo-kicker">Armoury</span>
-                <span class="fgo-title">Mods</span>
-            </span>
-            <span class="fgo-fitting" aria-hidden="true"></span>
-        </span>
-    </NavLink>
+    <div class="k-nav-group">
+        <div class="k-nav-group-label">Armoury</div>
+        <NavLink href="mods" Match="NavLinkMatch.Prefix" class="k-nav-row" ActiveClass="active">
+            <MudIcon Icon="@Icons.Material.Outlined.Extension" Class="k-nav-icon" />
+            <span class="k-nav-label">Mods</span>
+        </NavLink>
+    </div>
 
-    <NavLink href="monitoring" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
-        <span class="fgo-banner-inner">
-            <span class="fgo-banner-text">
-                <span class="fgo-kicker">Watchtower</span>
-                <span class="fgo-title">Monitoring</span>
-            </span>
+    <div class="k-nav-group">
+        <div class="k-nav-group-label">Watchtower</div>
+        <NavLink href="monitoring" Match="NavLinkMatch.Prefix" class="k-nav-row" ActiveClass="active">
+            <MudIcon Icon="@Icons.Material.Outlined.Insights" Class="k-nav-icon" />
+            <span class="k-nav-label">Monitoring</span>
             @if (_monitoringUnavailable)
             {
-                <span class="fgo-badge fgo-badge-warn" title="Monitoring unavailable">!</span>
+                <span class="k-nav-meta"><span class="k-nav-badge k-nav-badge-warn" title="Monitoring unavailable">!</span></span>
             }
-            <span class="fgo-fitting" aria-hidden="true"></span>
-        </span>
-    </NavLink>
+        </NavLink>
+    </div>
 
-    <NavLink href="settings" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
-        <span class="fgo-banner-inner">
-            <span class="fgo-banner-text">
-                <span class="fgo-kicker">Standing Orders</span>
-                <span class="fgo-title">Settings</span>
-            </span>
-            <span class="fgo-fitting" aria-hidden="true"></span>
-        </span>
-    </NavLink>
+    <div class="k-nav-group">
+        <div class="k-nav-group-label">Standing Orders</div>
+        <NavLink href="settings" Match="NavLinkMatch.Prefix" class="k-nav-row" ActiveClass="active">
+            <MudIcon Icon="@Icons.Material.Outlined.Tune" Class="k-nav-icon" />
+            <span class="k-nav-label">Settings</span>
+        </NavLink>
+        @foreach (var (tab, label) in SettingsTabs)
+        {
+            <a href="@(tab is null ? "settings" : $"settings?tab={tab}")"
+               class="k-nav-row k-nav-row-sub @(IsSettingsTabActive(tab) ? "active" : null)">
+                <span class="k-nav-tick" aria-hidden="true"></span>
+                <span class="k-nav-label">@label</span>
+            </a>
+        }
+    </div>
 
-    <NavLink href="about" Match="NavLinkMatch.Prefix" class="fgo-banner" ActiveClass="active">
-        <span class="fgo-banner-inner">
-            <span class="fgo-banner-text">
-                <span class="fgo-kicker">Archive</span>
-                <span class="fgo-title">About</span>
-            </span>
-            <span class="fgo-fitting" aria-hidden="true"></span>
-        </span>
-    </NavLink>
+    <div class="k-nav-group">
+        <div class="k-nav-group-label">Archive</div>
+        <NavLink href="about" Match="NavLinkMatch.Prefix" class="k-nav-row" ActiveClass="active">
+            <MudIcon Icon="@Icons.Material.Outlined.Info" Class="k-nav-icon" />
+            <span class="k-nav-label">About</span>
+        </NavLink>
+    </div>
 
 </nav>
 
 @code {
     private IReadOnlyList<ServerInstance> _servers = [];
     private string _serverFilter = string.Empty;
+
+    private static readonly (string? Tab, string Label)[] SettingsTabs =
+    [
+        (null,       "General"),
+        ("accounts", "Accounts"),
+        ("steam",    "Steam"),
+        ("api-keys", "API keys"),
+        ("service",  "Service"),
+        ("updates",  "Updates"),
+    ];
 
     private int RunningCount => _servers.Count(s => s.Status == ServerInstanceStatus.Running);
     private HubConnection? _hub;
@@ -128,6 +135,20 @@
             s.Name.Contains(_serverFilter, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// NavLink ignores the query string, so Settings sub-rows resolve their
+    /// own active state from the current <c>?tab=</c> value.
+    /// </summary>
+    private bool IsSettingsTabActive(string? tab)
+    {
+        var uri = new Uri(Nav.Uri);
+        if (!Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].Trim('/').Equals("settings", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var current = System.Web.HttpUtility.ParseQueryString(uri.Query)["tab"];
+        return tab is null ? string.IsNullOrEmpty(current) : string.Equals(current, tab, StringComparison.OrdinalIgnoreCase);
+    }
+
     private string GetPlayerSuffix(ServerInstance server)
     {
         if (server.Status != ServerInstanceStatus.Running)
@@ -138,8 +159,8 @@
             return "";
 
         return metrics.MaxPlayers > 0
-            ? $"  ({metrics.PlayerCount}/{metrics.MaxPlayers})"
-            : $"  ({metrics.PlayerCount})";
+            ? $"{metrics.PlayerCount}/{metrics.MaxPlayers}"
+            : $"{metrics.PlayerCount}";
     }
 
     private void OnSnapshotChanged()

@@ -38,7 +38,7 @@
         </MudTooltip>
     </MudAppBar>
     <MudDrawer id="nav-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2"
-               Width="290px" Breakpoint="Breakpoint.Md">
+               Width="248px" Breakpoint="Breakpoint.Md">
         <NavMenu />
     </MudDrawer>
     <MudMainContent Class="pt-16 pb-10 pa-4">
@@ -155,7 +155,8 @@
     {
         _breadcrumbItems.Clear();
 
-        var relativePath = NavigationManager.ToBaseRelativePath(uri);
+        // Path only — query strings (e.g. settings?tab=steam) never belong in a crumb.
+        var relativePath = NavigationManager.ToBaseRelativePath(uri).Split('?', '#')[0];
 
         // Always start with Dashboard as the root
         _breadcrumbItems.Add(new BreadcrumbItem("Dashboard", href: "/"));

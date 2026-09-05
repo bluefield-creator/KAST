@@ -91,9 +91,14 @@ desaturated — that restraint is what makes them land.
 
 ## Typography & shape
 
-Cormorant Garamond 500–700 for display ≥1.25rem (the softness — the one
-military cue left deliberately incomplete); Source Sans 3 for the body;
-JetBrains Mono for the war log. Buttons sentence-case, 600, `.01em`.
+One face, two optical cuts, in the Apple manner: **Inter** for display
+and body alike (display sizes go heavier and tighten to −.015…−.025em
+rather than switching to a serif), **JetBrains Mono** for anything that is
+data — the war log, tallies, keys. Inter runs with `cv11 ss01 tnum` so
+digits stay tabular and the `a` stays single-storey. The Cinzel wordmark
+survives only inside the SVG logo. Buttons sentence-case, 600, `.01em`.
+Navigation is a dense, edge-to-edge grouped list (32px rows, 28px
+sub-rows, small-caps group labels) — the brass rail marks the active row.
 Radii 2–4px: stiff, tailored, squared away. Motion 120–240ms ease-out —
 the rigid pieces do not deform; only the outboard material moves.
 

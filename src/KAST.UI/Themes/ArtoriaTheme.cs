@@ -121,8 +121,10 @@ public static class ArtoriaTheme
         _ => "#3B3A86",
     };
 
-    private static readonly string[] Display = ["Cormorant Garamond", "Georgia", "Times New Roman", "serif"];
-    private static readonly string[] Sans    = ["Source Sans 3", "Segoe UI", "system-ui", "sans-serif"];
+    // One face, two optical cuts: Inter carries display and text alike
+    // (display sizes tighten their tracking rather than switching faces).
+    private static readonly string[] Display = ["Inter", "-apple-system", "SF Pro Display", "Segoe UI", "system-ui", "sans-serif"];
+    private static readonly string[] Sans    = ["Inter", "-apple-system", "SF Pro Text", "Segoe UI", "system-ui", "sans-serif"];
 
     public static MudTheme Build() => new()
     {
@@ -138,14 +140,14 @@ public static class ArtoriaTheme
                 FontWeight = "400",
                 LineHeight = "1.45",
             },
-            // Serif display faces — never below 1.25rem (Cormorant gets frail)
-            H1 = new H1Typography { FontFamily = Display, FontSize = "2.75rem",  FontWeight = "600", LineHeight = "1.2",  LetterSpacing = "0" },
-            H2 = new H2Typography { FontFamily = Display, FontSize = "2.375rem", FontWeight = "600", LineHeight = "1.2",  LetterSpacing = "0" },
-            H3 = new H3Typography { FontFamily = Display, FontSize = "2.125rem", FontWeight = "600", LineHeight = "1.25", LetterSpacing = "0" },
-            H4 = new H4Typography { FontFamily = Display, FontSize = "1.625rem", FontWeight = "600", LineHeight = "1.3",  LetterSpacing = "0" },
-            // Sans below the serif floor
-            H5 = new H5Typography { FontFamily = Sans, FontSize = "1.25rem", FontWeight = "600", LineHeight = "1.35", LetterSpacing = "0" },
-            H6 = new H6Typography { FontFamily = Sans, FontSize = "1rem",    FontWeight = "600", LineHeight = "1.4",  LetterSpacing = ".005em" },
+            // Display cuts — heavier weight, negative tracking, tight leading
+            H1 = new H1Typography { FontFamily = Display, FontSize = "2.5rem",   FontWeight = "700", LineHeight = "1.1",  LetterSpacing = "-.025em" },
+            H2 = new H2Typography { FontFamily = Display, FontSize = "2.125rem", FontWeight = "700", LineHeight = "1.15", LetterSpacing = "-.022em" },
+            H3 = new H3Typography { FontFamily = Display, FontSize = "1.75rem",  FontWeight = "700", LineHeight = "1.2",  LetterSpacing = "-.02em" },
+            H4 = new H4Typography { FontFamily = Display, FontSize = "1.375rem", FontWeight = "600", LineHeight = "1.25", LetterSpacing = "-.015em" },
+            // Title cuts
+            H5 = new H5Typography { FontFamily = Sans, FontSize = "1.125rem", FontWeight = "600", LineHeight = "1.3",  LetterSpacing = "-.01em" },
+            H6 = new H6Typography { FontFamily = Sans, FontSize = "1rem",     FontWeight = "600", LineHeight = "1.35", LetterSpacing = "-.005em" },
             Subtitle1 = new Subtitle1Typography { FontFamily = Sans, FontSize = "1rem",      FontWeight = "600", LineHeight = "1.4" },
             Subtitle2 = new Subtitle2Typography { FontFamily = Sans, FontSize = ".875rem",   FontWeight = "600", LineHeight = "1.4" },
             Body1     = new Body1Typography     { FontFamily = Sans, FontSize = ".875rem",   FontWeight = "400", LineHeight = "1.45" },

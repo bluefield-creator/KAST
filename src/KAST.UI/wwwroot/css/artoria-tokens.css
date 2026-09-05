@@ -130,9 +130,15 @@
   --k-shadow-float:   0 16px 40px rgb(0 0 0 / 0.5);
 
   /* ── Typography ──────────────────────────────────────────────────────── */
-  --k-font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
-  --k-font-sans:    "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --k-font-mono:    "JetBrains Mono", Consolas, "Courier New", monospace;
+  /* One humanist grotesk for everything, in the Apple manner: Inter for
+     display and body (display cuts get tighter tracking, not a second
+     face), JetBrains Mono for anything that is data. */
+  --k-font-display: "Inter", -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  --k-font-sans:    "Inter", -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --k-font-mono:    "JetBrains Mono", "SF Mono", Consolas, "Courier New", monospace;
+  --k-tracking-display: -0.022em;
+  --k-tracking-title:   -0.012em;
+  --k-font-feat: "cv11", "ss01", "tnum";   /* Inter: single-storey a, open digits, tabular numbers */
 
   --k-text-xs:   .75rem;
   --k-text-sm:   .8125rem;

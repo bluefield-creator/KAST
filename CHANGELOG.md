@@ -1,3 +1,10 @@
+## [2.0.2] - 2026-09-05
+### Bug Fixes
+- Re-link servers and mods whose folder moved - re-base missing paths into the current directories on startup and via Settings, follow the directory on change and migration
+
+### Maintenance
+- Update changelog for v2.0.1 [skip ci]
+
 ## [2.0.1] - 2026-09-05
 ### Bug Fixes
 - Stop hashing every byte on storage changes - structural fingerprints, Relocated status defaults to Use discovered when the old path is gone, preserve write times on copy, keep applied directories under env overrides

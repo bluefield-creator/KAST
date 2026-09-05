@@ -800,7 +800,7 @@
         {
             <div class="d-flex align-center gap-2">
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                <MudText Typo="Typo.body2">Working...</MudText>
+                <MudText Typo="Typo.body2">@_storageBusyMessage</MudText>
             </div>
         }
         else if (_storageScan is not null)
@@ -919,6 +919,7 @@
     private bool _migrateStorage;
     private bool _storageDialogOpen;
     private bool _storageBusy;
+    private string _storageBusyMessage = "Working...";
     private StorageScanResult? _storageScan;
     private readonly Dictionary<string, StorageResolutionAction> _storageActions = new(StringComparer.OrdinalIgnoreCase);
     private KastAuthSettings _authSettings = new(KastAuthMode.Local, "OpenID Connect", null, null, null, "groups", "preferred_username", ["KAST Admins"]);
@@ -1306,6 +1307,7 @@
                 !PathsEqual(settings.ServersDirectory, serversDirectory))
             {
                 _storageBusy = true;
+                _storageBusyMessage = "Scanning the selected directories for servers and mods...";
                 _storageDialogOpen = true;
                 StateHasChanged();
 
@@ -1339,6 +1341,9 @@
             return;
 
         _storageBusy = true;
+        _storageBusyMessage = _migrateStorage
+            ? "Copying servers and mods to the new directories. Large installs can take a long time..."
+            : "Applying storage changes...";
         StateHasChanged();
 
         try
@@ -1371,6 +1376,11 @@
             }
 
             var settings = await SettingsService.GetSettingsAsync();
+            // GetSettingsAsync overlays Kast__ModsDirectory / Kast__ServersDirectory
+            // environment overrides; writing those back would silently undo the
+            // directories the storage service just persisted.
+            settings.ModsDirectory = _storageScan.ProposedModsDirectory;
+            settings.ServersDirectory = _storageScan.ProposedServersDirectory;
             settings.ParallelDownloads = Math.Clamp(_parallelDownloads, 1, 64);
             settings.ParallelModDownloads = Math.Clamp(_parallelModDownloads, 1, 16);
             await SettingsService.UpdateSettingsAsync(settings);
@@ -1423,6 +1433,8 @@
             StorageCandidateStatus.New => StorageResolutionAction.Skip,
             StorageCandidateStatus.IdenticalDuplicate => StorageResolutionAction.KeepCurrent,
             StorageCandidateStatus.SameNameDifferentData => StorageResolutionAction.KeepCurrent,
+            // The recorded path is gone; the only useful default is to follow the data.
+            StorageCandidateStatus.Relocated => StorageResolutionAction.UseDiscovered,
             _ => StorageResolutionAction.Skip
         };
 
@@ -1435,6 +1447,8 @@
                 [StorageResolutionAction.KeepCurrent, StorageResolutionAction.UseDiscovered],
             StorageCandidateStatus.SameNameDifferentData =>
                 [StorageResolutionAction.KeepCurrent, StorageResolutionAction.UseDiscovered, StorageResolutionAction.AdoptDiscovered, StorageResolutionAction.Skip],
+            StorageCandidateStatus.Relocated =>
+                [StorageResolutionAction.UseDiscovered, StorageResolutionAction.KeepCurrent, StorageResolutionAction.Skip],
             _ => [StorageResolutionAction.Skip]
         };
 
@@ -1452,6 +1466,7 @@
         {
             StorageCandidateStatus.IdenticalDuplicate => "Duplicate",
             StorageCandidateStatus.SameNameDifferentData => "Conflict",
+            StorageCandidateStatus.Relocated => "Relocated",
             _ => "New"
         };
 
@@ -1460,6 +1475,7 @@
         {
             StorageCandidateStatus.IdenticalDuplicate => Color.Info,
             StorageCandidateStatus.SameNameDifferentData => Color.Warning,
+            StorageCandidateStatus.Relocated => Color.Info,
             _ => Color.Success
         };
 

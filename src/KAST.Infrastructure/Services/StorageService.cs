@@ -198,6 +198,12 @@ public sealed class StorageService(
         var existingByName = existing
             .GroupBy(s => NormalizeName(s.Name), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        // Servers are installed under a sanitised folder name that can differ from
+        // the display name — match on the recorded install folder as well.
+        var existingByFolder = existing
+            .Where(s => !string.IsNullOrWhiteSpace(s.InstallPath))
+            .GroupBy(s => NormalizeName(Path.GetFileName(Path.TrimEndingDirectorySeparator(s.InstallPath))), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var candidates = new List<StorageScanCandidate>();
         foreach (var directory in Directory.EnumerateDirectories(serversDirectory).OrderBy(Path.GetFileName))
@@ -208,20 +214,15 @@ public sealed class StorageService(
 
             var name = Path.GetFileName(directory);
             var identity = NormalizeName(name);
-            var fingerprint = await CalculateDirectoryFingerprintAsync(directory, ct);
             var size = GetDirectorySize(directory);
+            var fingerprint = "";
             var status = StorageCandidateStatus.New;
             ServerInstance? match = null;
 
-            if (existingByName.TryGetValue(identity, out match))
-            {
-                var existingFingerprint = Directory.Exists(match.InstallPath)
-                    ? await CalculateDirectoryFingerprintAsync(match.InstallPath, ct)
-                    : "";
-                status = string.Equals(existingFingerprint, fingerprint, StringComparison.Ordinal)
-                    ? StorageCandidateStatus.IdenticalDuplicate
-                    : StorageCandidateStatus.SameNameDifferentData;
-            }
+            if (existingByName.TryGetValue(identity, out match) || existingByFolder.TryGetValue(identity, out match))
+                (status, fingerprint) = await ClassifyAgainstExistingAsync(directory, match.InstallPath, ct);
+            else
+                fingerprint = await CalculateDirectoryFingerprintAsync(directory, ct);
 
             candidates.Add(new StorageScanCandidate
             {
@@ -234,7 +235,7 @@ public sealed class StorageService(
                 SizeBytes = size,
                 ExistingId = match?.Id,
                 ExistingPath = match?.InstallPath,
-                Detail = status == StorageCandidateStatus.New ? "Discovered server install." : $"Matches existing server {match!.Name}."
+                Detail = DescribeMatch(status, "server", match?.Name)
             });
         }
 
@@ -254,6 +255,12 @@ public sealed class StorageService(
         var existingByName = existing
             .GroupBy(m => NormalizeName(m.Name), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        // Local-folder mods are keyed by their on-disk folder, which need not
+        // equal the display name.
+        var existingByFolder = existing
+            .Where(m => m.WorkshopId == 0 && !string.IsNullOrWhiteSpace(m.LocalPath))
+            .GroupBy(m => NormalizeName(Path.GetFileName(Path.TrimEndingDirectorySeparator(m.LocalPath!))), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var candidates = new List<StorageScanCandidate>();
         foreach (var directory in Directory.EnumerateDirectories(modsDirectory).OrderBy(Path.GetFileName))
@@ -265,21 +272,20 @@ public sealed class StorageService(
                 ? existingByWorkshopId.TryGetValue(workshopId, out var named) ? named.Name : folderName
                 : folderName;
             var identity = workshopId > 0 ? $"workshop:{workshopId}" : NormalizeName(name);
-            var fingerprint = await CalculateDirectoryFingerprintAsync(directory, ct);
             var size = GetDirectorySize(directory);
+            var fingerprint = "";
             var status = StorageCandidateStatus.New;
             SteamMod? match = null;
 
-            if (workshopId > 0 && existingByWorkshopId.TryGetValue(workshopId, out match) ||
-                workshopId == 0 && existingByName.TryGetValue(NormalizeName(name), out match))
-            {
-                var existingFingerprint = Directory.Exists(match.LocalPath)
-                    ? await CalculateDirectoryFingerprintAsync(match.LocalPath, ct)
-                    : "";
-                status = string.Equals(existingFingerprint, fingerprint, StringComparison.Ordinal)
-                    ? StorageCandidateStatus.IdenticalDuplicate
-                    : StorageCandidateStatus.SameNameDifferentData;
-            }
+            var matched = workshopId > 0
+                ? existingByWorkshopId.TryGetValue(workshopId, out match)
+                : existingByName.TryGetValue(NormalizeName(name), out match) ||
+                  existingByFolder.TryGetValue(NormalizeName(folderName), out match);
+
+            if (matched)
+                (status, fingerprint) = await ClassifyAgainstExistingAsync(directory, match!.LocalPath, ct);
+            else
+                fingerprint = await CalculateDirectoryFingerprintAsync(directory, ct);
 
             candidates.Add(new StorageScanCandidate
             {
@@ -293,12 +299,41 @@ public sealed class StorageService(
                 WorkshopId = workshopId,
                 ExistingId = match?.Id,
                 ExistingPath = match?.LocalPath,
-                Detail = status == StorageCandidateStatus.New ? "Discovered mod folder." : $"Matches existing mod {match!.Name}."
+                Detail = DescribeMatch(status, "mod", match?.Name)
             });
         }
 
         return candidates;
     }
+
+    /// <summary>
+    /// Classifies a discovered folder against the record it matches. When the
+    /// recorded path is gone there is nothing to compare against — the data was
+    /// moved — so the folder is reported as <see cref="StorageCandidateStatus.Relocated"/>
+    /// without walking it at all.
+    /// </summary>
+    private static async Task<(StorageCandidateStatus Status, string Fingerprint)> ClassifyAgainstExistingAsync(
+        string discovered,
+        string? existingPath,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(existingPath) || !Directory.Exists(existingPath))
+            return (StorageCandidateStatus.Relocated, "");
+
+        var fingerprint = await CalculateDirectoryFingerprintAsync(discovered, ct);
+        var existingFingerprint = await CalculateDirectoryFingerprintAsync(existingPath, ct);
+        var status = string.Equals(existingFingerprint, fingerprint, StringComparison.Ordinal)
+            ? StorageCandidateStatus.IdenticalDuplicate
+            : StorageCandidateStatus.SameNameDifferentData;
+        return (status, fingerprint);
+    }
+
+    private static string DescribeMatch(StorageCandidateStatus status, string kind, string? existingName) => status switch
+    {
+        StorageCandidateStatus.New => $"Discovered {kind} folder.",
+        StorageCandidateStatus.Relocated => $"Matches {kind} {existingName}, whose current path no longer exists.",
+        _ => $"Matches existing {kind} {existingName}."
+    };
 
     private async Task<bool> TryCopyDirectoryAndVerifyAsync(
         string source,
@@ -321,6 +356,9 @@ public sealed class StorageService(
             return false;
         }
 
+        // Verify the copy structurally (path, size, write time). The copy itself
+        // throws on any I/O failure; re-reading hundreds of gigabytes to hash
+        // both sides again would triple the cost of an already long migration.
         var sourceFingerprint = await CalculateDirectoryFingerprintAsync(source, ct);
         try
         {
@@ -368,9 +406,13 @@ public sealed class StorageService(
             var relative = Path.GetRelativePath(source, file);
             var target = Path.Combine(destination, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            await using var sourceStream = File.OpenRead(file);
-            await using var targetStream = File.Create(target);
-            await sourceStream.CopyToAsync(targetStream, ct);
+            {
+                await using var sourceStream = File.OpenRead(file);
+                await using var targetStream = File.Create(target);
+                await sourceStream.CopyToAsync(targetStream, ct);
+            }
+            // Stamp the write time only after the stream is closed — closing a
+            // written file would otherwise overwrite it with "now".
             File.SetLastWriteTimeUtc(target, File.GetLastWriteTimeUtc(file));
         }
     }
@@ -421,10 +463,18 @@ public sealed class StorageService(
             ? path
             : path + Path.DirectorySeparatorChar;
 
-    private static async Task<string> CalculateDirectoryFingerprintAsync(string path, CancellationToken ct)
+    /// <summary>
+    /// Cheap structural fingerprint for scans: relative path, length and
+    /// last-write time of every file. O(files), never reads file contents —
+    /// an Arma install plus a mod set is tens to hundreds of gigabytes, and
+    /// the scan runs on every storage change (twice, counting Apply).
+    /// Explorer, robocopy and <see cref="CopyDirectoryAsync"/> all preserve
+    /// write times, so a faithful copy fingerprints identically.
+    /// </summary>
+    private static Task<string> CalculateDirectoryFingerprintAsync(string path, CancellationToken ct)
     {
         if (!Directory.Exists(path))
-            return "";
+            return Task.FromResult("");
 
         var separator = new byte[] { 0 };
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -433,24 +483,16 @@ public sealed class StorageService(
         {
             ct.ThrowIfCancellationRequested();
 
-            var relative = Path.GetRelativePath(path, file).Replace('\\', '/');
-            sha.AppendData(Encoding.UTF8.GetBytes(relative));
+            var info = new FileInfo(file);
+            sha.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(path, file).Replace('\\', '/')));
             sha.AppendData(separator);
-
-            sha.AppendData(BitConverter.GetBytes(new FileInfo(file).Length));
+            sha.AppendData(BitConverter.GetBytes(info.Length));
             sha.AppendData(separator);
-
-            await using var stream = new FileStream(
-                file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
-                bufferSize: 81920, FileOptions.SequentialScan | FileOptions.Asynchronous);
-            var buffer = new byte[81920];
-            int read;
-            while ((read = await stream.ReadAsync(buffer, ct)) > 0)
-                sha.AppendData(buffer.AsSpan(0, read));
-
+            sha.AppendData(BitConverter.GetBytes(info.LastWriteTimeUtc.Ticks));
             sha.AppendData(separator);
         }
 
-        return Convert.ToHexString(sha.GetHashAndReset());
+        return Task.FromResult(Convert.ToHexString(sha.GetHashAndReset()));
     }
+
 }

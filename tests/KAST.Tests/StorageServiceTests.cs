@@ -97,6 +97,83 @@ public sealed class StorageServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ScanStorage_ReportsRelocatedWhenRecordedPathIsGone()
+    {
+        // The admin moved the whole data directory: records still point at the
+        // old location, which no longer exists.
+        var goneServers = Path.Combine(_root, "servers-gone");
+        var goneMods = Path.Combine(_root, "mods-gone");
+        var newServers = Path.Combine(_root, "servers-new");
+        var newMods = Path.Combine(_root, "mods-new");
+        var newServerPath = CreateServer(newServers, "Alpha", "same");
+        var newModPath = CreateMod(newMods, "12345", "same");
+        var server = new ServerInstance { Name = "Alpha", InstallPath = Path.Combine(goneServers, "Alpha") };
+        var mod = new SteamMod { Name = "Existing Mod", WorkshopId = 12345, LocalPath = Path.Combine(goneMods, "12345") };
+        _db.ServerInstances.Add(server);
+        _db.Mods.Add(mod);
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.ScanStorageAsync(new StorageScanRequest(newMods, newServers));
+
+        var serverCandidate = Assert.Single(result.Servers);
+        Assert.Equal(StorageCandidateStatus.Relocated, serverCandidate.Status);
+        Assert.Equal(server.Id, serverCandidate.ExistingId);
+        Assert.Equal(newServerPath, serverCandidate.Path);
+
+        var modCandidate = Assert.Single(result.Mods);
+        Assert.Equal(StorageCandidateStatus.Relocated, modCandidate.Status);
+        Assert.Equal(mod.Id, modCandidate.ExistingId);
+        Assert.Equal(newModPath, modCandidate.Path);
+    }
+
+    [Fact]
+    public async Task ScanStorage_MatchesServerByInstallFolderWhenDisplayNameDiffers()
+    {
+        var goneServers = Path.Combine(_root, "servers-gone");
+        var newServers = Path.Combine(_root, "servers-new");
+        CreateServer(newServers, "Main_Server", "same");
+        var server = new ServerInstance { Name = "Main Server (EU)", InstallPath = Path.Combine(goneServers, "Main_Server") };
+        _db.ServerInstances.Add(server);
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.ScanStorageAsync(new StorageScanRequest(Path.Combine(_root, "mods-new"), newServers));
+
+        var candidate = Assert.Single(result.Servers);
+        Assert.Equal(StorageCandidateStatus.Relocated, candidate.Status);
+        Assert.Equal(server.Id, candidate.ExistingId);
+    }
+
+    [Fact]
+    public async Task ApplyStorageChanges_RelocatedUseDiscoveredRepointsRecordsWithoutOldData()
+    {
+        var goneServers = Path.Combine(_root, "servers-gone");
+        var goneMods = Path.Combine(_root, "mods-gone");
+        var newServers = Path.Combine(_root, "servers-new");
+        var newMods = Path.Combine(_root, "mods-new");
+        var newServerPath = CreateServer(newServers, "Alpha", "same");
+        var newModPath = CreateMod(newMods, "12345", "same");
+        var server = new ServerInstance { Name = "Alpha", InstallPath = Path.Combine(goneServers, "Alpha") };
+        var mod = new SteamMod { Name = "Existing Mod", WorkshopId = 12345, LocalPath = Path.Combine(goneMods, "12345"), Status = ModStatus.NotInstalled };
+        _db.ServerInstances.Add(server);
+        _db.Mods.Add(mod);
+        await _db.SaveChangesAsync();
+
+        var applied = await _sut.ApplyStorageChangesAsync(new StorageApplyRequest(
+            newMods,
+            newServers,
+            [
+                new(StorageCandidateKind.Server, newServerPath, StorageResolutionAction.UseDiscovered, server.Id),
+                new(StorageCandidateKind.Mod, newModPath, StorageResolutionAction.UseDiscovered, mod.Id)
+            ]));
+
+        Assert.Equal(1, applied.ServersSwitched);
+        Assert.Equal(1, applied.ModsSwitched);
+        Assert.Equal(newServerPath, _db.ServerInstances.Single().InstallPath);
+        Assert.Equal(newModPath, _db.Mods.Single().LocalPath);
+        Assert.Equal(ModStatus.Installed, _db.Mods.Single().Status);
+    }
+
+    [Fact]
     public async Task ApplyStorageChanges_UseDiscoveredSwitchesExistingPaths()
     {
         var oldServers = Path.Combine(_root, "servers-old");
@@ -166,12 +243,16 @@ public sealed class StorageServiceTests : IDisposable
         Assert.Equal(oldServerPath, _db.ServerInstances.Single().InstallPath);
     }
 
+    // Fingerprints include last-write time, as a faithful copy preserves it.
+    // Pin one so two independently written fixtures look like copies.
+    private static readonly DateTime FixtureWriteTime = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+
     private static string CreateServer(string root, string name, string content)
     {
         var path = Path.Combine(root, name);
         Directory.CreateDirectory(path);
-        File.WriteAllText(Path.Combine(path, "arma3server_x64.exe"), "bin");
-        File.WriteAllText(Path.Combine(path, "server.cfg"), content);
+        WriteFixture(Path.Combine(path, "arma3server_x64.exe"), "bin");
+        WriteFixture(Path.Combine(path, "server.cfg"), content);
         return Path.GetFullPath(path);
     }
 
@@ -179,8 +260,14 @@ public sealed class StorageServiceTests : IDisposable
     {
         var path = Path.Combine(root, name);
         Directory.CreateDirectory(path);
-        File.WriteAllText(Path.Combine(path, "mod.cpp"), content);
+        WriteFixture(Path.Combine(path, "mod.cpp"), content);
         return Path.GetFullPath(path);
+    }
+
+    private static void WriteFixture(string path, string content)
+    {
+        File.WriteAllText(path, content);
+        File.SetLastWriteTimeUtc(path, FixtureWriteTime);
     }
 
     private sealed class TestHostEnvironment(string contentRootPath) : IHostEnvironment

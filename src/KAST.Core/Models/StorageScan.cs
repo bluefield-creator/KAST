@@ -10,7 +10,13 @@ public enum StorageCandidateStatus
 {
     New,
     IdenticalDuplicate,
-    SameNameDifferentData
+    SameNameDifferentData,
+    /// <summary>
+    /// Matches an existing server or mod whose recorded path no longer exists
+    /// on disk — the data was moved out from under CASTER. Defaults to
+    /// switching the record to the discovered folder.
+    /// </summary>
+    Relocated
 }
 
 public enum StorageResolutionAction

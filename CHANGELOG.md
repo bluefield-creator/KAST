@@ -1,3 +1,25 @@
+## [2.0.0] - 2026-09-05
+### Bug Fixes
+- Harden logout wait and drop redundant split-query hints
+- Load difficulty profile on Windows, authenticate hub clients, expose /ready
+- Harden CDN pool backoff, cancellation, and disposal
+- Robust login lifecycle, reconnect supervisor, and queue races
+- Reliable process lifecycle, schedules that fire, scoped hub broadcasts
+- Harden mission, preset, account, update, and storage services
+- Persist auth state, lock down ports, allow large uploads
+
+### Features
+- Password policy, API ProblemDetails, safer mod deletion, proxy networks
+- Live player counts via Steam A2S query
+- Blue Kepi design system - forensic Artoria retheme, dark-only de-Materialized MudBlazor, new kepi-C logo SVGs, staff-ribbon accents, CASTER_V1 spec + design docs
+- Themed banner nav links in sidebar - skewed plates with kickers, Cinzel titles, brass rail + crimson hem on active, shine sweep, staggered deal-in
+- Full Dress light mode + tailored nav banners - server-rendered mode class (no JS race), daylight token set, garments keep indigo, coat carries actions, de-skewed banner plates with stepped-hem corner
+- Formalize dashboard - Inter + JetBrains Mono type system, dense grouped sidebar with instance and Settings deep-links, path-only breadcrumbs
+- Default fresh installs to the Caster update channel (bluefield-creator/KAST)
+
+### Maintenance
+- Update changelog for v1.2.1 [skip ci]
+
 ## [1.2.1] - 2026-08-05
 ### Bug Fixes
 - Restore mission download url round-trip

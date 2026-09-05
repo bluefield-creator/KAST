@@ -59,7 +59,12 @@
                         Workers download files inside each Steam install. Parallel mod downloads controls how many Workshop mods run at once.
                     </MudText>
                 </div>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveGeneralSettings">Save</MudButton>
+                <div class="d-flex align-center gap-3 mt-3 flex-wrap">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveGeneralSettings">Save</MudButton>
+                    <MudTooltip Text="Find servers and mods whose folder no longer exists and re-base them onto the current directories.">
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Link" OnClick="RelinkMissingPaths">Re-link missing paths</MudButton>
+                    </MudTooltip>
+                </div>
 
                 <MudDivider Class="my-4" />
 
@@ -841,16 +846,54 @@
                             </td>
                         </tr>
                     }
-                    @if (!_storageScan.HasFindings)
+                    @if (_storageScan.Servers.Count == 0 && _storageScan.Mods.Count == 0)
                     {
                         <tr>
                             <td colspan="5">
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">No existing servers or mods were found in the selected directories.</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @(_storageScan.Relinks.Count > 0
+                                        ? "No new servers or mods were discovered in the selected directories."
+                                        : "No existing servers or mods were found in the selected directories, and every recorded path is intact.")
+                                </MudText>
                             </td>
                         </tr>
                     }
                 </tbody>
             </MudSimpleTable>
+
+            @if (_storageScan.Relinks.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Paths that follow the directory</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                    These records point inside the old directory but their folder is gone. Applying re-bases them onto the new directory.
+                </MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Name</th>
+                            <th>New path</th>
+                            <th>On disk</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var relink in _storageScan.Relinks)
+                        {
+                            <tr>
+                                <td>@relink.Kind</td>
+                                <td>@relink.Name</td>
+                                <td><code style="font-size:11px;">@OutputSanitizer.ToDisplayPath(relink.NewPath)</code></td>
+                                <td>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                             Color="@(relink.NewPathExists ? Color.Success : Color.Warning)">
+                                        @(relink.NewPathExists ? "Found" : "Not found")
+                                    </MudChip>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
 
             @if (_migrateStorage)
             {
@@ -1306,18 +1349,7 @@
             if (!PathsEqual(settings.ModsDirectory, modsDirectory) ||
                 !PathsEqual(settings.ServersDirectory, serversDirectory))
             {
-                _storageBusy = true;
-                _storageBusyMessage = "Scanning the selected directories for servers and mods...";
-                _storageDialogOpen = true;
-                StateHasChanged();
-
-                _storageScan = await StorageService.ScanStorageAsync(new StorageScanRequest(modsDirectory, serversDirectory));
-                _storageActions.Clear();
-                foreach (var candidate in _storageScan.Servers.Concat(_storageScan.Mods))
-                    _storageActions[StorageCandidateKey(candidate)] = DefaultStorageAction(candidate);
-
-                _storageBusy = false;
-                StateHasChanged();
+                await OpenStorageDialogAsync(modsDirectory, serversDirectory);
                 return;
             }
 
@@ -1332,6 +1364,41 @@
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             Snackbar.Add($"Storage path update failed: {OutputSanitizer.SanitizeException(ex)}", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// Scans the given directories and opens the Storage Changes dialog — used
+    /// both for a directory change and for re-linking against the current
+    /// directories when records were left pointing at a location that is gone.
+    /// </summary>
+    private async Task OpenStorageDialogAsync(string modsDirectory, string serversDirectory)
+    {
+        _storageBusy = true;
+        _storageBusyMessage = "Scanning the selected directories for servers and mods...";
+        _storageDialogOpen = true;
+        StateHasChanged();
+
+        _storageScan = await StorageService.ScanStorageAsync(new StorageScanRequest(modsDirectory, serversDirectory));
+        _storageActions.Clear();
+        foreach (var candidate in _storageScan.Servers.Concat(_storageScan.Mods))
+            _storageActions[StorageCandidateKey(candidate)] = DefaultStorageAction(candidate);
+
+        _storageBusy = false;
+        StateHasChanged();
+    }
+
+    private async Task RelinkMissingPaths()
+    {
+        try
+        {
+            var settings = await SettingsService.GetSettingsAsync();
+            await OpenStorageDialogAsync(settings.ModsDirectory, settings.ServersDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            _storageBusy = false;
+            Snackbar.Add($"Storage scan failed: {OutputSanitizer.SanitizeException(ex)}", Severity.Error);
         }
     }
 
@@ -1371,7 +1438,7 @@
                     _storageScan.ProposedServersDirectory,
                     selections));
                 Snackbar.Add(
-                    $"Storage saved. Adopted {applied.ServersAdopted + applied.ModsAdopted} item(s), switched {applied.ServersSwitched + applied.ModsSwitched} path(s).",
+                    $"Storage saved. Adopted {applied.ServersAdopted + applied.ModsAdopted} item(s), switched {applied.ServersSwitched + applied.ModsSwitched} path(s), re-linked {applied.ServersRelinked + applied.ModsRelinked} to the new directory.",
                     Severity.Success);
             }
 

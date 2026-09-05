@@ -422,6 +422,25 @@ using (var scope = app.Services.CreateScope())
     Directory.CreateDirectory(settings.ModsDirectory);
     Directory.CreateDirectory(settings.ServersDirectory);
 
+    // Re-link servers and mods left pointing at a location that no longer
+    // exists (data directory moved, settings already switched) whenever their
+    // folder is present under the current directories. Only proven targets are
+    // touched unattended; Settings → Storage → "Re-link missing paths" covers
+    // the rest.
+    try
+    {
+        var relinked = await scope.ServiceProvider.GetRequiredService<IStorageService>()
+            .RelinkMissingPathsAsync(onlyWhenTargetExists: true);
+        if (relinked.ServersRelinked + relinked.ModsRelinked > 0)
+            lifecycleLogger.LogInformation(
+                "Re-linked {Servers} server(s) and {Mods} mod(s) to the current storage directories.",
+                relinked.ServersRelinked, relinked.ModsRelinked);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+    {
+        lifecycleLogger.LogWarning(ex, "Startup storage re-link failed; continuing.");
+    }
+
     // Reset any mods stuck in-progress from a previous crash
     var stuckMods = await db.Mods
         .Where(m => m.Status == ModStatus.Downloading || m.Status == ModStatus.Updating)

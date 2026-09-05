@@ -174,6 +174,138 @@ public sealed class StorageServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ScanStorage_RelinksRecordsUnderOldDirectoryThatTheScanCannotPair()
+    {
+        // Old directory is gone. In the new one: a server folder WITHOUT the
+        // executable, a server that was never installed, and a local mod whose
+        // folder name differs from its display name.
+        var oldServers = Path.Combine(_root, "servers-old");
+        var oldMods = Path.Combine(_root, "mods-old");
+        var newServers = Path.Combine(_root, "servers-new");
+        var newMods = Path.Combine(_root, "mods-new");
+        Directory.CreateDirectory(Path.Combine(newServers, "Bravo"));           // copied, but no arma3server_x64.exe
+        var modFolder = CreateMod(newMods, "@ace", "same");                      // display name "ACE 3"
+        var bravo = new ServerInstance { Name = "Bravo", InstallPath = Path.Combine(oldServers, "Bravo") };
+        var charlie = new ServerInstance { Name = "Charlie", InstallPath = Path.Combine(oldServers, "Charlie") };
+        var ace = new SteamMod { Name = "ACE 3", WorkshopId = 0, LocalPath = Path.Combine(oldMods, "@ace"), Status = ModStatus.NotInstalled };
+        _db.ServerInstances.AddRange(bravo, charlie);
+        _db.Mods.Add(ace);
+        await _db.SaveChangesAsync();
+
+        var scan = await _sut.ScanStorageAsync(new StorageScanRequest(newMods, newServers));
+
+        Assert.Empty(scan.Servers);
+        Assert.True(scan.HasFindings);
+        // Servers the scan could not pair (no executable / never installed) are re-linked by relative path.
+        Assert.Collection(scan.Relinks,
+            r => { Assert.Equal(bravo.Id, r.Id); Assert.Equal(Path.GetFullPath(Path.Combine(newServers, "Bravo")), r.NewPath); Assert.True(r.NewPathExists); },
+            r => { Assert.Equal(charlie.Id, r.Id); Assert.Equal(Path.GetFullPath(Path.Combine(newServers, "Charlie")), r.NewPath); Assert.False(r.NewPathExists); });
+        // The mod folder is paired by folder name, so it is a Relocated candidate rather than a relink.
+        var aceCandidate = Assert.Single(scan.Mods);
+        Assert.Equal(StorageCandidateStatus.Relocated, aceCandidate.Status);
+        Assert.Equal(ace.Id, aceCandidate.ExistingId);
+
+        var applied = await _sut.ApplyStorageChangesAsync(new StorageApplyRequest(newMods, newServers,
+            [new(StorageCandidateKind.Mod, aceCandidate.Path, StorageResolutionAction.UseDiscovered, ace.Id)]));
+
+        Assert.Equal(2, applied.ServersRelinked);
+        Assert.Equal(0, applied.ModsRelinked);
+        Assert.Equal(1, applied.ModsSwitched);
+        Assert.Equal(Path.GetFullPath(Path.Combine(newServers, "Bravo")), _db.ServerInstances.Single(s => s.Id == bravo.Id).InstallPath);
+        Assert.Equal(Path.GetFullPath(Path.Combine(newServers, "Charlie")), _db.ServerInstances.Single(s => s.Id == charlie.Id).InstallPath);
+        var relinkedMod = _db.Mods.Single();
+        Assert.Equal(modFolder, relinkedMod.LocalPath);
+        Assert.Equal(ModStatus.Installed, relinkedMod.Status);
+    }
+
+    [Fact]
+    public async Task ScanStorage_DoesNotRelinkRecordsWhoseFolderStillExists()
+    {
+        var oldServers = Path.Combine(_root, "servers-old");
+        var oldServerPath = CreateServer(oldServers, "Alpha", "same");
+        _db.ServerInstances.Add(new ServerInstance { Name = "Alpha", InstallPath = oldServerPath });
+        await _db.SaveChangesAsync();
+
+        var scan = await _sut.ScanStorageAsync(new StorageScanRequest(Path.Combine(_root, "mods-new"), Path.Combine(_root, "servers-new")));
+
+        Assert.Empty(scan.Relinks);
+        await _sut.ApplyStorageChangesAsync(new StorageApplyRequest(Path.Combine(_root, "mods-new"), Path.Combine(_root, "servers-new"), []));
+        Assert.Equal(oldServerPath, _db.ServerInstances.Single().InstallPath);
+    }
+
+    [Fact]
+    public async Task RelinkMissingPaths_RebasesRecordsLeftOnTheOldDriveIntoCurrentDirectories()
+    {
+        // The directory setting was already switched (settings say mods-old /
+        // servers-old, which is where the data now is) but the records still
+        // point at a location that no longer exists on another root.
+        var servers = Path.Combine(_root, "servers-old");
+        var mods = Path.Combine(_root, "mods-old");
+        var alphaPath = CreateServer(servers, "Alpha", "same");
+        var modPath = CreateMod(mods, "12345", "same");
+        var gone = Path.Combine(_root, "elsewhere", "3SA");
+        var alpha = new ServerInstance { Name = "Alpha", InstallPath = Path.Combine(gone, "servers", "Alpha") };
+        var bravo = new ServerInstance { Name = "Bravo", InstallPath = Path.Combine(gone, "servers", "Bravo") }; // no folder anywhere
+        var mod = new SteamMod { Name = "Existing Mod", WorkshopId = 12345, LocalPath = Path.Combine(gone, "mods", "12345"), Status = ModStatus.NotInstalled };
+        _db.ServerInstances.AddRange(alpha, bravo);
+        _db.Mods.Add(mod);
+        await _db.SaveChangesAsync();
+
+        var unattended = await _sut.RelinkMissingPathsAsync(onlyWhenTargetExists: true);
+
+        Assert.Equal(1, unattended.ServersRelinked);
+        Assert.Equal(1, unattended.ModsRelinked);
+        Assert.Equal(alphaPath, _db.ServerInstances.Single(s => s.Id == alpha.Id).InstallPath);
+        Assert.Equal(Path.GetFullPath(Path.Combine(gone, "servers", "Bravo")), _db.ServerInstances.Single(s => s.Id == bravo.Id).InstallPath);
+        Assert.Equal(modPath, _db.Mods.Single().LocalPath);
+        Assert.Equal(ModStatus.Installed, _db.Mods.Single().Status);
+
+        // The explicit action also re-bases records whose folder is not there yet.
+        var explicitRun = await _sut.RelinkMissingPathsAsync(onlyWhenTargetExists: false);
+
+        Assert.Equal(1, explicitRun.ServersRelinked);
+        Assert.Equal(Path.GetFullPath(Path.Combine(servers, "Bravo")), _db.ServerInstances.Single(s => s.Id == bravo.Id).InstallPath);
+
+        // Idempotent: nothing left to do.
+        var again = await _sut.RelinkMissingPathsAsync(onlyWhenTargetExists: false);
+        Assert.Equal(0, again.ServersRelinked + again.ModsRelinked);
+    }
+
+    [Fact]
+    public async Task ScanStorage_WithUnchangedDirectoriesListsRelinksForRecordsElsewhere()
+    {
+        var servers = Path.Combine(_root, "servers-old");
+        var alphaPath = CreateServer(servers, "Alpha", "same");
+        var alpha = new ServerInstance { Name = "Alpha", InstallPath = Path.Combine(_root, "elsewhere", "Alpha") };
+        _db.ServerInstances.Add(alpha);
+        await _db.SaveChangesAsync();
+
+        var scan = await _sut.ScanStorageAsync(new StorageScanRequest(Path.Combine(_root, "mods-old"), servers));
+
+        // The scan pairs the folder by name as Relocated; nothing is double-listed.
+        var candidate = Assert.Single(scan.Servers);
+        Assert.Equal(StorageCandidateStatus.Relocated, candidate.Status);
+        Assert.Equal(alphaPath, candidate.Path);
+        Assert.Empty(scan.Relinks);
+    }
+
+    [Fact]
+    public async Task MigrateStorage_RelinksMissingSourcesInsteadOfLeavingDeadPaths()
+    {
+        var oldServers = Path.Combine(_root, "servers-old");
+        var newServers = Path.Combine(_root, "servers-new");
+        Directory.CreateDirectory(newServers);
+        _db.ServerInstances.Add(new ServerInstance { Name = "Alpha", InstallPath = Path.Combine(oldServers, "Alpha") });
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.MigrateStorageAsync(new StorageMigrationRequest(Path.Combine(_root, "mods-new"), newServers));
+
+        Assert.Equal(0, result.ServersMigrated);
+        Assert.Contains(result.Skipped, s => s.Contains("re-linked", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(Path.GetFullPath(Path.Combine(newServers, "Alpha")), _db.ServerInstances.Single().InstallPath);
+    }
+
+    [Fact]
     public async Task ApplyStorageChanges_UseDiscoveredSwitchesExistingPaths()
     {
         var oldServers = Path.Combine(_root, "servers-old");

@@ -42,15 +42,29 @@ public sealed record StorageResolutionSelection(
     StorageResolutionAction Action,
     int? ExistingId = null);
 
+/// <summary>
+/// A record whose path sits under the current storage directory but no longer
+/// exists on disk. Applying the storage change re-bases it onto the proposed
+/// directory by relative path, whether or not the folder is there yet.
+/// </summary>
+public sealed record StorageRelink(
+    StorageCandidateKind Kind,
+    int Id,
+    string Name,
+    string CurrentPath,
+    string NewPath,
+    bool NewPathExists);
+
 public sealed record StorageScanResult(
     string CurrentModsDirectory,
     string CurrentServersDirectory,
     string ProposedModsDirectory,
     string ProposedServersDirectory,
     IReadOnlyList<StorageScanCandidate> Servers,
-    IReadOnlyList<StorageScanCandidate> Mods)
+    IReadOnlyList<StorageScanCandidate> Mods,
+    IReadOnlyList<StorageRelink> Relinks)
 {
-    public bool HasFindings => Servers.Count > 0 || Mods.Count > 0;
+    public bool HasFindings => Servers.Count > 0 || Mods.Count > 0 || Relinks.Count > 0;
     public bool HasConflicts => Servers.Any(c => c.Status != StorageCandidateStatus.New) ||
                                 Mods.Any(c => c.Status != StorageCandidateStatus.New);
 }
@@ -75,7 +89,9 @@ public sealed record StorageApplyResult(
     int ServersSwitched,
     int ModsAdopted,
     int ModsSwitched,
-    bool SettingsSaved);
+    bool SettingsSaved,
+    int ServersRelinked = 0,
+    int ModsRelinked = 0);
 
 public sealed record StorageMigrationResult(
     int ServersMigrated,

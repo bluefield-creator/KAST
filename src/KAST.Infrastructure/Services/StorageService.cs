@@ -24,14 +24,154 @@ public sealed class StorageService(
         var modsDirectory = ResolvePath(request.ModsDirectory);
         var serversDirectory = ResolvePath(request.ServersDirectory);
 
+        var servers = await ScanServersAsync(serversDirectory, ct);
+        var mods = await ScanModsAsync(modsDirectory, ct);
+        var relinks = await FindRelinksAsync(
+            settings.ServersDirectory, serversDirectory,
+            settings.ModsDirectory, modsDirectory,
+            servers.Concat(mods).Where(c => c.ExistingId is not null).Select(c => (c.Kind, c.ExistingId!.Value)).ToHashSet(),
+            ct);
+
         return new StorageScanResult(
             settings.ModsDirectory,
             settings.ServersDirectory,
             modsDirectory,
             serversDirectory,
-            await ScanServersAsync(serversDirectory, ct),
-            await ScanModsAsync(modsDirectory, ct));
+            servers,
+            mods,
+            relinks);
     }
+
+    /// <summary>
+    /// Records that live under the current storage directory but whose folder
+    /// is gone are re-based onto the proposed directory by relative path. This
+    /// is what "I moved the data directory" means for everything the scan
+    /// could not pair up: uninstalled servers, folders without the server
+    /// executable, names that differ from the record. Records the scan already
+    /// matched are left to their resolutions.
+    /// </summary>
+    private async Task<IReadOnlyList<StorageRelink>> FindRelinksAsync(
+        string currentServersDirectory,
+        string proposedServersDirectory,
+        string currentModsDirectory,
+        string proposedModsDirectory,
+        HashSet<(StorageCandidateKind Kind, int Id)> matched,
+        CancellationToken ct)
+    {
+        var relinks = new List<StorageRelink>();
+
+        foreach (var server in await db.ServerInstances.AsNoTracking().OrderBy(s => s.Id).ToListAsync(ct))
+        {
+            if (matched.Contains((StorageCandidateKind.Server, server.Id)))
+                continue;
+            if (TryRebase(server.InstallPath, currentServersDirectory, proposedServersDirectory) is { } newPath)
+                relinks.Add(new StorageRelink(StorageCandidateKind.Server, server.Id, server.Name, server.InstallPath, newPath, Directory.Exists(newPath)));
+        }
+
+        foreach (var mod in await db.Mods.AsNoTracking().OrderBy(m => m.Id).ToListAsync(ct))
+        {
+            if (matched.Contains((StorageCandidateKind.Mod, mod.Id)))
+                continue;
+            if (TryRebase(mod.LocalPath, currentModsDirectory, proposedModsDirectory) is { } newPath)
+                relinks.Add(new StorageRelink(StorageCandidateKind.Mod, mod.Id, mod.Name, mod.LocalPath!, newPath, Directory.Exists(newPath)));
+        }
+
+        return relinks;
+    }
+
+    /// <summary>
+    /// Re-links records whose folder no longer exists into the <em>current</em>
+    /// storage directories, for installs where the directory setting was
+    /// already changed while the records kept their old paths. With
+    /// <paramref name="onlyWhenTargetExists"/> only records whose folder is
+    /// actually present at the new location are touched — safe to run
+    /// unattended at startup.
+    /// </summary>
+    public async Task<StorageApplyResult> RelinkMissingPathsAsync(bool onlyWhenTargetExists, CancellationToken ct = default)
+    {
+        var settings = await settingsService.GetSettingsAsync(ct);
+        var relinks = await FindRelinksAsync(
+            settings.ServersDirectory, settings.ServersDirectory,
+            settings.ModsDirectory, settings.ModsDirectory,
+            [],
+            ct);
+        if (onlyWhenTargetExists)
+            relinks = relinks.Where(r => r.NewPathExists).ToList();
+
+        var (servers, mods) = await ApplyRelinksAsync(relinks, ct);
+        if (servers + mods > 0)
+            await db.SaveChangesAsync(ct);
+
+        return new StorageApplyResult(0, 0, 0, 0, false, servers, mods);
+    }
+
+    private async Task<(int Servers, int Mods)> ApplyRelinksAsync(IReadOnlyList<StorageRelink> relinks, CancellationToken ct)
+    {
+        var serversRelinked = 0;
+        var modsRelinked = 0;
+        foreach (var relink in relinks)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (relink.Kind == StorageCandidateKind.Server)
+            {
+                var server = await db.ServerInstances.FindAsync([relink.Id], ct);
+                if (server is null || !PathsEqual(server.InstallPath, relink.CurrentPath) || Directory.Exists(server.InstallPath))
+                    continue;
+                server.InstallPath = relink.NewPath;
+                server.LastModified = DateTime.UtcNow;
+                serversRelinked++;
+            }
+            else
+            {
+                var mod = await db.Mods.FindAsync([relink.Id], ct);
+                if (mod is null || string.IsNullOrWhiteSpace(mod.LocalPath) || !PathsEqual(mod.LocalPath, relink.CurrentPath) || Directory.Exists(mod.LocalPath))
+                    continue;
+                mod.LocalPath = relink.NewPath;
+                if (Directory.Exists(relink.NewPath))
+                {
+                    mod.SizeBytes = GetDirectorySize(relink.NewPath);
+                    mod.Status = ModStatus.Installed;
+                    mod.LastUpdatedLocal = DateTime.UtcNow;
+                }
+                modsRelinked++;
+            }
+        }
+
+        return (serversRelinked, modsRelinked);
+    }
+
+    /// <summary>
+    /// Where a record whose folder is gone should live under
+    /// <paramref name="newRoot"/>: its old-root-relative path when it sat
+    /// under <paramref name="oldRoot"/>, otherwise its leaf folder name (a
+    /// record left behind on a drive the directory already moved away from).
+    /// Null when the folder still exists — data that is still there stays
+    /// put — or when nothing would change.
+    /// </summary>
+    private static string? TryRebase(string? path, string oldRoot, string newRoot)
+    {
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(newRoot))
+            return null;
+
+        var full = NormalizePath(path);
+        if (Directory.Exists(full))
+            return null;
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var oldFull = string.IsNullOrWhiteSpace(oldRoot) ? null : EnsureTrailingSeparator(NormalizePath(oldRoot));
+        var relative = oldFull is not null && full.StartsWith(oldFull, comparison)
+            ? Path.GetRelativePath(oldFull, full)
+            : Path.GetFileName(Path.TrimEndingDirectorySeparator(full));
+        if (string.IsNullOrWhiteSpace(relative) || relative == ".")
+            return null;
+
+        var rebased = NormalizePath(Path.Combine(newRoot, relative));
+        return string.Equals(rebased, full, comparison) ? null : rebased;
+    }
+
+    private static bool PathsEqual(string left, string right)
+        => string.Equals(NormalizePath(left), NormalizePath(right),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     public async Task<StorageApplyResult> ApplyStorageChangesAsync(StorageApplyRequest request, CancellationToken ct = default)
     {
@@ -120,13 +260,17 @@ public sealed class StorageService(
             }
         }
 
+        // Everything the scan could not pair up whose folder is gone follows
+        // the directory to its new location.
+        var (serversRelinked, modsRelinked) = await ApplyRelinksAsync(scan.Relinks, ct);
+
         var settings = await settingsService.GetSettingsAsync(ct);
         settings.ModsDirectory = modsDirectory;
         settings.ServersDirectory = serversDirectory;
         await settingsService.UpdateSettingsAsync(settings, ct);
         await db.SaveChangesAsync(ct);
 
-        return new StorageApplyResult(serversAdopted, serversSwitched, modsAdopted, modsSwitched, true);
+        return new StorageApplyResult(serversAdopted, serversSwitched, modsAdopted, modsSwitched, true, serversRelinked, modsRelinked);
     }
 
     public async Task<StorageMigrationResult> MigrateStorageAsync(StorageMigrationRequest request, CancellationToken ct = default)
@@ -139,6 +283,7 @@ public sealed class StorageService(
         var skipped = new List<string>();
         var serversMigrated = 0;
         var modsMigrated = 0;
+        var current = await settingsService.GetSettingsAsync(ct);
 
         var servers = await db.ServerInstances.OrderBy(s => s.Id).ToListAsync(ct);
         foreach (var server in servers)
@@ -146,7 +291,18 @@ public sealed class StorageService(
             ct.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(server.InstallPath) || !Directory.Exists(server.InstallPath))
             {
-                skipped.Add($"Server {server.Name}: source path missing.");
+                // Nothing to copy — but a record under the old directory still
+                // follows the directory, so it is not left pointing at a dead path.
+                if (TryRebase(server.InstallPath, current.ServersDirectory, serversDirectory) is { } rebased)
+                {
+                    server.InstallPath = rebased;
+                    server.LastModified = DateTime.UtcNow;
+                    skipped.Add($"Server {server.Name}: source path missing; re-linked to the new directory.");
+                }
+                else
+                {
+                    skipped.Add($"Server {server.Name}: source path missing.");
+                }
                 continue;
             }
 
@@ -165,7 +321,21 @@ public sealed class StorageService(
             ct.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(mod.LocalPath) || !Directory.Exists(mod.LocalPath))
             {
-                skipped.Add($"Mod {mod.Name}: source path missing.");
+                if (TryRebase(mod.LocalPath, current.ModsDirectory, modsDirectory) is { } rebased)
+                {
+                    mod.LocalPath = rebased;
+                    if (Directory.Exists(rebased))
+                    {
+                        mod.SizeBytes = GetDirectorySize(rebased);
+                        mod.Status = ModStatus.Installed;
+                        mod.LastUpdatedLocal = DateTime.UtcNow;
+                    }
+                    skipped.Add($"Mod {mod.Name}: source path missing; re-linked to the new directory.");
+                }
+                else
+                {
+                    skipped.Add($"Mod {mod.Name}: source path missing.");
+                }
                 continue;
             }
 

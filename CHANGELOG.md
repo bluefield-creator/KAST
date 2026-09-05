@@ -1,3 +1,10 @@
+## [2.0.1] - 2026-09-05
+### Bug Fixes
+- Stop hashing every byte on storage changes - structural fingerprints, Relocated status defaults to Use discovered when the old path is gone, preserve write times on copy, keep applied directories under env overrides
+
+### Maintenance
+- Update changelog for v2.0.0 [skip ci]
+
 ## [2.0.0] - 2026-09-05
 ### Bug Fixes
 - Harden logout wait and drop redundant split-query hints

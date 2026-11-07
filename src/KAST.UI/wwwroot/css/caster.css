@@ -198,6 +198,13 @@ h1:focus-visible {
 .k-stack > * + * { margin-top: 16px; }
 
 .k-muted  { color: var(--k-muted-foreground); font-size: var(--k-text-sm); }
+
+/* Inset panel inside a card (sub-forms, profile blocks). */
+.k-inset {
+  border: 1px solid var(--k-border) !important;
+  border-radius: var(--k-radius) !important;
+  background: var(--k-surface-sunken) !important;
+}
 .k-strong { color: var(--k-foreground); font-weight: 600; }
 
 /* Segmented control (filters). */
@@ -381,6 +388,62 @@ kbd {
   cursor: pointer;
 }
 .k-menu-button:hover { background: var(--k-hover); }
+
+/* ── Auth forms (Login, AccountSetup: plain HTML forms posted to /auth/*) ── */
+.k-auth-title {
+  margin: 0 0 4px;
+  font-size: var(--k-text-xl);
+  font-weight: 600;
+  color: var(--k-foreground);
+}
+.k-auth-lead {
+  margin: 0 0 20px;
+  font-size: var(--k-text-sm);
+  color: var(--k-muted-foreground);
+}
+.k-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--k-text-sm);
+  font-weight: 500;
+  color: var(--k-foreground);
+}
+.k-auth-field input:not([type=file]) {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--k-input);
+  border-radius: var(--k-radius);
+  background: var(--k-surface-sunken);
+  color: var(--k-foreground);
+  font: inherit;
+  font-weight: 400;
+  outline: none;
+}
+.k-auth-field input:focus-visible {
+  border-color: var(--k-primary);
+  outline: 2px solid var(--k-ring);
+  outline-offset: 1px;
+}
+.k-auth-file { font: inherit; font-weight: 400; color: var(--k-muted-foreground); }
+.k-auth-submit {
+  height: 40px;
+  border: 0;
+  border-radius: var(--k-radius);
+  background: var(--k-primary);
+  color: var(--k-primary-foreground);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--k-dur) var(--k-ease);
+}
+.k-auth-submit:hover { background: var(--k-primary-hover); }
+.k-auth-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
 
 /* ── Consoles ──────────────────────────────────────────────────────────── */
 .kast-console,

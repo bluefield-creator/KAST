@@ -3,124 +3,49 @@
 @using System.Reflection
 @using System.Runtime.InteropServices
 
-<PageTitle>CASTER -- About</PageTitle>
+<PageTitle>About · CASTER</PageTitle>
 
-@* ══ Hero ════════════════════════════════════════════════════════════════ *@
-<MudCard Elevation="3" Class="mb-4" Style="overflow:hidden; position:relative;">
-    @* subtle starlight glow in the background *@
-    <div style="position:absolute; top:-60px; right:-60px; width:260px; height:260px;
-                border-radius:50%; background:radial-gradient(circle, rgba(94,177,255,.18) 0%, transparent 70%);
-                pointer-events:none;"></div>
+<PageHeader Title="About">
+    <Actions>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.BugReport" Href="@_issueUrl" Target="_blank">
+            Report a bug
+        </MudButton>
+    </Actions>
+</PageHeader>
 
-    <MudCardContent Class="pa-8">
-        <div class="d-flex align-center gap-4 flex-wrap justify-center justify-sm-start">
-
-            @* CASTER mark — the kepi-C from favicon.svg (keep both in sync) *@
-            <img src="favicon.svg" alt="" width="88" height="88" draggable="false"
-                 style="flex-shrink:0; filter:drop-shadow(0 0 12px rgba(90,87,168,.5));" />
-
-            @* Title block *@
-            <div>
-                <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
-                    <span style="font-family:var(--k-font-display); font-size:2.8rem; font-weight:800; letter-spacing:var(--k-tracking-display); line-height:1;
-                                 background:var(--sheen-wheat);
-                                 -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-                                 background-clip:text;">CASTER</span>
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                             Color="Color.Tertiary" Style="font-family:monospace; font-size:11px; margin:0;">
-                        @_version
-                    </MudChip>
-                </div>
-                <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Style="margin-top:2px;">
-                    Arma Server Tool — Enterprise Edition
-                </MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top:6px; opacity:.75;">
-                    Manage your Arma 3 dedicated servers with ease —
-                    download mods, configure instances, monitor performance.
-                </MudText>
+<SectionCard>
+    <div class="k-about">
+        <img src="brand/logo-128.png" alt="" class="k-about-mark" draggable="false" />
+        <div>
+            <div class="k-about-name">CASTER <span class="k-status k-mono">@_version</span></div>
+            <div class="k-muted">Arma 3 server management: install servers and mods from Steam, configure instances, and run and monitor them.</div>
+            <div class="k-about-links">
+                <a class="k-link" href="@RepoUrl" target="_blank" rel="noopener">Source code</a>
+                <a class="k-link" href="@($"{RepoUrl}/blob/caster/CHANGELOG.md")" target="_blank" rel="noopener">Changelog</a>
+                <a class="k-link" href="@($"{RepoUrl}/blob/caster/CONTRIBUTING.md")" target="_blank" rel="noopener">Contributing</a>
+                <a class="k-link" href="@($"{RepoUrl}/blob/caster/LICENSE.md")" target="_blank" rel="noopener">License (GPL-3.0)</a>
             </div>
         </div>
-    </MudCardContent>
-</MudCard>
+    </div>
+</SectionCard>
 
-@* ══ System info + Tech stack ════════════════════════════════════════════ *@
-<MudGrid Class="mb-4">
-    <MudItem xs="12" sm="6">
-        <MudCard Elevation="2" Style="height:100%;">
-            <MudCardHeader>
-                <CardHeaderAvatar>
-                    <MudIcon Icon="@Icons.Material.Filled.Computer" Color="Color.Primary" />
-                </CardHeaderAvatar>
-                <CardHeaderContent>
-                    <MudText Typo="Typo.subtitle1">System Information</MudText>
-                </CardHeaderContent>
-            </MudCardHeader>
-            <MudCardContent Class="pt-0">
-                <MudSimpleTable Dense="true" Hover="false" Striped="false" Style="background:transparent;">
-                    <tbody>
-                        @foreach (var (label, value) in _sysInfo)
-                        {
-                            <tr>
-                                <td style="width:110px; color:var(--mud-palette-text-secondary); font-size:12px; padding:6px 8px;">@label</td>
-                                <td style="font-family:monospace; font-size:11px; word-break:break-all; padding:6px 8px;">@value</td>
-                            </tr>
-                        }
-                    </tbody>
-                </MudSimpleTable>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-
-    <MudItem xs="12" sm="6">
-        <MudCard Elevation="2" Style="height:100%;">
-            <MudCardHeader>
-                <CardHeaderAvatar>
-                    <MudIcon Icon="@Icons.Material.Filled.Code" Color="Color.Primary" />
-                </CardHeaderAvatar>
-                <CardHeaderContent>
-                    <MudText Typo="Typo.subtitle1">Built With</MudText>
-                </CardHeaderContent>
-            </MudCardHeader>
-            <MudCardContent Class="pt-0">
-                @foreach (var (tech, url) in _stack)
-                {
-                    <div class="d-flex align-center gap-2 mb-1">
-                        <MudIcon Icon="@Icons.Material.Filled.Circle"
-                                 Style="font-size:5px; color:var(--mud-palette-tertiary); flex-shrink:0;" />
-                        <MudLink Href="@url" Target="_blank" Typo="Typo.body2"
-                                 Style="color:var(--mud-palette-text-primary);">@tech</MudLink>
-                    </div>
-                }
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-</MudGrid>
-
-@* ══ Links + Report Bug ═══════════════════════════════════════════════════ *@
-<MudCard Elevation="2">
-    <MudCardContent Class="d-flex flex-wrap gap-2 align-center pa-4">
-        <MudButton StartIcon="@Icons.Custom.Brands.GitHub"
-                   Href="https://github.com/bluefield-creator/CASTER" Target="_blank"
-                   Variant="Variant.Outlined" Size="Size.Small">GitHub</MudButton>
-        <MudButton StartIcon="@Icons.Material.Filled.Forum"
-                   Href="https://discord.gg/2BUuZa3" Target="_blank"
-                   Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary">Discord</MudButton>
-        <MudButton StartIcon="@Icons.Material.Filled.Article"
-                   Href="https://github.com/bluefield-creator/CASTER/blob/caster/CHANGELOG.md" Target="_blank"
-                   Variant="Variant.Outlined" Size="Size.Small">Changelog</MudButton>
-        <MudButton StartIcon="@Icons.Material.Filled.People"
-                   Href="https://github.com/bluefield-creator/CASTER/blob/caster/CONTRIBUTING.md" Target="_blank"
-                   Variant="Variant.Outlined" Size="Size.Small">Contributing</MudButton>
-        <MudSpacer />
-        <MudButton StartIcon="@Icons.Material.Filled.BugReport"
-                   Href="@_issueUrl" Target="_blank"
-                   Variant="Variant.Filled" Size="Size.Small" Color="Color.Error">
-            Report a Bug
-        </MudButton>
-    </MudCardContent>
-</MudCard>
+<div class="k-grid-2 mt-4">
+    <SectionCard Title="System">
+        <KeyValueList Items="_sysInfo.Select(i => (i.Label, (string?)i.Value))" Mono="true" />
+    </SectionCard>
+    <SectionCard Title="Built with">
+        <ul class="k-about-stack">
+            @foreach (var (tech, url) in _stack)
+            {
+                <li><a class="k-link" href="@url" target="_blank" rel="noopener">@tech</a></li>
+            }
+        </ul>
+    </SectionCard>
+</div>
 
 @code {
+    private const string RepoUrl = "https://github.com/bluefield-creator/KAST";
+
     private static readonly string _version =
         Assembly.GetEntryAssembly()
             ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
@@ -170,9 +95,9 @@
             "**Steps to reproduce**\n1. \n2. \n3. \n\n" +
             "**Expected behaviour**\n<!-- What should have happened -->\n\n" +
             "**Actual behaviour**\n<!-- What happened instead -->\n\n" +
-            "**Logs**\n```\n<!-- Paste relevant output from the CASTER log console -->\n```\n";
+            "**Logs**\n```\n<!-- Paste relevant lines from the application log (status bar, Logs) -->\n```\n";
 
-        return "https://github.com/bluefield-creator/CASTER/issues/new" +
+        return "https://github.com/bluefield-creator/KAST/issues/new" +
                "?labels=bug%2Cneeds-triage" +
                "&title=%5BBug%5D%3A+" +
                "&body=" + Uri.EscapeDataString(body);

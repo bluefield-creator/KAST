@@ -5,13 +5,11 @@
 @inject IConfiguration Configuration
 @inject ISettingsService SettingsService
 
-<PageTitle>CASTER -- Login</PageTitle>
+<PageTitle>Sign in · CASTER</PageTitle>
 
-<MudPaper Elevation="3" Class="pa-5">
-    <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:700;">Sign in</MudText>
-    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-        Enter your CASTER administrator account.
-    </MudText>
+<MudPaper Elevation="0" Class="pa-6">
+    <h1 class="k-auth-title">Sign in</h1>
+    <p class="k-auth-lead">Use your CASTER administrator account.</p>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
@@ -20,7 +18,7 @@
 
     @if (_authSettings.IsOidcConfigured)
     {
-        <a class="kast-auth-submit kast-auth-link" href="@OidcLoginUrl">
+        <a class="k-auth-submit k-auth-link" href="@OidcLoginUrl">
             Continue with @_authSettings.DisplayName
         </a>
     }
@@ -36,70 +34,19 @@
         <form method="post" action="/auth/login" enctype="multipart/form-data" data-enhance="false">
             <input type="hidden" name="returnUrl" value="@_returnUrl" />
             <div class="d-flex flex-column gap-3">
-                <label class="kast-auth-field">
+                <label class="k-auth-field">
                     <span>Username</span>
                     <input name="username" autocomplete="username" autofocus="@(!_authSettings.IsOidcConfigured)" />
                 </label>
-                <label class="kast-auth-field">
+                <label class="k-auth-field">
                     <span>Password</span>
                     <input name="password" type="password" autocomplete="current-password" />
                 </label>
-                <button type="submit" class="kast-auth-submit">Sign in</button>
+                <button type="submit" class="k-auth-submit">Sign in</button>
             </div>
         </form>
     }
 </MudPaper>
-
-<style>
-    .kast-auth-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        color: var(--mud-palette-text-secondary);
-        font-size: .75rem;
-    }
-
-    .kast-auth-field input {
-        height: 46px;
-        border: 1px solid var(--k-input);
-        border-radius: var(--k-radius);
-        background: transparent;
-        color: var(--k-foreground);
-        padding: 0 12px;
-        outline: none;
-        font: inherit;
-    }
-
-    .kast-auth-field input:focus-visible {
-        border-color: var(--k-primary);
-        outline: 2px solid var(--k-ring);
-        outline-offset: 2px;
-    }
-
-    .kast-auth-submit {
-        height: 40px;
-        border: 0;
-        border-radius: var(--k-radius);
-        background: var(--k-primary);
-        color: var(--k-primary-foreground);
-        cursor: pointer;
-        font-family: var(--k-font-sans);
-        font-weight: 600;
-        letter-spacing: .01em;
-        transition: background-color var(--k-dur) var(--k-ease);
-    }
-
-    .kast-auth-submit:hover {
-        background: var(--k-primary-hover);
-    }
-
-    .kast-auth-link {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-    }
-</style>
 
 @code {
     private string _returnUrl = "/";

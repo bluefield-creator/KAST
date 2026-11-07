@@ -5,11 +5,11 @@
         <section class="components-reconnect-surface" aria-live="assertive" aria-atomic="true">
             <header class="components-reconnect-header">
                 <span class="components-reconnect-status-dot" aria-hidden="true"></span>
-                <h2>Connection Interrupted</h2>
+                <h2>Connection lost</h2>
             </header>
 
             <p class="components-reconnect-supporting">
-                Your current session is still open. We'll keep trying to restore it.
+                The connection to CASTER was interrupted. Your servers keep running; the page reconnects automatically.
             </p>
 
             <div class="components-rejoin-loader components-reconnect-first-attempt-visible components-reconnect-repeated-attempt-visible" aria-hidden="true">
@@ -19,13 +19,13 @@
             </div>
 
             <p class="components-reconnect-first-attempt-visible components-reconnect-message">
-                Rejoining the server...
+                Reconnecting…
             </p>
             <p class="components-reconnect-repeated-attempt-visible components-reconnect-message">
-                Rejoin failed. Trying again in <span id="components-seconds-to-next-attempt"></span>s.
+                Reconnect failed. Retrying in <span id="components-seconds-to-next-attempt"></span>s.
             </p>
             <p class="components-reconnect-failed-visible components-reconnect-message components-reconnect-danger">
-                Failed to rejoin. Retry now or reload the page.
+                Could not reconnect. Retry, or reload the page.
             </p>
 
             <p class="components-pause-visible components-reconnect-message">

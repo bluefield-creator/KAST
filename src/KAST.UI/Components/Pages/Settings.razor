@@ -19,11 +19,11 @@
 @inject IHostEnvironment HostEnvironment
 @using MudBlazor.Utilities
 
-<PageTitle>CASTER -- Settings</PageTitle>
+<PageTitle>Settings · CASTER</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Settings</MudText>
+<PageHeader Title="Settings" Subtitle="Panel configuration: storage, accounts, Steam, API access, service and updates." />
 
-<MudTabs ActivePanelIndex="_activePanelIndex" ActivePanelIndexChanged="OnSectionChanged" Elevation="0" ApplyEffectsToContainer="true">
+<MudTabs ActivePanelIndex="_activePanelIndex" ActivePanelIndexChanged="OnSectionChanged" Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-1">
 
     @* ════ General ════ *@
     <MudTabPanel Text="General">
@@ -365,8 +365,7 @@
 
                 @if (SteamService.IsAuthenticated)
                 {
-                    <div class="d-flex align-center gap-4 flex-wrap pa-3"
-                         style="border-radius:8px; background:rgba(255,255,255,.04);">
+                    <div class="d-flex align-center gap-4 flex-wrap pa-3 k-inset">
                         @if (!string.IsNullOrEmpty(SteamService.Profile?.AvatarUrl))
                         {
                             <img src="@SteamService.Profile.AvatarUrl" alt="Steam avatar"
@@ -388,7 +387,7 @@
                         Sign in to download and manage mods with your Steam account.
                     </MudText>
 
-                    <MudPaper Elevation="0" Class="pa-3 mb-3" Style="border:1px solid rgba(255,255,255,.12); border-radius:8px;">
+                    <MudPaper Elevation="0" Class="pa-3 mb-3 k-inset">
                         <MudText Typo="Typo.subtitle2" Class="mb-2">Sign in with Username + Password</MudText>
                         <div class="d-flex gap-2 flex-wrap align-end">
                             <MudTextField @bind-Value="_steamUsername" Label="Steam Username" Style="min-width:220px;" Disabled="@_loggingIn" />
@@ -468,7 +467,7 @@
     </MudTabPanel>
 
     @* ════ API Keys ════ *@
-    <MudTabPanel Text="API Keys">
+    <MudTabPanel Text="API keys">
         <MudCard Elevation="1" Class="mt-3">
             <MudCardContent>
                 <MudText Typo="Typo.subtitle1" Class="mb-1">API Keys</MudText>
@@ -542,7 +541,7 @@
                         </MudText>
                     </div>
                     <MudButton Variant="Variant.Outlined"
-                               StartIcon="@Icons.Material.Filled.Refresh"
+                               StartIcon="@Icons.Material.Outlined.Refresh"
                                OnClick="LoadServiceStatus"
                                Disabled="@_serviceBusy">
                         Refresh
@@ -599,35 +598,35 @@
                     <div class="d-flex gap-2 flex-wrap">
                         <MudButton Variant="Variant.Filled"
                                    Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.InstallDesktop"
+                                   StartIcon="@Icons.Material.Outlined.InstallDesktop"
                                    Disabled="@(!CanChangeService)"
                                    OnClick="InstallService">
                             Install
                         </MudButton>
                         <MudButton Variant="Variant.Outlined"
                                    Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Save"
+                                   StartIcon="@Icons.Material.Outlined.Save"
                                    Disabled="@(!CanConfigureService)"
                                    OnClick="ConfigureService">
                             Apply
                         </MudButton>
                         <MudButton Variant="Variant.Outlined"
                                    Color="Color.Success"
-                                   StartIcon="@Icons.Material.Filled.PlayArrow"
+                                   StartIcon="@Icons.Material.Outlined.PlayArrow"
                                    Disabled="@(!CanStartService)"
                                    OnClick="StartService">
                             Start
                         </MudButton>
                         <MudButton Variant="Variant.Outlined"
                                    Color="Color.Warning"
-                                   StartIcon="@Icons.Material.Filled.Stop"
+                                   StartIcon="@Icons.Material.Outlined.Stop"
                                    Disabled="@(!CanStopService)"
                                    OnClick="StopService">
                             Stop
                         </MudButton>
                         <MudButton Variant="Variant.Outlined"
                                    Color="Color.Error"
-                                   StartIcon="@Icons.Material.Filled.Delete"
+                                   StartIcon="@Icons.Material.Outlined.Delete"
                                    Disabled="@(!CanConfigureService)"
                                    OnClick="UninstallService">
                             Remove
@@ -647,7 +646,7 @@
                         </MudText>
                     </div>
                     <MudButton Variant="Variant.Outlined"
-                               StartIcon="@Icons.Material.Filled.Refresh"
+                               StartIcon="@Icons.Material.Outlined.Refresh"
                                OnClick="LoadCrashReports">
                         Refresh
                     </MudButton>
@@ -699,11 +698,11 @@
                         }
                     </MudSelect>
                     <MudSwitch @bind-Value="_autoUpdateCheckEnabled" Label="Check automatically" Color="Color.Primary" />
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Save"
                                OnClick="SaveUpdateSettings">
                         Save
                     </MudButton>
-                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh"
                                OnClick="@(() => CheckForUpdate())" Disabled="@_checkingUpdate">
                         Check
                     </MudButton>
@@ -746,7 +745,7 @@
                     {
                         <div class="d-flex gap-2 flex-wrap align-center mb-3">
                             <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.FileDownload"
+                                       StartIcon="@Icons.Material.Outlined.FileDownload"
                                        Disabled="@(!_updateCheck.IsChannelAvailable || !_updateCheck.IsUpdateAvailable || _downloadingUpdate)"
                                        OnClick="DownloadUpdate">
                                 Download and Stage
@@ -756,7 +755,7 @@
                                 <MudCheckBox T="bool" @bind-Value="_confirmApplyUpdate" Color="Color.Warning"
                                              Label="@ApplyUpdateConfirmationText" />
                                 <MudButton Variant="Variant.Filled" Color="Color.Warning"
-                                           StartIcon="@Icons.Material.Filled.SystemUpdateAlt"
+                                           StartIcon="@Icons.Material.Outlined.SystemUpdateAlt"
                                            Disabled="@(!_confirmApplyUpdate || _applyingUpdate)"
                                            OnClick="ApplyStagedUpdate">
                                     Apply Staged Update
@@ -788,7 +787,7 @@
 <MudDialog @bind-Visible="_storageDialogOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true })">
     <TitleContent>
         <div class="d-flex align-center gap-2">
-            <MudIcon Icon="@Icons.Material.Filled.Storage" />
+            <MudIcon Icon="@Icons.Material.Outlined.Storage" />
             <MudText Typo="Typo.h6">Storage Changes</MudText>
         </div>
     </TitleContent>

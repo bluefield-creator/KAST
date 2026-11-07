@@ -1,9 +1,11 @@
 @page "/not-found"
 @layout Layout.MainLayout
 
-<PageTitle>Not Found</PageTitle>
+<PageTitle>Page not found · CASTER</PageTitle>
 
-<MudText Typo="Typo.h3" GutterBottom="true">404 - Page Not Found</MudText>
-<MudText Class="mb-8">Sorry, the content you are looking for does not exist.</MudText>
-
-<MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">Go to Home</MudButton>
+<SectionCard>
+    <EmptyState Icon="@Icons.Material.Outlined.SearchOff" Title="Page not found"
+                Description="The page you asked for does not exist or has moved.">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="">Go to the dashboard</MudButton>
+    </EmptyState>
+</SectionCard>

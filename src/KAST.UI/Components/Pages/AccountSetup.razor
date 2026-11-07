@@ -3,13 +3,11 @@
 @attribute [AllowAnonymous]
 @inject NavigationManager Navigation
 
-<PageTitle>CASTER -- Initial Account</PageTitle>
+<PageTitle>Create administrator · CASTER</PageTitle>
 
-<MudPaper Elevation="3" Class="pa-5">
-    <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:700;">Create administrator</MudText>
-    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-        This account protects the CASTER panel and API.
-    </MudText>
+<MudPaper Elevation="0" Class="pa-6">
+    <h1 class="k-auth-title">Create administrator</h1>
+    <p class="k-auth-lead">This account protects the CASTER panel and its API.</p>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
@@ -18,67 +16,22 @@
 
     <form method="post" action="/auth/setup" enctype="multipart/form-data" data-enhance="false">
         <div class="d-flex flex-column gap-3">
-            <label class="kast-auth-field">
+            <label class="k-auth-field">
                 <span>Username</span>
                 <input name="username" autocomplete="username" autofocus />
             </label>
-            <label class="kast-auth-field">
+            <label class="k-auth-field">
                 <span>Password</span>
                 <input name="password" type="password" autocomplete="new-password" />
             </label>
-            <div>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Avatar image</MudText>
-                <input type="file" name="avatar" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                       style="display:block;margin-top:6px;width:100%;" />
-            </div>
-            <button type="submit" class="kast-auth-submit">Create account</button>
+            <label class="k-auth-field">
+                <span>Avatar (optional)</span>
+                <input type="file" name="avatar" class="k-auth-file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" />
+            </label>
+            <button type="submit" class="k-auth-submit">Create account</button>
         </div>
     </form>
 </MudPaper>
-
-<style>
-    .kast-auth-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        color: var(--mud-palette-text-secondary);
-        font-size: .75rem;
-    }
-
-    .kast-auth-field input {
-        height: 46px;
-        border: 1px solid var(--k-input);
-        border-radius: var(--k-radius);
-        background: transparent;
-        color: var(--k-foreground);
-        padding: 0 12px;
-        outline: none;
-        font: inherit;
-    }
-
-    .kast-auth-field input:focus-visible {
-        border-color: var(--k-primary);
-        outline: 2px solid var(--k-ring);
-        outline-offset: 2px;
-    }
-
-    .kast-auth-submit {
-        height: 40px;
-        border: 0;
-        border-radius: var(--k-radius);
-        background: var(--k-primary);
-        color: var(--k-primary-foreground);
-        cursor: pointer;
-        font-family: var(--k-font-sans);
-        font-weight: 600;
-        letter-spacing: .01em;
-        transition: background-color var(--k-dur) var(--k-ease);
-    }
-
-    .kast-auth-submit:hover {
-        background: var(--k-primary-hover);
-    }
-</style>
 
 @code {
     private string? _error;

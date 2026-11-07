@@ -41,6 +41,20 @@ CASTER is a web panel for running Arma 3 dedicated servers. It started as a fork
 - **Reliable Steam downloads** for server files and Workshop mods
 - **Process supervision** with crash detection, restart policies, and orphan cleanup
 
+### Screenshots
+
+<table>
+  <tr>
+    <td align="center"><a href="img/dashboard.png"><img src="img/dashboard.png" alt="Dashboard" width="100%" /></a><br /><sub><b>Dashboard</b>: servers, players, and host health at a glance</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="img/mods.png"><img src="img/mods.png" alt="Mod library" width="100%" /></a><br /><sub><b>Mod library</b>: install status, sizes, and per-mod actions</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="img/server.png"><img src="img/server.png" alt="Settings service" width="100%" /></a><br /><sub><b>Settings → Service</b>: Windows service control and crash reports</sub></td>
+  </tr>
+</table>
+
 ---
 
 ## Features

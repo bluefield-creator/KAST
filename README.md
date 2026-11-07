@@ -1,45 +1,28 @@
+<p align="center">
+  <img src="src/KAST.UI/wwwroot/brand/logo-128.png" alt="CASTER" width="96" height="96" />
+</p>
 
-# Kheela Arma Server Tool (Enterprise Edition)
+<h1 align="center">CASTER</h1>
 
-### CASTER
+<p align="center">Arma 3 server management: install servers and mods from Steam, configure instances, run and monitor them from one web panel.</p>
 
----
-
-## Badges
-
-***GitHub***  
-[![GitHub issues](https://img.shields.io/github/issues/bluefield-creator/KAST.svg?logo=github&style=flat-square)](https://github.com/bluefield-creator/KAST/issues)
-![GitHub](https://img.shields.io/github/license/bluefield-creator/KAST.svg?style=flat-square)
-[![GitHub release](https://img.shields.io/github/release/bluefield-creator/KAST.svg?logo=github&style=flat-square)](https://GitHub.com/bluefield-creator/KAST/releases/)  
-[![Github total downloads](https://img.shields.io/github/downloads/bluefield-creator/KAST/total.svg?logo=github&style=flat-square)](https://GitHub.com/bluefield-creator/KAST/releases/)
-[![Github latest downloads](https://img.shields.io/github/downloads/bluefield-creator/KAST/latest/total.svg?logo=github&style=flat-square)](https://GitHub.com/bluefield-creator/KAST/releases/)
-
-***CI / Quality***  
-[![CI](https://github.com/bluefield-creator/KAST/actions/workflows/ci.yml/badge.svg?branch=caster)](https://github.com/bluefield-creator/KAST/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/bluefield-creator/KAST/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/bluefield-creator/KAST/actions/workflows/codeql-analysis.yml)
+<p align="center">
+  <a href="https://github.com/bluefield-creator/KAST/releases/latest"><img alt="Release" src="https://img.shields.io/github/release/bluefield-creator/KAST.svg?style=flat-square" /></a>
+  <a href="https://github.com/bluefield-creator/KAST/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/bluefield-creator/KAST/actions/workflows/ci.yml/badge.svg?branch=caster" /></a>
+  <a href="https://github.com/bluefield-creator/KAST/actions/workflows/codeql-analysis.yml"><img alt="CodeQL" src="https://github.com/bluefield-creator/KAST/actions/workflows/codeql-analysis.yml/badge.svg" /></a>
+  <a href="LICENSE.md"><img alt="License" src="https://img.shields.io/github/license/bluefield-creator/KAST.svg?style=flat-square" /></a>
+</p>
 
 ## Intro
 
-Our unit originally adopted KAST because we needed a management panel that
-was accessible to administrators who did not necessarily want to conduct every
-server operation through scripts, configuration files, and ritual sacrifice.
+CASTER is a web panel for running Arma 3 dedicated servers. It started as a
+fork of [KAST](https://github.com/Foxlider/KAST) for communities that need more
+than a single-admin tool:
 
-As we began using it more extensively, however, we encountered a number of
-limitations. Our deployment required features more commonly associated with
-enterprise software, including OIDC and LDAP authentication, support for
-multiple administrator accounts, native service installation, more reliable
-update workflows, and a more robust system for downloading and managing mods.
-
-Rather than continuing to build increasingly elaborate workarounds around
-the existing application, I forked KAST and began developing an expanded
-edition designed around those requirements.
-
-The result is **KASTED**, although we generally prefer the considerably more
-pronounceable name **CASTER**.
-
-CASTER is the enterprise-focused edition of KAST, built for communities and
-organisations that require stronger authentication, multi-user administration,
-automated deployment, and more dependable server management.
+- OIDC and system-account sign-in, multiple administrators and API keys
+- native service installation and an in-app update channel
+- reliable Steam downloads for server files and Workshop mods
+- process supervision: crash detection, restart policies and orphan cleanup
 
 ## Features
 
@@ -170,9 +153,10 @@ automated deployment, and more dependable server management.
 | Feature | Description |
 | --- | --- |
 | Web-based UI | Blazor Server — accessible from any browser, no client install |
-| Dark / Light theme | Toggle with persistent preference |
-| Custom accent color | Color picker with preset swatches |
-| Responsive navigation | Server listing with live status icons and filtering |
+| Dark and light mode | Dark by default; light or "match system" per browser |
+| Command palette | `Ctrl+K` to jump to any page or server and start, stop or restart servers |
+| Self-hosted assets | Fonts and charts are served by the panel itself; works on air-gapped hosts |
+| Responsive navigation | Server listing with live status and filtering |
 | Live status updates | Server status pushed to the navigation in real time via SignalR |
 | Unsaved changes guard | Confirm-before-leave dialog when navigating away from unsaved edits |
 | Reconnect handling | Modal and state recovery when SignalR disconnects |

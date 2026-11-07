@@ -309,13 +309,13 @@ var crashReports = app.Services.GetRequiredService<ICrashReportService>();
 crashReports.RecordProcessStart();
 app.Lifetime.ApplicationStarted.Register(() =>
     lifecycleLogger.LogInformation(
-        "KAST web host started. ProcessId={ProcessId}, WorkingSetMB={WorkingSetMB:F1}",
+        "CASTER web host started. ProcessId={ProcessId}, WorkingSetMB={WorkingSetMB:F1}",
         Environment.ProcessId,
         Environment.WorkingSet / 1_048_576.0));
 app.Lifetime.ApplicationStopping.Register(() =>
 {
     lifecycleLogger.LogInformation(
-        "KAST web host stopping. ProcessId={ProcessId}, WorkingSetMB={WorkingSetMB:F1}",
+        "CASTER web host stopping. ProcessId={ProcessId}, WorkingSetMB={WorkingSetMB:F1}",
         Environment.ProcessId,
         Environment.WorkingSet / 1_048_576.0);
 
@@ -326,7 +326,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
 });
 app.Lifetime.ApplicationStopped.Register(() =>
 {
-    lifecycleLogger.LogInformation("KAST web host stopped. ProcessId={ProcessId}", Environment.ProcessId);
+    lifecycleLogger.LogInformation("CASTER web host stopped. ProcessId={ProcessId}", Environment.ProcessId);
     crashReports.RecordCleanShutdown();
 });
 AppDomain.CurrentDomain.UnhandledException += (_, e) =>

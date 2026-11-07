@@ -25,6 +25,13 @@ RUN dotnet publish -c Release -o /app/publish --no-restore /p:MinVerVersionOverr
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+ARG APP_VERSION=0.0.0-local
+LABEL org.opencontainers.image.title="CASTER" \
+      org.opencontainers.image.description="Arma 3 server management panel" \
+      org.opencontainers.image.source="https://github.com/bluefield-creator/KAST" \
+      org.opencontainers.image.licenses="GPL-3.0" \
+      org.opencontainers.image.version="${APP_VERSION}"
+
 # Arma 3 dedicated server runtime dependencies + curl for healthcheck
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

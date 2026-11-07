@@ -1,3 +1,23 @@
+## [2.1.0] - 2026-11-07
+### Bug Fixes
+- Drop invalid MudTabs PanelClass
+
+### Documentation
+- Remove Artoria design system doc
+
+### Features
+- **BREAKING** Replace Artoria theme with CASTER theme foundation
+- Shared page components, servers table and server overview
+- Redesign dashboard
+- Restyle mods library
+- Redesign monitoring page
+- Settings routes, auth, about and error pages
+- CASTER identity in README, Docker labels and host logs
+
+### Maintenance
+- Update changelog for v2.0.3 [skip ci]
+- Drop SonarCloud, label/stale bots and coverage; run CI on caster only
+
 ## [2.0.3] - 2026-11-07
 ### Bug Fixes
 - Stop stranding instances in Running/Stopping and hunt orphaned Arma processes

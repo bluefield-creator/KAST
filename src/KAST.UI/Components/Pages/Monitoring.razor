@@ -6,195 +6,125 @@
 @inject ISnackbar Snackbar
 @inject IProcessManagerService ProcessManager
 @inject ThemeService ThemeService
+@inject IDialogService Dialogs
 @inject ILogger<Monitoring> Logger
 
-<PageTitle>CASTER -- Monitoring</PageTitle>
+<PageTitle>Monitoring · CASTER</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Monitoring</MudText>
+<PageHeader Title="Monitoring" Subtitle="Host resources, server metrics and every Arma process on this machine." />
 
-@* ── Host stats ── *@
-<MudText Typo="Typo.subtitle1" Class="mb-2">Host</MudText>
-<MudGrid Spacing="3" Class="mb-4">
-    <MudItem xs="12" sm="4">
-        <MudCard Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.overline" Color="Color.Secondary">CPU</MudText>
-                <MudText Typo="Typo.h5">@State.HostMetrics.CpuUsagePercent.ToString("F1")%</MudText>
-                <MudProgressLinear Value="@State.HostMetrics.CpuUsagePercent" Min="0" Max="100" Color="Color.Warning" />
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-    <MudItem xs="12" sm="4">
-        <MudCard Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.overline" Color="Color.Secondary">Memory</MudText>
-                <MudText Typo="Typo.h5">@State.HostMetrics.MemoryUsagePercent.ToString("F1")%</MudText>
-                <MudProgressLinear Value="@State.HostMetrics.MemoryUsagePercent" Min="0" Max="100" Color="Color.Info" />
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    @UiHelpers.FormatBytes(State.HostMetrics.UsedMemoryBytes) / @UiHelpers.FormatBytes(State.HostMetrics.TotalMemoryBytes)
-                </MudText>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-    <MudItem xs="12" sm="4">
-        <MudCard Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.overline" Color="Color.Secondary">Disk</MudText>
-                <MudText Typo="Typo.h5">@State.HostMetrics.DiskUsagePercent.ToString("F1")%</MudText>
-                <MudProgressLinear Value="@State.HostMetrics.DiskUsagePercent" Min="0" Max="100" Color="Color.Success" />
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    @UiHelpers.FormatBytes(State.HostMetrics.UsedDiskBytes) / @UiHelpers.FormatBytes(State.HostMetrics.TotalDiskBytes)
-                </MudText>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-</MudGrid>
+<div class="k-grid-3">
+    <MetricTile Label="CPU" Value="@($"{State.HostMetrics.CpuUsagePercent:F1}%")" Percent="State.HostMetrics.CpuUsagePercent" />
+    <MetricTile Label="Memory" Value="@($"{State.HostMetrics.MemoryUsagePercent:F1}%")" Percent="State.HostMetrics.MemoryUsagePercent"
+                Detail="@($"{UiHelpers.FormatBytes(State.HostMetrics.UsedMemoryBytes)} of {UiHelpers.FormatBytes(State.HostMetrics.TotalMemoryBytes)}")" />
+    <MetricTile Label="Disk" Value="@($"{State.HostMetrics.DiskUsagePercent:F1}%")" Percent="State.HostMetrics.DiskUsagePercent"
+                Detail="@($"{UiHelpers.FormatBytes(State.HostMetrics.UsedDiskBytes)} of {UiHelpers.FormatBytes(State.HostMetrics.TotalDiskBytes)}")" />
+</div>
 
-@* ── Host charts ── *@
-<MudGrid Spacing="3" Class="mb-6">
-    <MudItem xs="12" md="6">
-        <MudCard Elevation="1">
-            <MudCardContent>
-                <MudText Typo="Typo.subtitle2" Class="mb-2">CPU Usage</MudText>
-                <div style="position:relative; height:160px;">
-                    <canvas id="chart-host-cpu"></canvas>
-                </div>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-    <MudItem xs="12" md="6">
-        <MudCard Elevation="1">
-            <MudCardContent>
-                <MudText Typo="Typo.subtitle2" Class="mb-2">Memory Usage</MudText>
-                <div style="position:relative; height:160px;">
-                    <canvas id="chart-host-mem"></canvas>
-                </div>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-</MudGrid>
+<div class="k-grid-2 mt-4">
+    <SectionCard Title="Host CPU">
+        <div class="k-chart"><canvas id="chart-host-cpu"></canvas></div>
+    </SectionCard>
+    <SectionCard Title="Host memory">
+        <div class="k-chart"><canvas id="chart-host-mem"></canvas></div>
+    </SectionCard>
+</div>
 
-@* ── All Running Arma Processes ── *@
-<MudText Typo="Typo.subtitle1" Class="mb-2">All Running Arma Processes</MudText>
-@if (_extProcesses.Count == 0)
-{
-    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">No running Arma server processes detected.</MudAlert>
-}
-else
-{
-    <MudTable Items="_extProcesses" Hover="true" Class="mb-4" Elevation="1" Dense="true">
-        <HeaderContent>
-            <MudTh>PID</MudTh>
-            <MudTh>Name</MudTh>
-            <MudTh>CPU / Mem</MudTh>
-            <MudTh>Port</MudTh>
-            <MudTh>Uptime</MudTh>
-            <MudTh>Status</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="PID">
-                <MudText Typo="Typo.body2">@context.Pid</MudText>
-            </MudTd>
-            <MudTd DataLabel="Name">
-                <MudText Typo="Typo.body2">@context.ProcessName</MudText>
-            </MudTd>
-            <MudTd DataLabel="CPU/Mem">
-                <MudText Typo="Typo.caption">
-                    CPU: @context.CpuPercent.ToString("F1")% |
-                    Mem: @UiHelpers.FormatBytes(context.MemoryBytes)
-                </MudText>
-            </MudTd>
-            <MudTd DataLabel="Port">
-                @if (context.Port.HasValue)
+<SectionCard Title="Arma processes" Description="All arma3server processes on this host, including ones CASTER does not manage." Class="mt-4" Flush="true">
+    @if (_extProcesses.Count == 0)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.Memory" Title="No Arma processes running" />
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" Class="k-table">
+            <thead>
+                <tr>
+                    <th class="k-num-col">PID</th>
+                    <th>Process</th>
+                    <th>Owner</th>
+                    <th class="k-num-col">Port</th>
+                    <th class="k-num-col">CPU</th>
+                    <th class="k-num-col">Memory</th>
+                    <th>Uptime</th>
+                    <th class="k-actions-col"><span class="k-sr-only">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var process in _extProcesses)
                 {
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@context.Port</MudChip>
+                    var p = process;
+                    <tr>
+                        <td class="k-num-col k-mono">@p.Pid</td>
+                        <td class="k-mono">@p.ProcessName</td>
+                        <td>
+                            @if (p.IsManaged)
+                            {
+                                <a class="k-link" href="@($"servers/{p.LinkedInstanceId}")">@p.LinkedInstanceName</a>
+                            }
+                            else
+                            {
+                                <span class="k-status k-status-warn" title="Not managed by CASTER">External</span>
+                            }
+                        </td>
+                        <td class="k-num-col k-mono">@(p.Port?.ToString() ?? "—")</td>
+                        <td class="k-num-col">@p.CpuPercent.ToString("F1")%</td>
+                        <td class="k-num-col">@UiHelpers.FormatBytes(p.MemoryBytes)</td>
+                        <td class="k-cell-muted">@FormatUptime(p.StartTime)</td>
+                        <td class="k-actions-col">
+                            @if (!p.IsManaged)
+                            {
+                                <MudTooltip Text="Kill process">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Dangerous" Size="Size.Small" Color="Color.Error"
+                                                   aria-label="@($"Kill process {p.Pid}")"
+                                                   OnClick="@(() => KillExternalProcess(p))" Disabled="_killingPids.Contains(p.Pid)" />
+                                </MudTooltip>
+                            }
+                        </td>
+                    </tr>
                 }
-                else
-                {
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
-                }
-            </MudTd>
-            <MudTd DataLabel="Uptime">
-                <MudText Typo="Typo.caption">@FormatUptime(context.StartTime)</MudText>
-            </MudTd>
-            <MudTd DataLabel="Status">
-                @if (context.IsManaged)
-                {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
-                        @context.LinkedInstanceName
-                    </MudChip>
-                }
-                else
-                {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">External</MudChip>
-                }
-                <MudIconButton Icon="@Icons.Material.Filled.StopCircle"
-                               Size="Size.Small"
-                               Color="Color.Error"
-                               OnClick="@(() => KillExternalProcess(context))"
-                               Disabled="_killingPids.Contains(context.Pid)" />
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
-}
+            </tbody>
+        </MudSimpleTable>
+    }
+</SectionCard>
 
-@* ── Instances ── *@
-<MudText Typo="Typo.subtitle1" Class="mb-2">Instances</MudText>
 @if (State.Instances.Count == 0)
 {
-    <MudAlert Severity="Severity.Info" Variant="Variant.Filled">No running instances to monitor.</MudAlert>
+    <SectionCard Title="Servers" Class="mt-4">
+        <EmptyState Icon="@Icons.Material.Outlined.Insights" Title="No running servers" Description="Per-server charts appear here while servers are running." />
+    </SectionCard>
 }
 else
 {
     @foreach (var instance in State.Instances)
     {
         var metrics = State.InstanceMetrics.GetValueOrDefault(instance.Id);
-        <div class="mb-5">
-            <div class="d-flex align-center gap-2 mb-2">
-                <MudIcon Icon="@UiHelpers.GetStatusIcon(instance.Status)" Color="@UiHelpers.GetStatusColor(instance.Status)" />
-                <MudText Typo="Typo.subtitle1">@instance.Name</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Port @instance.Port</MudText>
+        <SectionCard Title="@instance.Name" Class="mt-4">
+            <Actions>
+                <StatusBadge Status="instance.Status" />
                 @if (metrics != null)
                 {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
-                             Icon="@Icons.Material.Filled.Groups">
-                        @metrics.PlayerCount@(metrics.MaxPlayers > 0 ? $" / {metrics.MaxPlayers}" : "") players
-                    </MudChip>
+                    <span class="k-status">@metrics.PlayerCount@(metrics.MaxPlayers > 0 ? $" / {metrics.MaxPlayers}" : "") players</span>
                 }
-            </div>
-            <MudGrid Spacing="3">
-                <MudItem xs="12" md="4">
-                    <MudCard Elevation="1">
-                        <MudCardContent>
-                            <MudText Typo="Typo.subtitle2" Class="mb-2">CPU</MudText>
-                            <div style="position:relative; height:130px;">
-                                <canvas id="chart-inst-@(instance.Id)-cpu"></canvas>
-                            </div>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudCard Elevation="1">
-                        <MudCardContent>
-                            <MudText Typo="Typo.subtitle2" Class="mb-2">Memory</MudText>
-                            <div style="position:relative; height:130px;">
-                                <canvas id="chart-inst-@(instance.Id)-mem"></canvas>
-                            </div>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudCard Elevation="1">
-                        <MudCardContent>
-                            <MudText Typo="Typo.subtitle2" Class="mb-2">Players</MudText>
-                            <div style="position:relative; height:130px;">
-                                <canvas id="chart-inst-@(instance.Id)-players"></canvas>
-                            </div>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-            </MudGrid>
-        </div>
+                <MudButton Variant="Variant.Text" Size="Size.Small" Href="@($"servers/{instance.Id}")">Open</MudButton>
+            </Actions>
+            <ChildContent>
+                <div class="k-grid-3">
+                    <div>
+                        <div class="k-chart-title">CPU</div>
+                        <div class="k-chart k-chart-sm"><canvas id="chart-inst-@(instance.Id)-cpu"></canvas></div>
+                    </div>
+                    <div>
+                        <div class="k-chart-title">Memory</div>
+                        <div class="k-chart k-chart-sm"><canvas id="chart-inst-@(instance.Id)-mem"></canvas></div>
+                    </div>
+                    <div>
+                        <div class="k-chart-title">Players</div>
+                        <div class="k-chart k-chart-sm"><canvas id="chart-inst-@(instance.Id)-players"></canvas></div>
+                    </div>
+                </div>
+            </ChildContent>
+        </SectionCard>
     }
 }
 
@@ -249,8 +179,10 @@ else
     {
         if (process.IsManaged) return;
 
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Kill process {process.ProcessName} (PID {process.Pid})?");
-        if (!confirmed) return;
+        if (!await Dialogs.ConfirmAsync("Kill process",
+                $"Force-kill {process.ProcessName} (PID {process.Pid})? It is not managed by CASTER and will not save anything.",
+                "Kill", destructive: true))
+            return;
 
         _killingPids.Add(process.Pid);
         try
@@ -290,21 +222,21 @@ else
 
     private async Task InitChartsAsync()
     {
-        await CreateLineChart("chart-host-cpu", "CPU %", "var(--k-primary)", 100);
-        await CreateLineChart("chart-host-mem", "Memory %", "var(--k-accent)", 100);
+        await CreateLineChart("chart-host-cpu", "CPU %", "var(--k-info)", 100);
+        await CreateLineChart("chart-host-mem", "Memory %", "var(--k-success)", 100);
         foreach (var id in State.Instances.Select(i => i.Id))
         {
-            await CreateLineChart($"chart-inst-{id}-cpu", "CPU %", "var(--k-primary)", 100);
-            await CreateLineChart($"chart-inst-{id}-mem", "Memory (MB)", "var(--k-accent)", null);
-            await CreateLineChart($"chart-inst-{id}-players", "Players", "var(--k-info)", null);
+            await CreateLineChart($"chart-inst-{id}-cpu", "CPU %", "var(--k-info)", 100);
+            await CreateLineChart($"chart-inst-{id}-mem", "Memory (MB)", "var(--k-success)", null);
+            await CreateLineChart($"chart-inst-{id}-players", "Players", "var(--k-primary)", null);
         }
         await UpdateChartsAsync();
     }
 
     private async Task CreateLineChart(string canvasId, string label, string color, int? maxY)
     {
-        // Axis chrome resolves from the Artoria tokens at creation time;
-        // kastCharts.create substitutes the live values per theme.
+        // Axis chrome resolves from the theme tokens at creation time;
+        // charts are rebuilt when the colour mode changes.
         var tickColor = "var(--k-muted-foreground)";
         var gridColor = "var(--k-border)";
 

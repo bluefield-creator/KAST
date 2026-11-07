@@ -100,6 +100,12 @@ code, kbd, pre, samp, .k-mono {
 
 .k-num { font-variant-numeric: tabular-nums; }
 
+.k-link {
+  color: var(--k-primary-text);
+  text-decoration: none;
+}
+.k-link:hover { text-decoration: underline; }
+
 :focus-visible {
   outline: 2px solid var(--k-ring);
   outline-offset: 2px;

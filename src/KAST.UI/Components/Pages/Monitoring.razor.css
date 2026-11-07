@@ -1,0 +1,14 @@
+.k-chart {
+    position: relative;
+    height: 180px;
+}
+
+.k-chart-sm {
+    height: 130px;
+}
+
+.k-chart-title {
+    margin-bottom: 6px;
+    font-size: var(--k-text-sm);
+    color: var(--k-muted-foreground);
+}

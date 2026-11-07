@@ -11,92 +11,54 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<PageTitle>CASTER -- Mods</PageTitle>
+<PageTitle>Mods · CASTER</PageTitle>
 
-@* ── Top bar ── *@
-<div class="d-flex justify-space-between align-center mb-3 flex-wrap gap-2">
-    <div class="d-flex align-center gap-3">
-        <MudToggleGroup T="string" @bind-Value="_viewMode" Size="Size.Small" Class="mr-2">
-            <MudToggleItem Value="@("table")">
-                <MudIcon Icon="@Icons.Material.Filled.TableRows" />
-            </MudToggleItem>
-            <MudToggleItem Value="@("cards")">
-                <MudIcon Icon="@Icons.Material.Filled.GridView" />
-            </MudToggleItem>
-        </MudToggleGroup>
-        <MudText Typo="Typo.h5">Mod Management</MudText>
-        <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
-            @_mods.Count total
-        </MudChip>
+<PageHeader Title="Mods" Subtitle="The shared mod library. Assign mods to servers from each server's Mods tab.">
+    <TitleContent>
+        <span class="k-status">@_mods.Count total</span>
         @if (_outdatedCount > 0)
         {
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
-                     Icon="@Icons.Material.Filled.SystemUpdateAlt">
-                @_outdatedCount outdated
-            </MudChip>
+            <span class="k-status k-status-warn">@_outdatedCount outdated</span>
         }
         @if (_errorCount > 0)
         {
-            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                     Icon="@Icons.Material.Filled.Error">
-                @_errorCount error(s)
-            </MudChip>
+            <span class="k-status k-status-err">@_errorCount error@(_errorCount == 1 ? "" : "s")</span>
         }
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => _showAddDialog = true)">
-            Add Mod
+    </TitleContent>
+    <Actions>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Refresh"
+                   OnClick="CheckForUpdates" Disabled="_isCheckingUpdates || _isUpdatingAll">
+            @(_isCheckingUpdates && !_isUpdatingAll ? "Checking…" : "Check for updates")
         </MudButton>
-        <MudButton Variant="Variant.Outlined"
-                   StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="@(() => _showImportDialog = true)">
-            Import Local
-        </MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
-                   StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="@(() => _showPresetImportDialog = true)">
-            Import Preset
-        </MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Info"
-                   StartIcon="@Icons.Material.Filled.Refresh"
-                   OnClick="CheckForUpdates"
-                   Disabled="_isCheckingUpdates || _isUpdatingAll">
-            @(_isCheckingUpdates && !_isUpdatingAll ? "Checking…" : "Check for Updates")
-        </MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Warning"
-                   StartIcon="@Icons.Material.Filled.CloudDownload"
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.CloudDownload"
                    OnClick="UpdateAllOutdated"
                    Disabled="_isUpdatingAll || _isCheckingUpdates || DownloadManager.ActiveCount > 0">
-            @if (_isCheckingUpdates)
-            {
-                @("Checking…")
-            }
-            else if (_isUpdatingAll)
-            {
-                @("Queuing…")
-            }
-            else if (_pendingCount > 0)
-            {
-                @($"Update All ({_pendingCount})")
-            }
-            else
-            {
-                @("Update All")
-            }
+            @(_isUpdatingAll ? "Queuing…" : _pendingCount > 0 ? $"Update all ({_pendingCount})" : "Update all")
         </MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Error"
-                   StartIcon="@Icons.Material.Filled.Construction"
-                   OnClick="RepairAllMods"
-                   Disabled="_isUpdatingAll || _isCheckingUpdates || DownloadManager.ActiveCount > 0">
-            Repair All
+        <MudMenu Icon="@Icons.Material.Outlined.MoreVert" Dense="true" aria-label="More mod actions"
+                 AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <MudMenuItem Icon="@Icons.Material.Outlined.FolderOpen" OnClick="@(() => _showImportDialog = true)">Import local mod…</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Outlined.PlaylistAdd" OnClick="@(() => _showPresetImportDialog = true)">Import launcher preset…</MudMenuItem>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Outlined.Construction" OnClick="RepairAllMods"
+                         Disabled="@(_isUpdatingAll || _isCheckingUpdates || DownloadManager.ActiveCount > 0)">Repair all mods</MudMenuItem>
+        </MudMenu>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add"
+                   OnClick="@(() => _showAddDialog = true)">
+            Add mod
         </MudButton>
-    </div>
-</div>
+    </Actions>
+</PageHeader>
 
 <div class="mod-command-row mb-3">
+    <MudToggleGroup T="string" @bind-Value="_viewMode" Size="Size.Small" Outlined="true" aria-label="View">
+        <MudToggleItem Value="@("table")"><MudIcon Icon="@Icons.Material.Outlined.TableRows" Size="Size.Small" /></MudToggleItem>
+        <MudToggleItem Value="@("cards")"><MudIcon Icon="@Icons.Material.Outlined.GridView" Size="Size.Small" /></MudToggleItem>
+    </MudToggleGroup>
     <MudTextField @bind-Value="_modSearchQuery"
-                  Placeholder="Search mods..."
+                  Placeholder="Search mods…"
                   Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  AdornmentIcon="@Icons.Material.Outlined.Search"
                   Clearable="true"
                   Immediate="true"
                   Margin="Margin.Dense"
@@ -129,22 +91,19 @@
     var hasQueued = queuedDownloads.Count > 0;
 }
 
-<MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true">
+<MudTabs Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-4">
 
     @* ════════════ MODS TAB ════════════ *@
-    <MudTabPanel Text="Mods" BadgeData="@(_mods.Count > 0 ? _mods.Count.ToString() : null)" BadgeColor="Color.Primary">
+    <MudTabPanel Text="@($"Library ({_mods.Count})")">
         @if (_mods.Count == 0)
         {
-            <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="1">
-                <MudIcon Icon="@Icons.Material.Filled.Extension" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
-                <MudText Typo="Typo.h6" Color="Color.Secondary">No mods yet</MudText>
-                <MudText Color="Color.Secondary" Class="mb-3">
-                    Add mods from the Steam Workshop or import local mods to get started.
-                </MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => _showAddDialog = true)">
-                    Add Your First Mod
-                </MudButton>
-            </MudPaper>
+            <SectionCard>
+                <EmptyState Icon="@Icons.Material.Outlined.Extension" Title="No mods yet"
+                            Description="Add Workshop items by ID or URL, import an Arma 3 launcher preset, or add a local mod folder.">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add" OnClick="@(() => _showAddDialog = true)">Add mod</MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="@(() => _showPresetImportDialog = true)">Import preset</MudButton>
+                </EmptyState>
+            </SectionCard>
         }
         else if (_viewMode == "table")
         {
@@ -230,7 +189,7 @@
                         var isLatest = context.Item.SteamManifestId == 0 ||
                                        context.Item.InstalledManifestId == context.Item.SteamManifestId;
                         <MudTooltip Text="@(isLatest ? "Up to date" : "Outdated — manifest ID differs from Steam")" Arrow="true">
-                            <MudIcon Icon="@(isLatest ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.NewReleases)"
+                            <MudIcon Icon="@(isLatest ? Icons.Material.Outlined.CheckCircle : Icons.Material.Outlined.NewReleases)"
                                      Color="@(isLatest ? Color.Success : Color.Warning)"
                                      Size="Size.Small" />
                         </MudTooltip>
@@ -238,7 +197,7 @@
                     else if (context.Item.Status == ModStatus.Installed)
                     {
                         <MudTooltip Text="Manifest not tracked — run Check for Updates" Arrow="true">
-                            <MudIcon Icon="@Icons.Material.Filled.HelpOutline"
+                            <MudIcon Icon="@Icons.Material.Outlined.HelpOutline"
                                      Color="Color.Default" Size="Size.Small" Style="opacity:.4;" />
                         </MudTooltip>
                     }
@@ -278,7 +237,7 @@
                         @if (context.Item.Status is ModStatus.Downloading or ModStatus.Updating)
                         {
                             <MudTooltip Text="Cancel" Arrow="true">
-                                <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                <MudIconButton Icon="@Icons.Material.Outlined.Cancel"
                                                Size="Size.Small" Color="Color.Warning"
                                                OnClick="@(() => CancelModDownload(context.Item.Id))" />
                             </MudTooltip>
@@ -373,7 +332,7 @@ else
             @* ── Active Downloads (Left) ── *@
             <div style="flex:1;">
                 <MudText Typo="Typo.h6" Class="mb-2">
-                    <MudIcon Icon="@Icons.Material.Filled.CloudDownload" Color="Color.Primary" Size="Size.Small" Class="mr-1" />
+                    <MudIcon Icon="@Icons.Material.Outlined.CloudDownload" Color="Color.Primary" Size="Size.Small" Class="mr-1" />
                     Active (@activeDownloads.Count)
                 </MudText>
                 @if (activeDownloads.Count == 0)
@@ -402,7 +361,7 @@ else
                                     </div>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mod-download-size">@FormatDownloadSize(mod.ExpectedSizeBytes)</MudText>
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Info">@pct.ToString("F0")%</MudChip>
-                                    <MudIcon Icon="@(expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                                    <MudIcon Icon="@(expanded ? Icons.Material.Outlined.ExpandLess : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
                                 </button>
                                 @if (expanded)
                                 {
@@ -445,7 +404,7 @@ else
             @* ── Queue (Right) ── *@
             <div style="flex:1;">
                 <MudText Typo="Typo.h6" Class="mb-2">
-                    <MudIcon Icon="@Icons.Material.Filled.Queue" Color="Color.Warning" Size="Size.Small" Class="mr-1" />
+                    <MudIcon Icon="@Icons.Material.Outlined.Queue" Color="Color.Warning" Size="Size.Small" Class="mr-1" />
                     Queue (@queuedDownloads.Count)
                 </MudText>
                 @if (queuedDownloads.Count == 0)
@@ -547,12 +506,12 @@ else
                                         {
                                             @if (_selectedMod.InstalledManifestId == _selectedMod.SteamManifestId)
                                             {
-                                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                                                <MudIcon Icon="@Icons.Material.Outlined.CheckCircle"
                                                          Color="Color.Success" Size="Size.Small" Class="ml-1" />
                                             }
                                             else
                                             {
-                                                <MudIcon Icon="@Icons.Material.Filled.NewReleases"
+                                                <MudIcon Icon="@Icons.Material.Outlined.NewReleases"
                                                          Color="Color.Warning" Size="Size.Small" Class="ml-1" />
                                             }
                                         }
@@ -631,13 +590,13 @@ else
 <MudDialog @bind-Visible="_showPresetImportDialog"
            Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true })">
     <TitleContent>
-        <MudIcon Icon="@Icons.Material.Filled.PlaylistAdd" Class="mr-2" />
+        <MudIcon Icon="@Icons.Material.Outlined.PlaylistAdd" Class="mr-2" />
         <MudText Typo="Typo.h6" Style="display:inline;">Import Arma 3 Preset</MudText>
     </TitleContent>
     <DialogContent>
         <MudFileUpload T="IBrowserFile" FilesChanged="OnPresetFileSelected" Accept=".html">
             <CustomContent>
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile"
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.UploadFile"
                            FullWidth="true" Color="@(_presetFile is null ? Color.Default : Color.Primary)"
                            OnClick="@context.OpenFilePickerAsync">
                     @(_presetFile is null ? "Select HTML preset file (.html)" : _presetFile.Name)
@@ -1667,11 +1626,11 @@ else
 
     private static string GetActionIcon(SteamMod mod) => mod.Status switch
     {
-        ModStatus.UpdateAvailable                   => Icons.Material.Filled.SystemUpdateAlt,
-        ModStatus.Error                             => Icons.Material.Filled.Refresh,
-        ModStatus.Downloading or ModStatus.Updating => Icons.Material.Filled.CloudDownload,
+        ModStatus.UpdateAvailable                   => Icons.Material.Outlined.SystemUpdateAlt,
+        ModStatus.Error                             => Icons.Material.Outlined.Refresh,
+        ModStatus.Downloading or ModStatus.Updating => Icons.Material.Outlined.CloudDownload,
         ModStatus.Installed                         => Icons.Material.Outlined.CloudDownload,
-        _                                           => Icons.Material.Filled.CloudDownload
+        _                                           => Icons.Material.Outlined.CloudDownload
     };
 
     private static long ParseWorkshopId(string input)

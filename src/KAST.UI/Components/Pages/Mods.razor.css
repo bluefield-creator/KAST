@@ -1,7 +1,7 @@
 /* ── Downloads fixed overlay panel ─────────────────────────────────────── */
 .mod-command-row {
     display: grid;
-    grid-template-columns: minmax(220px, 360px) minmax(0, 1fr);
+    grid-template-columns: auto minmax(220px, 360px) minmax(0, 1fr);
     align-items: center;
     gap: 12px;
 }
@@ -101,7 +101,7 @@
 }
 
 .mod-download-header:hover {
-    background: rgba(128, 128, 128, .08);
+    background: var(--k-hover);
 }
 
 .mod-download-thumb {
@@ -230,11 +230,11 @@
 
 .mod-description .bb-code {
     display: block;
-    background: rgba(0, 0, 0, .25);
+    background: var(--k-surface-sunken);
     padding: .5em .75em;
     border-radius: 4px;
     overflow-x: auto;
-    font-family: monospace;
+    font-family: var(--k-font-mono);
     font-size: .85em;
     white-space: pre;
     margin: .4em 0;
@@ -253,7 +253,7 @@
 }
 
 .mod-description .bb-table th {
-    background: rgba(128, 128, 128, .12);
+    background: var(--k-surface-sunken);
     font-weight: 600;
 }
 

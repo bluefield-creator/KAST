@@ -198,6 +198,15 @@ For general discussion, join us on [Discord](https://discord.gg/2BUuZa3).
 
 A complete documentation is available on the [GitHub Wiki](https://github.com/bluefield-creator/KAST/wiki).
 
+In this repository:
+
+| Document | Contents |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commits, development setup, release process |
+| [CHANGELOG.md](CHANGELOG.md) | Generated release notes |
+| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities |
+| [docs/DESIGN.md](docs/DESIGN.md) | Artoria / Blue Kepi UI design system |
+
 ## Installation
 
 CASTER is distributed as a self-contained single-file executable — no .NET
@@ -353,4 +362,4 @@ binaries for all platforms, publishes checksum assets, pushes Docker image
 tags, and publishes a non-prerelease GitHub Release.
 
 Maintainer release steps are documented in
-[docs/release-runbook.md](docs/release-runbook.md).
+[CONTRIBUTING.md](CONTRIBUTING.md#release-process).

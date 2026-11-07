@@ -493,3 +493,6 @@ graphify-out/
 # Dev-runtime server installs created when running from the repo
 src/KAST.UI/servers/
 .tmux-logs/
+
+# Local agent tooling
+opencode.json

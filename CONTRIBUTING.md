@@ -27,15 +27,12 @@ By participating in this project you agree to abide by our [Code of Conduct](COD
 
 | Branch | Purpose |
 |---|---|
-| `main` | Stable releases only. Never commit directly. Tagged with `vMAJOR.MINOR.PATCH`. |
-| `develop` | Integration branch. Every push triggers a nightly Docker image on GHCR. |
-| `feature/<name>` | New features. Branch from `develop`, PR back into `develop`. |
-| `hotfix/<name>` | Urgent production fixes. Branch from `main`, PR into **both** `main` and `develop`. |
+| `caster` | Default branch. Every push is tested and publishes the rolling `nightly` build. Stable releases are tagged from here. |
+| `feat/<name>`, `fix/<name>` | Work branches. Branch from `caster`, PR back into `caster`. |
 
 **Rules:**
-- `main` and `develop` are protected. All changes go through a Pull Request.
-- Never push directly to `main` or `develop`.
-- Branch names must follow the patterns above — they are used by the changelog generator to categorise commits when a conventional commit prefix is absent.
+- `caster` is protected. All changes go through a Pull Request.
+- Branch prefixes mirror the Conventional Commit types and are used to label PRs.
 
 ---
 
@@ -91,14 +88,14 @@ When merging via Pull Request, use the PR **title** as the conventional commit m
 
 KAST uses [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
 
-Versions are derived automatically from git tags using **MinVer** (a NuGet package). You never set the version manually in any `.csproj`.
+Versions are derived automatically from git tags using **MinVer**. You never set the version manually in any `.csproj`.
 
 | Scenario | Version example |
 |---|---|
-| Tagged commit on `main` (`v0.3.0`) | `0.3.0` |
-| Commit on `develop` after `v0.3.0` | `0.3.1-alpha.0.4+abc1234` |
-| Nightly Docker image | `ghcr.io/foxlider/kast:nightly-20260520` |
-| Release Docker image | `ghcr.io/foxlider/kast:0.3.0`, `:latest` |
+| Tagged release `v1.2.3` | `1.2.3` |
+| Nightly (`caster`) | `1.2.3-nightly.20260522.abc1234` |
+| Local dev build | `1.2.3-alpha.0.5` |
+| Docker | `ghcr.io/bluefield-creator/kast:1.2.3`, `:latest`, `:stable`, `:nightly` |
 
 To see the current computed version locally:
 ```bash
@@ -113,7 +110,7 @@ dotnet build --configuration Release
 **Prerequisites:** .NET 10 SDK, Docker (optional).
 
 ```bash
-git clone https://github.com/Foxlider/KAST.git
+git clone https://github.com/bluefield-creator/KAST.git
 cd KAST
 dotnet restore
 dotnet build
@@ -152,19 +149,15 @@ docker compose up --build
 ### Pull Requests
 
 1. Fork the repository (external contributors) or create a branch on the upstream repo (collaborators).
-2. Branch from `develop` for features, from `main` for hotfixes:
+2. Branch from `caster`:
    ```bash
-   git checkout develop
-   git checkout -b feature/my-feature
-   # or
-   git checkout main
-   git checkout -b hotfix/critical-fix
+   git checkout caster && git pull --ff-only
+   git checkout -b fix/my-fix
    ```
 3. Write your code. Keep commits focused; one logical change per commit.
 4. Ensure all tests pass: `dotnet test`
-5. Push and open a PR targeting the correct base branch (`develop` for features, `main` for hotfixes).
+5. Push and open a PR targeting `caster`.
 6. **PR title must follow the Conventional Commits format** — it becomes the squash-merge commit message and feeds the changelog.
-7. For hotfixes: after merging into `main`, open a second PR to merge the fix into `develop` as well.
 
 **PR checklist:**
 - [ ] PR title follows Conventional Commits
@@ -176,23 +169,45 @@ docker compose up --build
 
 ## Release Process
 
-Releases are fully automated. Only maintainers with write access to `main` perform releases.
+Stable releases are tag-driven: a release is published when a tag matching
+`vX.Y.Z` points to a commit reachable from `caster`. Nightly builds are separate
+and use the rolling `nightly` tag. No manual changelog editing or version
+bumping is required.
 
-1. Ensure `develop` is stable and all desired changes are merged.
-2. Open a PR from `develop` into `main` with title `chore: release vX.Y.Z`.
-3. After merge, tag the commit on `main`:
-   ```bash
-   git checkout main && git pull
-   git tag v0.3.0
-   git push origin v0.3.0
-   ```
-4. The `release` GitHub Actions workflow automatically:
-   - Runs the full test suite
-   - Generates release notes from conventional commits via git-cliff
-   - Builds and pushes the Docker image to GHCR (`ghcr.io/foxlider/kast:0.3.0` + `:latest`)
-   - Creates a GitHub Release with the generated notes
+### Promote from GitHub Actions
 
-No manual changelog editing or version bumping is required.
+1. Open **Actions** and run **Promote Stable Release**.
+2. Set `version` to the stable version, for example `1.2.3`.
+3. Leave `target_ref` as `caster` unless promoting a specific commit that is
+   already reachable from `caster`.
+4. Leave `publish_latest` enabled for normal stable releases.
+
+The promotion workflow creates and pushes an annotated tag; the `Release`
+workflow then runs the tests, builds native packages, pushes Docker images and
+creates the GitHub Release.
+
+### Promote from the command line
+
+```bash
+git fetch origin caster --tags
+git checkout caster
+git pull --ff-only origin caster
+git tag -a v1.2.3 -m "KAST v1.2.3"
+git push origin v1.2.3
+```
+
+CLI-created tags default to `make_latest: true`. To publish a stable release
+without marking it as latest, add this line to the annotated tag message:
+
+```text
+Publish-Latest: false
+```
+
+### Expected outputs
+
+- GitHub Release named `KAST vX.Y.Z` with generated notes.
+- Linux x64, Linux ARM64 and Windows x64 archives, each with a `.sha256` file.
+- GHCR Docker tags `X.Y.Z`, `latest` and `stable`.
 
 ---
 

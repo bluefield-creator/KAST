@@ -7,9 +7,7 @@
     feat!: breaking change (bumps major version)
 
   Branch rules:
-    feature/<name>  →  target: develop
-    hotfix/<name>   →  target: main  (then a second PR into develop)
-    chore/...       →  target: develop
+    feat/<name>, fix/<name>, chore/<name>  →  target: caster
 -->
 
 ## Summary
@@ -55,7 +53,7 @@ Closes #<!-- issue number, or remove this line -->
 ## Checklist
 
 - [ ] PR title follows [Conventional Commits](https://www.conventionalcommits.org/) format
-- [ ] Targets the correct branch (`develop` for features, `main` for hotfixes)
+- [ ] Targets `caster`
 - [ ] No unrelated changes mixed in (whitespace, refactors, unrelated fixes)
 - [ ] EF Core migration included if any entity model changed
 - [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md)

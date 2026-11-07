@@ -74,7 +74,7 @@
     flex-direction: column;
     background: var(--k-surface);
     border-left: 1px solid var(--k-border);
-    box-shadow: -8px 0 24px rgba(0, 0, 0, .24);
+    box-shadow: var(--k-shadow-panel);
     color: var(--k-foreground);
 }
 

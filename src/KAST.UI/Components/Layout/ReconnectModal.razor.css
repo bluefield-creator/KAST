@@ -48,7 +48,7 @@
     border-radius: var(--k-radius-lg);
     border: 1px solid var(--k-border);
     background: var(--k-surface);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, .32);
+    box-shadow: var(--k-shadow-float);
     color: var(--k-foreground);
     padding: 20px;
 }

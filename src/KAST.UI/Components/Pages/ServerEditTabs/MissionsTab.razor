@@ -12,19 +12,19 @@
         <MudButtonGroup OverrideStyles="false" Size="Size.Small">
             <MudButton Variant="@(_view == ViewLibrary ? Variant.Filled : Variant.Outlined)"
                        Color="@(_view == ViewLibrary ? Color.Primary : Color.Default)"
-                       StartIcon="@Icons.Material.Filled.VideoLibrary"
+                       StartIcon="@Icons.Material.Outlined.VideoLibrary"
                        OnClick="@(() => _view = ViewLibrary)">
                 Library&nbsp;<MudText Typo="Typo.caption" Style="opacity:.75;">(@_missions.Count)</MudText>
             </MudButton>
             <MudButton Variant="@(_view == ViewCampaigns ? Variant.Filled : Variant.Outlined)"
                        Color="@(_view == ViewCampaigns ? Color.Tertiary : Color.Default)"
-                       StartIcon="@Icons.Material.Filled.AutoStories"
+                       StartIcon="@Icons.Material.Outlined.AutoStories"
                        OnClick="@(() => _view = ViewCampaigns)">
                 Campaigns&nbsp;<MudText Typo="Typo.caption" Style="opacity:.75;">(@_campaigns.Count)</MudText>
             </MudButton>
             <MudButton Variant="@(_view == ViewCollections ? Variant.Filled : Variant.Outlined)"
                        Color="@(_view == ViewCollections ? Color.Secondary : Color.Default)"
-                       StartIcon="@Icons.Material.Filled.Collections"
+                       StartIcon="@Icons.Material.Outlined.Collections"
                        OnClick="@(() => _view = ViewCollections)">
                 Collections&nbsp;<MudText Typo="Typo.caption" Style="opacity:.75;">(@_sets.Count)</MudText>
             </MudButton>
@@ -32,19 +32,19 @@
         <MudSpacer />
         @if (_view == ViewCampaigns)
         {
-            <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Tertiary" Variant="Variant.Filled"
+            <MudButton StartIcon="@Icons.Material.Outlined.Add" Color="Color.Tertiary" Variant="Variant.Filled"
                        Size="Size.Small" OnClick="@(() => _showCampaignDialog = true)">
                 New Campaign
             </MudButton>
         }
         else if (_view == ViewCollections)
         {
-            <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Secondary" Variant="Variant.Filled"
+            <MudButton StartIcon="@Icons.Material.Outlined.Add" Color="Color.Secondary" Variant="Variant.Filled"
                        Size="Size.Small" OnClick="@(() => _showSetDialog = true)">
                 New Collection
             </MudButton>
         }
-        <MudButton StartIcon="@Icons.Material.Filled.UploadFile"
+        <MudButton StartIcon="@Icons.Material.Outlined.UploadFile"
                    Color="Color.Primary" Variant="Variant.Filled"
                    Size="Size.Small"
                    OnClick="OpenUploadDialog">
@@ -61,7 +61,7 @@
                           ValueChanged="@((string value) => OnMissionSearchChanged(value))"
                           Placeholder="Search missions… (use #tag to filter)"
                           Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentIcon="@Icons.Material.Outlined.Search"
                           Clearable="true" Immediate="true"
                           Margin="Margin.Dense"
                           Variant="Variant.Outlined"
@@ -118,7 +118,7 @@
             else if (_filteredMissions.Count == 0)
             {
                 <div class="d-flex flex-column align-center justify-center gap-2" style="padding:60px 0;">
-                    <MudIcon Icon="@Icons.Material.Filled.FolderOff" Size="Size.Large" Color="Color.Default" />
+                    <MudIcon Icon="@Icons.Material.Outlined.FolderOff" Size="Size.Large" Color="Color.Default" />
                     <MudText Typo="Typo.body1" Color="Color.Default">@(HasMissionFilters ? "No missions match the filters" : "No missions yet")</MudText>
                     <MudText Typo="Typo.caption" Color="Color.Default">@(HasMissionFilters ? "Clear search, map, or tag filters to widen the list." : "Upload a .pbo file to get started")</MudText>
                 </div>
@@ -139,7 +139,7 @@
                     <RowTemplate>
                         <MudTd DataLabel="Name">
                             <div class="d-flex align-center gap-2">
-                                <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Small" Color="Color.Secondary" />
+                                <MudIcon Icon="@Icons.Material.Outlined.Map" Size="Size.Small" Color="Color.Secondary" />
                                 <div>
                                     <MudText Typo="Typo.body2">@context.DisplayName</MudText>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">@context.FileName</MudText>
@@ -167,7 +167,7 @@
                                         #@assignment.Tag!.Name
                                     </MudChip>
                                 }
-                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
+                                <MudIconButton Icon="@Icons.Material.Outlined.AddCircleOutline"
                                                Size="Size.Small"
                                                OnClick="@(() => OpenTagEditor(context))"
                                                Color="Color.Default" />
@@ -193,29 +193,29 @@
                                 {
                                     <MudTooltip Text="@($"In {inCampaigns} campaign(s)")">
                                         <MudChip T="string" Size="Size.Small" Color="Color.Tertiary" Variant="Variant.Text"
-                                                 Icon="@Icons.Material.Filled.AutoStories">@inCampaigns</MudChip>
+                                                 Icon="@Icons.Material.Outlined.AutoStories">@inCampaigns</MudChip>
                                     </MudTooltip>
                                 }
                                 @if (inSets > 0)
                                 {
                                     <MudTooltip Text="@($"In {inSets} collection(s)")">
                                         <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Text"
-                                                 Icon="@Icons.Material.Filled.Collections">@inSets</MudChip>
+                                                 Icon="@Icons.Material.Outlined.Collections">@inSets</MudChip>
                                     </MudTooltip>
                                 }
                             </div>
                         </MudTd>
                         <MudTd DataLabel="Actions">
-                            <MudMenu Icon="@Icons.Material.Filled.PlaylistAdd" Size="Size.Small"
+                            <MudMenu Icon="@Icons.Material.Outlined.PlaylistAdd" Size="Size.Small"
                                      AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
                                      Dense="true">
                                 @if (_campaigns.Count == 0 && _sets.Count == 0)
                                 {
-                                    <MudMenuItem Icon="@Icons.Material.Filled.AutoStories"
+                                    <MudMenuItem Icon="@Icons.Material.Outlined.AutoStories"
                                                  OnClick="@(() => { _view = ViewCampaigns; _showCampaignDialog = true; })">
                                         Create a campaign…
                                     </MudMenuItem>
-                                    <MudMenuItem Icon="@Icons.Material.Filled.Collections"
+                                    <MudMenuItem Icon="@Icons.Material.Outlined.Collections"
                                                  OnClick="@(() => { _view = ViewCollections; _showSetDialog = true; })">
                                         Create a collection…
                                     </MudMenuItem>
@@ -223,7 +223,7 @@
                                 @foreach (var campaign in _campaigns)
                                 {
                                     var alreadyIn = campaign.CampaignMissions.Any(cm => cm.MissionId == context.Id);
-                                    <MudMenuItem Icon="@Icons.Material.Filled.AutoStories"
+                                    <MudMenuItem Icon="@Icons.Material.Outlined.AutoStories"
                                                  Disabled="@alreadyIn"
                                                  OnClick="@(() => AddMissionToCampaignInline(campaign, context))">
                                         @campaign.Title @(alreadyIn ? " ✓" : "")
@@ -236,16 +236,16 @@
                                 @foreach (var set in _sets)
                                 {
                                     var alreadyIn = set.SetMissions.Any(sm => sm.MissionId == context.Id);
-                                    <MudMenuItem Icon="@Icons.Material.Filled.Collections"
+                                    <MudMenuItem Icon="@Icons.Material.Outlined.Collections"
                                                  Disabled="@alreadyIn"
                                                  OnClick="@(() => AddMissionToSetInline(set, context))">
                                         @set.Title @(alreadyIn ? " ✓" : "")
                                     </MudMenuItem>
                                 }
                             </MudMenu>
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                            <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
                                            OnClick="@(() => OpenMissionEditDialog(context))" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                            Color="Color.Error"
                                            OnClick="@(() => DeleteMission(context))" />
                         </MudTd>
@@ -265,12 +265,12 @@
             @if (_campaigns.Count == 0)
             {
                 <div class="d-flex flex-column align-center gap-2" style="padding:70px 0;">
-                    <MudIcon Icon="@Icons.Material.Filled.AutoStories" Style="font-size:56px; color:var(--mud-palette-tertiary); opacity:.7;" />
+                    <MudIcon Icon="@Icons.Material.Outlined.AutoStories" Style="font-size:56px; color:var(--mud-palette-tertiary); opacity:.7;" />
                     <MudText Typo="Typo.h6">No campaigns yet</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
                         A campaign is an ordered playlist — mission 1 leads to mission 2. Perfect for multi-session operations.
                     </MudText>
-                    <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Tertiary" Variant="Variant.Filled"
+                    <MudButton StartIcon="@Icons.Material.Outlined.Add" Color="Color.Tertiary" Variant="Variant.Filled"
                                Class="mt-2" OnClick="@(() => _showCampaignDialog = true)">
                         Create your first campaign
                     </MudButton>
@@ -286,7 +286,7 @@
                                 <MudCardHeader Class="pb-0">
                                     <CardHeaderAvatar>
                                         <MudAvatar Color="Color.Tertiary" Variant="Variant.Outlined">
-                                            <MudIcon Icon="@Icons.Material.Filled.AutoStories" />
+                                            <MudIcon Icon="@Icons.Material.Outlined.AutoStories" />
                                         </MudAvatar>
                                     </CardHeaderAvatar>
                                     <CardHeaderContent>
@@ -296,7 +296,7 @@
                                         </MudText>
                                     </CardHeaderContent>
                                     <CardHeaderActions>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                        Color="Color.Error" OnClick="@(() => DeleteCampaign(campaign))" />
                                     </CardHeaderActions>
                                 </MudCardHeader>
@@ -326,13 +326,13 @@
                                                         <MudText Typo="Typo.body2" Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@cm.Mission?.DisplayName</MudText>
                                                         <MudText Typo="Typo.caption" Color="Color.Secondary">@cm.Mission?.MapName</MudText>
                                                     </div>
-                                                    <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small"
+                                                    <MudIconButton Icon="@Icons.Material.Outlined.KeyboardArrowUp" Size="Size.Small"
                                                                    Disabled="@(index == 0)"
                                                                    OnClick="@(() => MoveCampaignMission(campaign, index, -1))" />
-                                                    <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small"
+                                                    <MudIconButton Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small"
                                                                    Disabled="@(index == ordered.Count - 1)"
                                                                    OnClick="@(() => MoveCampaignMission(campaign, index, +1))" />
-                                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                                    <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small" Color="Color.Error"
                                                                    OnClick="@(() => RemoveMissionFromCampaign(campaign.Id, cm.MissionId))" />
                                                 </div>
                                             }
@@ -347,7 +347,7 @@
                                                      ToStringFunc="@(m => m is not null ? $"{m.DisplayName} ({m.MapName})" : "")"
                                                      ResetValueOnEmptyText="false"
                                                      Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
-                                                     Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Add"
+                                                     Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Add"
                                                      Style="width:100%;" />
                                 </MudCardActions>
                             </MudCard>
@@ -365,12 +365,12 @@
             @if (_sets.Count == 0)
             {
                 <div class="d-flex flex-column align-center gap-2" style="padding:70px 0;">
-                    <MudIcon Icon="@Icons.Material.Filled.Collections" Style="font-size:56px; color:var(--mud-palette-secondary); opacity:.7;" />
+                    <MudIcon Icon="@Icons.Material.Outlined.Collections" Style="font-size:56px; color:var(--mud-palette-secondary); opacity:.7;" />
                     <MudText Typo="Typo.h6">No collections yet</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
                         A collection is an unordered group of related missions — a theme night, a map pack, a rotation pool.
                     </MudText>
-                    <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Secondary" Variant="Variant.Filled"
+                    <MudButton StartIcon="@Icons.Material.Outlined.Add" Color="Color.Secondary" Variant="Variant.Filled"
                                Class="mt-2" OnClick="@(() => _showSetDialog = true)">
                         Create your first collection
                     </MudButton>
@@ -386,7 +386,7 @@
                                 <MudCardHeader Class="pb-0">
                                     <CardHeaderAvatar>
                                         <MudAvatar Color="Color.Secondary" Variant="Variant.Outlined">
-                                            <MudIcon Icon="@Icons.Material.Filled.Collections" />
+                                            <MudIcon Icon="@Icons.Material.Outlined.Collections" />
                                         </MudAvatar>
                                     </CardHeaderAvatar>
                                     <CardHeaderContent>
@@ -394,7 +394,7 @@
                                         <MudText Typo="Typo.caption" Color="Color.Secondary">@set.SetMissions.Count mission(s)</MudText>
                                     </CardHeaderContent>
                                     <CardHeaderActions>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                        Color="Color.Error" OnClick="@(() => DeleteSet(set))" />
                                     </CardHeaderActions>
                                 </MudCardHeader>
@@ -413,7 +413,7 @@
                                             @foreach (var sm in set.SetMissions)
                                             {
                                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                                         Icon="@Icons.Material.Filled.Map"
+                                                         Icon="@Icons.Material.Outlined.Map"
                                                          OnClose="@(() => RemoveMissionFromSet(set.Id, sm.MissionId))">
                                                     @sm.Mission?.DisplayName
                                                 </MudChip>
@@ -429,7 +429,7 @@
                                                      ToStringFunc="@(m => m is not null ? $"{m.DisplayName} ({m.MapName})" : "")"
                                                      ResetValueOnEmptyText="false"
                                                      Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
-                                                     Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Add"
+                                                     Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Add"
                                                      Style="width:100%;" />
                                 </MudCardActions>
                             </MudCard>
@@ -450,7 +450,7 @@
     <DialogContent>
         <MudFileUpload T="IReadOnlyList<IBrowserFile>" @ref="_fileUpload" FilesChanged="@OnUploadFilesSelected" Accept=".pbo">
             <CustomContent>
-                <MudButton StartIcon="@Icons.Material.Filled.FileUpload"
+                <MudButton StartIcon="@Icons.Material.Outlined.FileUpload"
                            Variant="Variant.Outlined"
                            OnClick="@OpenFilePicker">
                     Select .pbo files…

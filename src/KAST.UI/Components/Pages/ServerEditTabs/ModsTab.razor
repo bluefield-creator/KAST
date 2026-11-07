@@ -8,7 +8,7 @@
     <MudTextField @bind-Value="_modSearch"
                   Placeholder="Filter mods…"
                   Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  AdornmentIcon="@Icons.Material.Outlined.Search"
                   Clearable="true" Immediate="true"
                   Margin="Margin.Dense"
                   Variant="Variant.Outlined"
@@ -17,36 +17,36 @@
     <MudToggleGroup T="string" @bind-Value="_viewMode" Size="Size.Small" Class="mr-1">
         <MudToggleItem Value="@("table")">
             <MudTooltip Text="Table view">
-                <MudIcon Icon="@Icons.Material.Filled.TableRows" />
+                <MudIcon Icon="@Icons.Material.Outlined.TableRows" />
             </MudTooltip>
         </MudToggleItem>
         <MudToggleItem Value="@("columns")">
             <MudTooltip Text="Column drag-drop view">
-                <MudIcon Icon="@Icons.Material.Filled.ViewColumn" />
+                <MudIcon Icon="@Icons.Material.Outlined.ViewColumn" />
             </MudTooltip>
         </MudToggleItem>
     </MudToggleGroup>
-    <MudButton StartIcon="@Icons.Material.Filled.RemoveCircleOutline"
+    <MudButton StartIcon="@Icons.Material.Outlined.RemoveCircleOutline"
                Color="Color.Default" Variant="Variant.Outlined"
                Size="Size.Small"
                Disabled="@(!Instance.Mods.Any())"
                OnClick="@(() => _showUnloadAllDialog = true)">
         Unload All
     </MudButton>
-    <MudButton StartIcon="@Icons.Material.Filled.DoneAll"
+    <MudButton StartIcon="@Icons.Material.Outlined.DoneAll"
                Color="Color.Info" Variant="Variant.Outlined"
                Size="Size.Small"
                Disabled="@(!UnassignedMods.Any())"
                OnClick="@(() => _showLoadAllDialog = true)">
         Load All
     </MudButton>
-    <MudButton StartIcon="@Icons.Material.Filled.PlaylistAdd"
+    <MudButton StartIcon="@Icons.Material.Outlined.PlaylistAdd"
                Color="Color.Secondary" Variant="Variant.Outlined"
                Size="Size.Small"
                OnClick="@(() => _showPresetImportDialog = true)">
         Import → Clientside
     </MudButton>
-    <MudButton StartIcon="@Icons.Material.Filled.Save"
+    <MudButton StartIcon="@Icons.Material.Outlined.Save"
                Color="Color.Primary" Variant="Variant.Outlined"
                Size="Size.Small"
                Disabled="@(!Instance.Mods.Any())"
@@ -56,7 +56,7 @@
     @if (_presets.Count > 0)
     {
         <MudBadge Content="@_presets.Count" Color="Color.Primary">
-            <MudButton StartIcon="@Icons.Material.Filled.History"
+            <MudButton StartIcon="@Icons.Material.Outlined.History"
                        Color="Color.Default" Variant="Variant.Outlined"
                        Size="Size.Small"
                        OnClick="@(() => _showPresetsPanel = !_showPresetsPanel)">
@@ -92,21 +92,21 @@
 
 @* ════════════ TABLE VIEW ════════════ *@
 <div class="mod-assignment-summary mb-2">
-    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Extension">
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Outlined.Extension">
         @Instance.Mods.Count loaded
     </MudChip>
-    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info" Icon="@Icons.Material.Filled.People">
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info" Icon="@Icons.Material.Outlined.People">
         @ClientMods.Count clientside
     </MudChip>
-    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Icon="@Icons.Material.Filled.Storage">
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Icon="@Icons.Material.Outlined.Storage">
         @ServerMods.Count serverside
     </MudChip>
-    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Icon="@Icons.Material.Filled.VpnKey">
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Icon="@Icons.Material.Outlined.VpnKey">
         @WhitelistedMods.Count whitelisted
     </MudChip>
     @if (AssignmentWarnings.Count > 0)
     {
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" Icon="@Icons.Material.Outlined.Warning">
             @AssignmentWarnings.Count warning(s)
         </MudChip>
     }
@@ -178,7 +178,7 @@
             <MudTd DataLabel="">
                 @if (context.Zone != "available")
                 {
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                    <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small" Color="Color.Error"
                                    OnClick="@(() => RemoveModFromZone(context))" />
                 }
             </MudTd>
@@ -226,7 +226,7 @@
                 <MudDropZone T="ModDragItem" Identifier="available" AllowReorder="false"
                              Class="pa-3 d-flex flex-column mod-dropzone flex-grow-1">
                     <div class="d-flex align-center gap-1 mb-2">
-                        <MudIcon Icon="@Icons.Material.Filled.Apps" Size="Size.Small" />
+                        <MudIcon Icon="@Icons.Material.Outlined.Apps" Size="Size.Small" />
                         <MudText Typo="Typo.subtitle2">Available</MudText>
                         <MudSpacer />
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@_modDragItems.Count(x => x.Zone == "available")</MudText>
@@ -237,7 +237,7 @@
                 <MudDropZone T="ModDragItem" Identifier="whitelisted" AllowReorder="true"
                              Class="pa-3 d-flex flex-column mod-dropzone flex-grow-1">
                     <div class="d-flex align-center gap-1 mb-1">
-                        <MudIcon Icon="@Icons.Material.Filled.VpnKey" Size="Size.Small" Color="Color.Warning" />
+                        <MudIcon Icon="@Icons.Material.Outlined.VpnKey" Size="Size.Small" Color="Color.Warning" />
                         <MudText Typo="Typo.subtitle2">Whitelisted</MudText>
                         <MudSpacer />
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@_modDragItems.Count(x => x.Zone == "whitelisted")</MudText>
@@ -249,7 +249,7 @@
                 <MudDropZone T="ModDragItem" Identifier="client" AllowReorder="true"
                              Class="pa-3 d-flex flex-column mod-dropzone flex-grow-1">
                     <div class="d-flex align-center gap-1 mb-1">
-                        <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" Color="Color.Info" />
+                        <MudIcon Icon="@Icons.Material.Outlined.People" Size="Size.Small" Color="Color.Info" />
                         <MudText Typo="Typo.subtitle2">Clientside</MudText>
                         <MudSpacer />
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@_modDragItems.Count(x => x.Zone == "client")</MudText>
@@ -261,7 +261,7 @@
                 <MudDropZone T="ModDragItem" Identifier="server" AllowReorder="true"
                              Class="pa-3 d-flex flex-column mod-dropzone flex-grow-1">
                     <div class="d-flex align-center gap-1 mb-1">
-                        <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" Color="Color.Primary" />
+                        <MudIcon Icon="@Icons.Material.Outlined.Storage" Size="Size.Small" Color="Color.Primary" />
                         <MudText Typo="Typo.subtitle2">Serverside</MudText>
                         <MudSpacer />
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@_modDragItems.Count(x => x.Zone == "server")</MudText>
@@ -279,7 +279,7 @@
                 }
                 else
                 {
-                    <MudIcon Icon="@Icons.Material.Filled.Extension" Size="Size.Small"
+                    <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small"
                              Style="flex-shrink:0;opacity:.45;" />
                 }
                 <span class="mod-item-name">@context.Name</span>
@@ -293,10 +293,10 @@
 {
     <div class="mud-paper mud-elevation-1 pa-3 mt-3">
         <div class="d-flex align-center gap-2 mb-2">
-            <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" Color="Color.Primary" />
+            <MudIcon Icon="@Icons.Material.Outlined.History" Size="Size.Small" Color="Color.Primary" />
             <MudText Typo="Typo.h6">Saved Presets</MudText>
             <MudSpacer />
-            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+            <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small"
                            OnClick="@(() => _showPresetsPanel = false)" />
         </div>
         <MudTable Items="_presets" Hover="true" Dense="true" Elevation="0">
@@ -322,13 +322,13 @@
                     @(context.LastAppliedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")
                 </MudTd>
                 <MudTd DataLabel="Actions">
-                    <MudButton StartIcon="@Icons.Material.Filled.PlayArrow"
+                    <MudButton StartIcon="@Icons.Material.Outlined.PlayArrow"
                                Color="Color.Success" Size="Size.Small" Variant="Variant.Filled"
                                OnClick="@(() => ApplyPreset(context))"
                                Disabled="@IsApplyingPreset(context)">
                         Apply
                     </MudButton>
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                    Color="Color.Error"
                                    OnClick="@(() => DeletePreset(context))" />
                 </MudTd>
@@ -365,7 +365,7 @@
            Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true })">
     <TitleContent>
         <div class="d-flex align-center gap-2">
-            <MudIcon Icon="@Icons.Material.Filled.PlaylistAdd" Color="Color.Secondary" />
+            <MudIcon Icon="@Icons.Material.Outlined.PlaylistAdd" Color="Color.Secondary" />
             <MudText Typo="Typo.h6">Import Arma 3 Launcher Preset</MudText>
             <MudSpacer />
             <MudText Typo="Typo.caption" Color="Color.Info">→ Clientside</MudText>
@@ -374,7 +374,7 @@
     <DialogContent>
         <MudFileUpload T="IBrowserFile" FilesChanged="@OnPresetFileSelected" Accept=".html,.htm">
             <CustomContent>
-                <MudButton StartIcon="@Icons.Material.Filled.FileUpload"
+                <MudButton StartIcon="@Icons.Material.Outlined.FileUpload"
                            Variant="Variant.Outlined" Size="Size.Small"
                            OnClick="@context.OpenFilePickerAsync">
                     Select Preset HTML file…
@@ -385,7 +385,7 @@
         @if (_parsedPresetMods.Count > 0)
         {
             <div class="d-flex align-center gap-2 mt-3 mb-1">
-                <MudIcon Icon="@Icons.Material.Filled.PlaylistPlay" Size="Size.Small" />
+                <MudIcon Icon="@Icons.Material.Outlined.PlaylistPlay" Size="Size.Small" />
                 <MudText Typo="Typo.subtitle2">@_parsedPresetName</MudText>
                 <MudSpacer />
                 <MudText Typo="Typo.caption" Color="Color.Secondary">@_presetSelectedIds.Count selected</MudText>
@@ -409,7 +409,7 @@
                                      Value="@(_presetSelectedIds.Contains(wid))"
                                      ValueChanged="@((v) => TogglePresetMod(wid, v))"
                                      Dense="true" />
-                        <MudIcon Icon="@Icons.Material.Filled.Extension" Size="Size.Small"
+                        <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small"
                                  Style="opacity:.4; flex-shrink:0;" />
                         <MudText Typo="Typo.caption"
                                  Style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@dname</MudText>

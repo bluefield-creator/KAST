@@ -7,7 +7,7 @@
     padding: 6px 8px;
     border: 1px solid var(--mud-palette-divider);
     border-radius: 4px;
-    background: rgba(128, 128, 128, .04);
+    background: var(--k-hover);
 }
 
 ::deep .mud-drop-item {

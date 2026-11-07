@@ -13,7 +13,7 @@
         @* ── Action bar ── *@
         <div class="d-flex gap-2 mb-4 align-center flex-wrap">
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Download"
+                       StartIcon="@Icons.Material.Outlined.Download"
                        OnClick="StartInstall"
                        Disabled="@(_installState?.IsDownloading == true)">
                 @(Instance.InstalledAt.HasValue ? "Reinstall" : "Install Server Files")
@@ -21,11 +21,11 @@
             @if (_installState?.IsDownloading == true)
             {
                 <MudButton Variant="Variant.Outlined" Color="Color.Error"
-                           StartIcon="@Icons.Material.Filled.Cancel"
+                           StartIcon="@Icons.Material.Outlined.Cancel"
                            OnClick="CancelInstall">Cancel</MudButton>
             }
             <MudButton Variant="Variant.Outlined"
-                       StartIcon="@Icons.Material.Filled.FactCheck"
+                       StartIcon="@Icons.Material.Outlined.FactCheck"
                        OnClick="ValidateInstall"
                        Disabled="@(!Instance.InstalledAt.HasValue)">Validate</MudButton>
             <MudSpacer />
@@ -34,7 +34,7 @@
                 <MudChip T="string" Size="Size.Small"
                          Color="@(_validationResults?.Any(r => !r.OK) == true ? Color.Warning : Color.Success)"
                          Variant="Variant.Outlined"
-                         Icon="@(_validationResults?.Any(r => !r.OK) == true ? Icons.Material.Filled.Warning : Icons.Material.Filled.CheckCircle)">
+                         Icon="@(_validationResults?.Any(r => !r.OK) == true ? Icons.Material.Outlined.Warning : Icons.Material.Outlined.CheckCircle)">
                     @Instance.InstalledAt.Value.ToString("g")
                     @if (!string.IsNullOrEmpty(Instance.InstalledBuildId))
                     {<text>&nbsp;&middot; build @Instance.InstalledBuildId</text>}
@@ -59,7 +59,7 @@
                             NavClass="kast-stepper-nav"
                             StepClass="kast-stepper-step">
                     <ConnectorTemplate Context="connStep">
-                        @* artoria: raw mud classes — re-audit on MudBlazor upgrade *@
+                        @* Raw MudBlazor classes: re-audit on MudBlazor upgrades. *@
                         <div class="mud-stepper-nav-connector">
                             <MudProgressLinear Value="@(connStep.Completed || connStep.Skipped ? 100 : 0)"
                                                Indeterminate="@(connStep.IsActive && !connStep.Completed && !connStep.HasError && (_installState?.IsDownloading == true))"
@@ -76,15 +76,15 @@
                         }
                         @if (context.HasError)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" />
+                            <MudIcon Icon="@Icons.Material.Outlined.Cancel" Color="Color.Error" Size="Size.Small" />
                         }
                         else if (context.Skipped)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.SkipNext" Color="Color.Secondary" Size="Size.Small" />
+                            <MudIcon Icon="@Icons.Material.Outlined.SkipNext" Color="Color.Secondary" Size="Size.Small" />
                         }
                         else if (context.Completed)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Color="Color.Success" Size="Size.Small" />
                         }
                         else if (context.IsActive)
                         {
@@ -136,7 +136,7 @@
                     <CompletedContent>
                         <div class="pa-3">
                             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" Color="Color.Success" />
+                                <MudIcon Icon="@Icons.Material.Outlined.RocketLaunch" Color="Color.Success" />
                                 <MudText Typo="Typo.subtitle2" Color="Color.Success">Installation complete — server is ready to launch.</MudText>
                             </MudStack>
                         </div>
@@ -149,7 +149,7 @@
                 <div class="d-flex align-center justify-space-between px-3 pt-2 pb-1 flex-shrink-0">
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Install Log</MudText>
                     <MudTooltip Text='@(_followLog ? "Auto-scroll on \u2014 click to disable" : "Auto-scroll off \u2014 click to enable")'>
-                        <MudIconButton Icon="@(_followLog ? Icons.Material.Filled.LockOpen : Icons.Material.Outlined.VerticalAlignBottom)"
+                        <MudIconButton Icon="@(_followLog ? Icons.Material.Outlined.LockOpen : Icons.Material.Outlined.VerticalAlignBottom)"
                                        Color="@(_followLog ? Color.Primary : Color.Default)"
                                        Size="Size.Small"
                                        OnClick="@(() => { _followLog = !_followLog; if (_followLog) _scrollInstallLog = true; })" />
@@ -176,14 +176,14 @@
 <MudDialog @bind-Visible="_validationDialogOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true })">
     <TitleContent>
         <div class="d-flex align-center gap-2">
-            <MudIcon Icon="@Icons.Material.Filled.FactCheck"
+            <MudIcon Icon="@Icons.Material.Outlined.FactCheck"
                      Color="@(_validationResults?.All(r => r.OK) == true ? Color.Success : Color.Error)" />
             <MudText Typo="Typo.h6">Validation</MudText>
             <MudSpacer />
             @if (_validationResults?.All(r => r.OK) == true)
             {
                 <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text"
-                         Icon="@Icons.Material.Filled.CheckCircle">All OK</MudChip>
+                         Icon="@Icons.Material.Outlined.CheckCircle">All OK</MudChip>
             }
             else if (_validationResults?.Any(r => !r.OK) == true)
             {
@@ -197,7 +197,7 @@
             @foreach (var r in _validationResults)
             {
                 <div class="d-flex align-start gap-2 mb-2">
-                    <MudIcon Icon="@(r.OK ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)"
+                    <MudIcon Icon="@(r.OK ? Icons.Material.Outlined.CheckCircle : Icons.Material.Outlined.Cancel)"
                              Color="@(r.OK ? Color.Success : Color.Error)" Size="Size.Small"
                              Style="margin-top:2px; flex-shrink:0;" />
                     <div>
@@ -215,7 +215,7 @@
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">Validation passes but something still feels off?</MudText>
                 <MudTooltip Text="Re-downloads all server files from Steam, bypassing any cached state.">
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
-                               StartIcon="@Icons.Material.Filled.Refresh"
+                               StartIcon="@Icons.Material.Outlined.Refresh"
                                OnClick="@(() => { _validationDialogOpen = false; _ = StartInstall(); })"
                                Disabled="@(_installState?.IsDownloading == true)">Force re-download</MudButton>
                 </MudTooltip>

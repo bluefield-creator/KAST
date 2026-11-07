@@ -1,39 +1,33 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
 | Version | Supported |
-|---|---|
-| Latest release (`main`) | ✅ |
-| Nightly (`develop`) | ⚠️ Best-effort only |
+| --- | --- |
+| Latest stable release | ✅ |
+| Nightly (`caster` branch) | ⚠️ Best effort |
 | Older releases | ❌ |
 
-Only the latest stable release receives security fixes. If you are on an older version, please upgrade.
+Please upgrade to the latest stable release before reporting an issue.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+**Please do not report security issues in public GitHub issues.**
 
-### Preferred: GitHub Private Vulnerability Reporting
+**Preferred:** use GitHub's [private vulnerability reporting](https://github.com/bluefield-creator/KAST/security/advisories/new). Reports are visible only to maintainers.
 
-Use GitHub's built-in private reporting:
-[Report a vulnerability](https://github.com/Foxlider/KAST/security/advisories/new)
+**Alternative:** for less critical issues, or if you want to talk before filing, contact us on the [3rd Shock Army Discord](https://discord.gg/kWScy7rDm8).
 
-This creates a private advisory visible only to maintainers. You will receive a response within **72 hours**.
+We aim to respond within 72 hours.
 
-### Alternative: Discord
+## What to include
 
-For less critical issues or if you need to discuss before filing, reach out directly on [Discord](https://discord.gg/2BUuZa3).
-
-## What to Include
-
-A useful report contains:
-- KAST version (visible on the **About** page)
-- Deployment type (Docker / native)
-- Description of the vulnerability and its potential impact
+- CASTER version (shown on the **About** page)
+- Deployment type (Docker, Windows, or Linux)
+- Description of the issue and its potential impact
 - Steps to reproduce
-- Any suggested fix or mitigation (optional but appreciated)
+- Suggested fix or mitigation (optional)
 
-## Disclosure Policy
+## Disclosure
 
-We follow a **90-day coordinated disclosure** window. We will work with you to understand, reproduce, and fix the issue, then publish a security advisory and release a patched version before public disclosure.
+We follow coordinated disclosure with a 90-day window. We will work with you to reproduce and fix the issue, then publish an advisory and a patched release.

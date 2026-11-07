@@ -213,4 +213,4 @@ Publish-Latest: false
 
 ## Getting Help
 
-Join us on [Discord](https://discord.gg/2BUuZa3) and ask in the appropriate channel.
+Questions? Join the [3rd Shock Army Discord](https://discord.gg/kWScy7rDm8).

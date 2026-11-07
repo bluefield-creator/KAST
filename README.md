@@ -1,10 +1,13 @@
 <p align="center">
-  <img src="src/KAST.UI/wwwroot/brand/logo-128.png" alt="CASTER" width="96" height="96" />
+  <img src="src/KAST.UI/wwwroot/brand/logo-256.png" alt="CASTER logo" width="128" height="128" />
 </p>
 
 <h1 align="center">CASTER</h1>
 
-<p align="center">Arma 3 server management: install servers and mods from Steam, configure instances, run and monitor them from one web panel.</p>
+<p align="center">
+  <strong>Arma 3 server management from one web panel.</strong><br />
+  Install servers and mods from Steam, configure instances, and run and monitor them from the browser.
+</p>
 
 <p align="center">
   <a href="https://github.com/bluefield-creator/KAST/releases/latest"><img alt="Release" src="https://img.shields.io/github/release/bluefield-creator/KAST.svg?style=flat-square" /></a>
@@ -13,201 +16,210 @@
   <a href="LICENSE.md"><img alt="License" src="https://img.shields.io/github/license/bluefield-creator/KAST.svg?style=flat-square" /></a>
 </p>
 
-## Intro
+---
 
-CASTER is a web panel for running Arma 3 dedicated servers. It started as a
-fork of [KAST](https://github.com/Foxlider/KAST) for communities that need more
-than a single-admin tool:
+## Table of Contents
 
-- OIDC and system-account sign-in, multiple administrators and API keys
-- native service installation and an in-app update channel
-- reliable Steam downloads for server files and Workshop mods
-- process supervision: crash detection, restart policies and orphan cleanup
+- [About](#about)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Operations](#operations)
+- [Versioning](#versioning)
+- [Documentation](#documentation)
+- [Support](#support)
+
+---
+
+## About
+
+CASTER is a web panel for running Arma 3 dedicated servers. It started as a fork of [KAST](https://github.com/Foxlider/KAST), built for communities that need more than a single-admin tool:
+
+- **Multi-user access** with OIDC and system-account sign-in, multiple administrators, and API keys
+- **Native service installation** and an in-app update channel
+- **Reliable Steam downloads** for server files and Workshop mods
+- **Process supervision** with crash detection, restart policies, and orphan cleanup
+
+---
 
 ## Features
 
-### Authentication & Security
+<details>
+<summary><strong>Authentication &amp; Security</strong></summary>
 
-| Feature | Description |
+- Multiple administrator accounts with individual credentials
+- OIDC / OpenID Connect, compatible with Authentik and other providers
+- Three auth modes: Local-only, OIDC-only, or Local + OIDC fallback
+- Group-claim access control (e.g. restrict to `KAST Admins`)
+- System account sign-in: Windows local users, AD domain users, or Linux local users
+- API keys with generate, revoke, and usage tracking
+- First-run bootstrapping for an initial administrator or OIDC provisioning
+
+</details>
+
+<details>
+<summary><strong>Deployment &amp; Operations</strong></summary>
+
+- Windows Service: install, configure, start, stop, and remove
+- Crash recovery with restart delay and failure reset window
+- Auto-update from GitHub releases, staged and applied from the UI
+- Stable and nightly update channels with configurable auto-check
+- Service-aware updater that stops the Windows service before overwriting files
+- Multi-arch Docker images tagged `latest`, `stable`, and `nightly`
+- `/health` (web and database) and `/ready` (includes download queue status) endpoints
+- Reverse proxy support (Caddy, nginx) with websocket proxying for Blazor Server
+- Configurable trusted proxy IPs for forwarded headers
+
+</details>
+
+<details>
+<summary><strong>Server Management</strong></summary>
+
+- Multiple server profiles: create, edit, and delete instances
+- Headless client support with configurable count and auto-launch
+- Restart policies: None, On Crash, or Always, with max attempts
+- Scheduled start and stop per instance (HH:mm)
+- Process watchdog with crash detection and restart
+- Process history for start, stop, restart, and crash events, with durations
+- Performance tuning: hyper-threading toggle, max memory and CPU count overrides, ranking toggle
+- Toggles for all 8 official Creator DLCs
+- Custom launch parameters per instance (e.g. `-hugepages`)
+- Live status indicators: Stopped, Starting, Running, Stopping, Crashed, Restarting
+
+</details>
+
+<details>
+<summary><strong>Server Configuration</strong></summary>
+
+- Structured `server.cfg` editor (hostname, password, max players, MOTD, voting, and more)
+- `basic.cfg` editor (Bandwidth, MinBandwidth, MaxMsgSend, and other performance settings)
+- Arma 3 profile editor with difficulty settings and raw-text fallback
+- Raw config editing with bidirectional sync to structured fields
+- Configs written to disk on save and launch
+- Unsaved-changes guard on navigation
+
+</details>
+
+<details>
+<summary><strong>Steam Integration</strong></summary>
+
+- Install and update Arma 3 Dedicated Server (Stable, Development, DLCs, Legacy)
+- Install, update, and manage Arma 3 Steam Workshop mods
+- Steam login with username, password, and Steam Guard, or by QR code in the Steam mobile app
+- Mod preset import from Arma 3 Launcher HTML exports
+- Mod update check on application launch
+- Steam profile display (avatar, persona name, SteamID) in settings
+
+</details>
+
+<details>
+<summary><strong>Mod Management</strong></summary>
+
+- Centralized mod page with table and card views
+- Parallel downloads with an independent, configurable concurrency limit
+- Durable download queue: queued and running downloads survive restarts
+- Per-mod download, update, verify, and cancel actions
+- Update All to batch-update outdated mods
+- Per-instance mods with drag-and-drop load order and client/server flags
+- Local mod import from folders with custom search paths
+- Manifest tracking (`SteamManifestId` / `InstalledManifestId`) for reliable update detection
+- Per-mod comment field
+- Built-in speed benchmark to find optimal download parallelism
+
+</details>
+
+<details>
+<summary><strong>Mission Management</strong></summary>
+
+- Mission upload (PBO) via the web UI or API
+- HTTP mission downloads as a faster, bandwidth-friendly alternative to Arma's built-in file transfer
+- CRC32 / BZip2 integrity verification
+- ETag and If-Modified-Since support (304 Not Modified)
+- Byte-range requests for partial and resumable downloads
+- Download logging: player name, Steam ID, server address, and user agent
+- Tagging with create, delete, assign, and remove
+- Search by text, tags, and map name
+- Campaigns with add, remove, and reorder
+- Named mission sets
+- Bind a mission to a mod preset for easy deployment
+
+</details>
+
+<details>
+<summary><strong>Monitoring &amp; Observability</strong></summary>
+
+- Host dashboard with real-time CPU, memory, and disk charts
+- Per-instance CPU, memory, and player count charts
+- Live console tailing with color-coded output and log-level filtering
+- RPT event detection: mission starts, Steam connections, admin activity, and crashes
+- Server events panel with severity levels
+- Detection of external (unmanaged) Arma processes, with the ability to kill them
+- Real-time status and metrics pushed to the UI via SignalR
+- Configurable metrics collection interval
+
+</details>
+
+<details>
+<summary><strong>REST API</strong></summary>
+
+| Endpoint | Purpose |
 | --- | --- |
-| Multi-admin accounts | Multiple administrator accounts with individual credentials |
-| OIDC / OpenID Connect | Compatible with Authentik and other OIDC providers |
-| Three auth modes | Local-only, OIDC-only, or Local+OIDC fallback login |
-| Group-claim access control | Restrict OIDC access to specific groups (e.g. `KAST Admins`) |
-| System account sign-in | Windows local users, AD domain users, or Linux local users |
-| API keys | Generate, revoke, and track API keys for automation and integrations |
-| First-run bootstrapping | Initial administrator or OIDC provisioning on fresh install |
+| `/api/servers` | Server instance CRUD |
+| `/api/mods` | Mods, downloads, updates, and presets |
+| `/api/missions` | Upload, download, search, tags, campaigns, and sets |
+| `/api/monitoring` | Host and instance metrics |
+| `/api/processes` | List running processes and kill by PID |
+| `/api/settings` | Settings and API key management |
+| `/api/downloads/state` | Authoritative download queue snapshot for UI recovery |
 
-### Deployment & Operations
+OpenAPI documentation with endpoint tags and Swagger support is included.
 
-| Feature | Description |
-| --- | --- |
-| Windows Service | Install, configure, start, stop, and remove CASTER as a Windows service |
-| Service crash recovery | Configure restart-on-crash with delay and failure reset window |
-| Auto-update | Check GitHub releases, download, stage, and apply updates from within the UI |
-| Update channels | Stable and nightly channels with configurable auto-check |
-| Service-aware updater | Stops the Windows service before overwriting files during updates |
-| Docker | Pre-built multi-arch images with `latest`, `stable`, and `nightly` tags |
-| Health endpoints | `/health` (web/database) and `/ready` (includes download queue status) |
-| Reverse proxy support | Caddy, nginx — websocket proxying for Blazor Server |
-| Forwarded headers | Configurable trusted proxy IPs for reverse proxy deployments |
+</details>
 
-### Server Management
+<details>
+<summary><strong>UI / UX</strong></summary>
 
-| Feature | Description |
-| --- | --- |
-| Multiple server profiles | Create, edit, and delete individual server configurations |
-| Headless Client support | Configurable count with auto-launch |
-| Restart policies | None, On Crash, or Always — with configurable max attempts |
-| Scheduled start/stop | Per-instance auto-start and auto-stop times (HH:mm) |
-| Process watchdog | Automatic crash detection and restart |
-| Process history | Track start, stop, restart, and crash events with duration |
-| Performance tuning | Hyper-threading toggle, max memory override, CPU count override, ranking toggle |
-| Creator DLC toggles | Individual toggle for all 8 official CDLCs |
-| Additional launch parameters | Custom command-line arguments per instance (e.g. `-hugepages`) |
-| Live server status | Stopped, Starting, Running, Stopping, Crashed, Restarting indicators |
+- Blazor Server web UI: works in any browser, no client install
+- Dark mode by default, with light or "match system" per browser
+- Command palette (`Ctrl+K`) to jump to pages or servers and start, stop, or restart them
+- Self-hosted fonts and charts, so it works on air-gapped hosts
+- Live status in navigation via SignalR
+- Reconnect handling with state recovery
 
-### Server Configuration
+</details>
 
-| Feature | Description |
-| --- | --- |
-| `server.cfg` editor | Structured editor with hostname, password, max players, MOTD, voting, and more |
-| `basic.cfg` editor | Bandwidth, MinBandwidth, MaxMsgSend, and other performance settings |
-| Arma 3 Profile editor | Difficulty settings with raw profile text fallback |
-| Raw config editing | Direct text editing with bidirectional sync to structured fields |
-| Auto-generated configs | Configuration files written to disk on save and launch |
-| Unsaved changes guard | Navigation confirmation when unsaved edits exist |
+---
 
-### Steam Integration
+## Quick Start
 
-| Feature | Description |
-| --- | --- |
-| Arma 3 Server install | Install and update Arma 3 Dedicated Server (Stable, Development, DLCs, Legacy) |
-| Workshop mod management | Install, update, and manage Arma 3 Steam Workshop mods |
-| Steam credentials | Username + password + Steam Guard login |
-| Steam QR login | Log in via Steam mobile app QR code scan |
-| Mod preset import | Import mod presets from Arma 3 Launcher HTML exports |
-| Mod update check | Check for mod updates on application launch |
-| Steam profile display | Avatar, persona name, and SteamID in settings |
+1. Make sure you have a **Steam account that owns Arma 3** and a basic understanding of Arma 3 dedicated servers.
+2. Download the latest release for your platform (see [Installation](#installation)).
+3. Run the `KAST.UI` executable and open the panel in your browser.
+4. Create the first administrator on first run, then configure your servers.
 
-### Mod Management
-
-| Feature | Description |
-| --- | --- |
-| Centralized mod page | Table and card views for browsing all installed mods |
-| Parallel downloads | Configurable parallel Steam download workers with independent concurrency limit |
-| Durable download queue | Queued and running downloads survive process restarts |
-| Per-mod actions | Download, update, verify, and cancel individual mods |
-| Update All | Batch-update all outdated mods in one action |
-| Per-instance mods | Drag-and-drop load ordering with client-side / server-side flags |
-| Local mods | Import mods from local folders with custom search paths |
-| Manifest tracking | SteamManifestId and InstalledManifestId for reliable update detection |
-| Mod comment field | Add notes to individual mods |
-| Speed benchmark | Built-in tool for finding optimal download parallelism |
-
-### Mission Management
-
-| Feature | Description |
-| --- | --- |
-| Mission upload | Upload PBO files via the web UI or API |
-| HTTP mission downloads | Alternative to Arma 3's built-in file transfer — a web server-based approach that is faster and offers more bandwidth |
-| Integrity verification | CRC32/BZip2 hashing for mission files |
-| Conditional requests | ETag and If-Modified-Since support (304 Not Modified) |
-| Byte-range support | Partial and resumable downloads via HTTP range requests |
-| Download logging | Track player name, Steam ID, server address, and user agent per download |
-| Tagging system | Create, delete, assign, and remove tags from missions |
-| Mission search | Filter by text query, tags, and map name |
-| Campaign management | Create campaigns, add/remove missions, reorder mission sequence |
-| Mission sets | Group missions into named sets |
-| Mod preset linking | Bind a mission to a specific mod preset for easy deployment |
-
-### Monitoring & Observability
-
-| Feature | Description |
-| --- | --- |
-| Host metrics dashboard | Real-time CPU, memory, and disk usage with live time-series charts |
-| Per-instance metrics | CPU, memory, and player count charts for each server |
-| Live console tailing | Color-coded server console output with log level filtering |
-| RPT event detection | Detect mission starts, Steam connections, admin activity, and crashes from RPT logs |
-| Server events panel | Recent events with severity levels in the Monitor tab |
-| External process detection | Detect and display all running Arma processes, including unmanaged ones |
-| Process kill | Kill external Arma processes from the monitoring page |
-| SignalR broadcasting | Real-time server status changes and metrics pushed to the UI |
-| Configurable metrics interval | Adjust how often metrics are collected |
-
-### REST API
-
-| Feature | Description |
-| --- | --- |
-| Server CRUD | Full API for server instances (`/api/servers`) |
-| Mod CRUD | Full API for mods, downloads, updates, and presets (`/api/mods`) |
-| Mission API | Upload, download, CRUD, search, tags, campaigns, and sets (`/api/missions`) |
-| Monitoring API | Host and instance metrics (`/api/monitoring`) |
-| Process API | List running processes and kill by PID (`/api/processes`) |
-| Settings API | Read and update settings, manage API keys (`/api/settings`) |
-| Download state snapshot | Authoritative queue state for UI recovery after reconnects |
-| OpenAPI | Endpoint tags and Swagger support |
-
-### UI / UX
-
-| Feature | Description |
-| --- | --- |
-| Web-based UI | Blazor Server — accessible from any browser, no client install |
-| Dark and light mode | Dark by default; light or "match system" per browser |
-| Command palette | `Ctrl+K` to jump to any page or server and start, stop or restart servers |
-| Self-hosted assets | Fonts and charts are served by the panel itself; works on air-gapped hosts |
-| Responsive navigation | Server listing with live status and filtering |
-| Live status updates | Server status pushed to the navigation in real time via SignalR |
-| Unsaved changes guard | Confirm-before-leave dialog when navigating away from unsaved edits |
-| Reconnect handling | Modal and state recovery when SignalR disconnects |
-
-## Prerequisites
-
-- Steam account with a valid copy of Arma 3.
-- Basic understanding of Arma 3 dedicated servers.
-
-## Issues and Feedback
-
-Report issues on the [GitHub repository](https://github.com/bluefield-creator/KAST/issues).
-
-## Documentation
-
-A complete documentation is available on the [GitHub Wiki](https://github.com/bluefield-creator/KAST/wiki).
-
-In this repository:
-
-| Document | Contents |
-|---|---|
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commits, development setup, release process |
-| [CHANGELOG.md](CHANGELOG.md) | Generated release notes |
-| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities |
+---
 
 ## Installation
 
-CASTER is distributed as a self-contained single-file executable — no .NET
-installation required on the host.
+CASTER ships as a self-contained single-file executable. No .NET installation is needed on the host.
 
 ### Stable releases
 
-Download the latest release for your platform from the [Releases page](https://github.com/bluefield-creator/KAST/releases/latest):
+Download the latest build from the [Releases page](https://github.com/bluefield-creator/KAST/releases/latest):
 
 | Platform | Archive |
 | --- | --- |
 | Linux x64 | `kast-linux-x64-v*.tar.gz` |
 | Linux arm64 | `kast-linux-arm64-v*.tar.gz` |
 | Windows x64 | `kast-win-x64-v*.zip` |
-| Docker | `ghcr.io/bluefield-creator/kast:latest` or `ghcr.io/bluefield-creator/kast:stable` |
+| Docker | `ghcr.io/bluefield-creator/kast:latest` or `:stable` |
 
-Extract and run the `KAST.UI` executable. On Linux you may need to
-`chmod +x KAST.UI` first.
+Extract and run `KAST.UI`. On Linux you may need to run `chmod +x KAST.UI` first.
 
 ### Nightly builds
 
-Automated builds from the `caster` branch are published as a rolling pre-release
-at [`releases/tag/nightly`](https://github.com/bluefield-creator/KAST/releases/tag/nightly).
-
-The nightly tag always points to the latest development commit. Download URLs
-are stable:
+Automated builds from the `caster` branch are published as a rolling pre-release at [`releases/tag/nightly`](https://github.com/bluefield-creator/KAST/releases/tag/nightly). Download URLs are stable.
 
 | Platform | File |
 | --- | --- |
@@ -216,6 +228,7 @@ are stable:
 | Windows x64 | `kast-win-x64-nightly.zip` |
 | Docker | `ghcr.io/bluefield-creator/kast:nightly` |
 
+> [!WARNING]
 > Nightly builds may be unstable. Use tagged releases for production.
 
 ### Docker (Compose)
@@ -232,63 +245,19 @@ volumes:
   kast-data:
 ```
 
-### Operations
+---
 
-CASTER exposes `/health` for basic web/database health and `/ready` for
-readiness including the active mod download count. Bulk mod downloads are
-queued durably; `/api/downloads/state` is the authoritative queue snapshot
-used by the UI after reconnects.
-
-The Settings page includes a Service tab for Windows hosts. It can install
-CASTER as a Windows service, set startup mode after reboot, configure crash
-restart actions, and show recent crash reports. Service changes require
-running CASTER as Administrator. Non-Windows deployments should use their
-supervisor instead (`systemd`, Docker restart policies, or the hosting
-platform restart policy).
-
-When running behind Caddy or another reverse proxy, keep websocket proxying
-enabled for Blazor Server and configure CASTER to trust only the proxy IPs
-that can reach it. For a local Caddy reverse proxy, the default trusted
-proxies are `127.0.0.1` and `::1`; override with `ForwardedHeaders:KnownProxies`
-if the proxy runs elsewhere.
-
-Example Caddy configuration:
-
-```caddyfile
-panel.3rdshock.army {
-    encode zstd gzip
-
-    reverse_proxy 127.0.0.1:5000 {
-        flush_interval -1
-    }
-}
-```
-
-If the CASTER process exits during active downloads, configure Windows
-Service, systemd, Docker, or your supervisor to restart it. On startup
-CASTER reconciles interrupted queued/running download records and resets
-mods left in `Downloading` or `Updating` state so they can be retried safely.
+## Configuration
 
 ### Authentication and OIDC
 
-CASTER uses local administrator accounts by default. OpenID Connect can be
-enabled through configuration or environment variables and is compatible with
-Authentik and other OIDC providers.
-
-Existing CASTER administrators can also enable system account sign-in from
-**Settings -> Accounts**. Windows installs can allow local machine users or AD
-domain users. Linux installs can allow local Linux users from the running
-system. Docker installs use local users inside the CASTER container, not users
-from the Docker host; create or mount those container accounts before selecting
-them in CASTER.
-
-Supported auth modes:
+CASTER uses local administrator accounts by default. OpenID Connect can be enabled through configuration or environment variables.
 
 | Mode | Behavior |
 | --- | --- |
-| `Local` | Local CASTER username/password sign-in only. |
-| `Oidc` | OIDC sign-in only. The first allowed OIDC user bootstraps the first CASTER administrator. |
-| `LocalAndOidc` | OIDC sign-in with local administrator passwords kept as a fallback. |
+| `Local` | Local CASTER username and password sign-in only. |
+| `Oidc` | OIDC sign-in only. The first allowed OIDC user bootstraps the first administrator. |
+| `LocalAndOidc` | OIDC sign-in, with local administrator passwords kept as a fallback. |
 
 Example Docker environment:
 
@@ -304,37 +273,85 @@ environment:
   - Auth__Oidc__AllowedGroups__0=KAST Admins
 ```
 
-For Authentik, configure the application/provider with:
+#### Authentik setup
 
 | Setting | Value |
 | --- | --- |
 | Redirect URI | `https://<kast-host>/auth/oidc/callback` |
-| Logout/signed-out URI | `https://<kast-host>/auth/oidc/signed-out` |
+| Logout / signed-out URI | `https://<kast-host>/auth/oidc/signed-out` |
 | Scopes | `openid profile email` |
 | Group claim | `groups` |
 | Required group value | `KAST Admins` |
 
-Authentik application assignment alone is not enough for CASTER access. The
-OIDC user must also have at least one configured allowed group in the
-configured group claim. CASTER links external accounts by OIDC issuer plus
-`sub`, so email or username changes in Authentik do not break the account link.
+> Assigning a user to the Authentik application is not enough. The user must also belong to at least one allowed group in the group claim. CASTER links external accounts by OIDC issuer plus `sub`, so email or username changes do not break the link.
+
+### System account sign-in
+
+Existing administrators can enable system account sign-in from **Settings → Accounts**:
+
+- **Windows:** local machine users or AD domain users.
+- **Linux:** local Linux users on the running system.
+- **Docker:** users inside the CASTER container, not the Docker host. Create or mount those container accounts before selecting them.
+
+### Reverse proxy
+
+Keep websocket proxying enabled for Blazor Server, and configure CASTER to trust only the proxy IPs that can reach it. For a local Caddy proxy the default trusted proxies are `127.0.0.1` and `::1`; override them with `ForwardedHeaders:KnownProxies` if the proxy runs elsewhere.
+
+```caddyfile
+panel.3rdshock.army {
+    encode zstd gzip
+
+    reverse_proxy 127.0.0.1:5000 {
+        flush_interval -1
+    }
+}
+```
+
+---
+
+## Operations
+
+- **Health:** `/health` reports basic web and database health. `/ready` also reports the active mod download count.
+- **Downloads:** bulk mod downloads are queued durably. If CASTER exits mid-download, it reconciles interrupted records on startup and resets mods left in `Downloading` or `Updating` so they can be retried safely.
+- **Windows Service:** the **Settings → Service** tab installs CASTER as a service, sets startup mode, configures crash restart actions, and shows recent crash reports. Service changes require running CASTER as Administrator.
+- **Other platforms:** use your supervisor for restarts, such as `systemd`, Docker restart policies, or your hosting platform's restart policy.
+
+---
 
 ## Versioning
 
-CASTER uses [MinVer](https://github.com/adamralph/minver) to derive the version
-from git tags at build time.
+CASTER uses [MinVer](https://github.com/adamralph/minver) to derive the version from git tags at build time.
 
 | Scenario | Version format |
 | --- | --- |
 | Tagged release `v1.2.3` | `1.2.3` |
-| Nightly (caster) | `1.2.3-nightly.20260522.abc1234` |
+| Nightly (`caster`) | `1.2.3-nightly.20260522.abc1234` |
 | Local dev build | `1.2.3-alpha.0.5` |
 
-To create a stable release, run the **Promote Stable Release** workflow from
-GitHub Actions or push an annotated tag matching `vX.Y.Z` from a commit
-reachable from `caster`. The release pipeline runs tests, builds native
-binaries for all platforms, publishes checksum assets, pushes Docker image
-tags, and publishes a non-prerelease GitHub Release.
+To cut a stable release, run the **Promote Stable Release** workflow in GitHub Actions, or push an annotated `vX.Y.Z` tag from a commit reachable from `caster`. The pipeline runs tests, builds native binaries for all platforms, publishes checksums, pushes Docker tags, and creates a non-prerelease GitHub Release. Maintainer steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release-process).
 
-Maintainer release steps are documented in
-[CONTRIBUTING.md](CONTRIBUTING.md#release-process).
+---
+
+## Documentation
+
+Full documentation is on the [GitHub Wiki](https://github.com/bluefield-creator/KAST/wiki).
+
+| Document | Contents |
+| --- | --- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commits, development setup, release process |
+| [CHANGELOG.md](CHANGELOG.md) | Generated release notes |
+| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
+
+---
+
+## Support
+
+- **Bugs and feature requests:** open an issue on the [GitHub repository](https://github.com/bluefield-creator/KAST/issues).
+- **Security issues:** follow [SECURITY.md](SECURITY.md) and do not file them publicly.
+
+---
+
+<p align="center">
+  <sub>Licensed under the terms in <a href="LICENSE.md">LICENSE.md</a>.</sub>
+</p>

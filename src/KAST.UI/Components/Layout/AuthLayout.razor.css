@@ -1,0 +1,40 @@
+.k-auth {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--k-background);
+}
+
+.k-auth-panel {
+    width: 100%;
+    max-width: 400px;
+}
+
+.k-auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.k-auth-mark {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--k-radius-lg);
+    border: 1px solid var(--k-border);
+    object-fit: cover;
+}
+
+.k-auth-name {
+    font-size: var(--k-text-xl);
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--k-foreground);
+}
+
+.k-auth-tagline {
+    font-size: var(--k-text-sm);
+    color: var(--k-muted-foreground);
+}

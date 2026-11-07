@@ -1,0 +1,211 @@
+@inject NavigationManager Nav
+@inject IServerInstanceService ServerService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+@if (Open)
+{
+    <div class="k-palette-backdrop" @onclick="CloseAsync"></div>
+    <div class="k-palette" role="dialog" aria-modal="true" aria-label="Command palette">
+        <div class="k-palette-search">
+            <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+            <input @ref="_input"
+                   class="k-palette-input"
+                   placeholder="Go to a page, find a server, run a command…"
+                   value="@_query"
+                   @oninput="OnInput"
+                   @onkeydown="OnKeyDown"
+                   @onkeydown:preventDefault="_preventKey"
+                   aria-label="Command" />
+            <kbd>Esc</kbd>
+        </div>
+
+        <div class="k-palette-results" role="listbox">
+            @if (_results.Count == 0)
+            {
+                <div class="k-palette-empty">No matches.</div>
+            }
+            @{
+                string? group = null;
+            }
+            @for (var i = 0; i < _results.Count; i++)
+            {
+                var item = _results[i];
+                var index = i;
+                if (item.Group != group)
+                {
+                    group = item.Group;
+                    <div class="k-palette-group">@group</div>
+                }
+                <button type="button"
+                        class="k-palette-item @(index == _selected ? "selected" : null)"
+                        role="option"
+                        aria-selected="@(index == _selected)"
+                        @onmouseenter="@(() => _selected = index)"
+                        @onclick="@(() => RunAsync(item))">
+                    <MudIcon Icon="@item.Icon" Size="Size.Small" />
+                    <span class="k-palette-label">@item.Label</span>
+                    @if (item.Hint is not null)
+                    {
+                        <span class="k-palette-hint">@item.Hint</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+
+    private sealed record Command(string Group, string Label, string Icon, Func<Task> Run, string? Hint = null);
+
+    private ElementReference _input;
+    private string _query = "";
+    private int _selected;
+    private bool _preventKey;
+    private bool _wasOpen;
+    private List<Command> _all = [];
+    private List<Command> _results = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Open && !_wasOpen)
+        {
+            _query = "";
+            _selected = 0;
+            _all = await BuildCommandsAsync();
+            Filter();
+        }
+        _wasOpen = Open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open)
+        {
+            try { await _input.FocusAsync(); } catch { /* element not mounted yet */ }
+        }
+    }
+
+    private async Task<List<Command>> BuildCommandsAsync()
+    {
+        var commands = new List<Command>
+        {
+            Go("Dashboard", Icons.Material.Outlined.SpaceDashboard, ""),
+            Go("Servers", Icons.Material.Outlined.Dns, "servers"),
+            Go("New server", Icons.Material.Outlined.Add, "servers/new"),
+            Go("Mods", Icons.Material.Outlined.Extension, "mods"),
+            Go("Monitoring", Icons.Material.Outlined.Insights, "monitoring"),
+            Go("Settings: General", Icons.Material.Outlined.Tune, "settings/general"),
+            Go("Settings: Accounts", Icons.Material.Outlined.ManageAccounts, "settings/accounts"),
+            Go("Settings: Steam", Icons.Material.Outlined.Cloud, "settings/steam"),
+            Go("Settings: API keys", Icons.Material.Outlined.Key, "settings/api-keys"),
+            Go("Settings: Service", Icons.Material.Outlined.SettingsApplications, "settings/service"),
+            Go("Settings: Updates", Icons.Material.Outlined.SystemUpdateAlt, "settings/updates"),
+            Go("About", Icons.Material.Outlined.Info, "about"),
+        };
+
+        try
+        {
+            foreach (var server in await ServerService.GetAllInstancesAsync())
+            {
+                var id = server.Id;
+                var name = server.Name;
+                commands.Add(new Command("Servers", name, Icons.Material.Outlined.Dns,
+                    () => NavigateAsync($"servers/{id}"), UiHelpers.GetStatusLabel(server.Status)));
+
+                if (server.Status is ServerInstanceStatus.Stopped or ServerInstanceStatus.Crashed)
+                    commands.Add(new Command("Actions", $"Start {name}", Icons.Material.Outlined.PlayArrow,
+                        () => RunServerActionAsync(name, "Starting", s => s.StartInstanceAsync(id))));
+                else if (server.Status == ServerInstanceStatus.Running)
+                {
+                    commands.Add(new Command("Actions", $"Restart {name}", Icons.Material.Outlined.RestartAlt,
+                        () => RunServerActionAsync(name, "Restarting", s => s.RestartInstanceAsync(id))));
+                    commands.Add(new Command("Actions", $"Stop {name}", Icons.Material.Outlined.Stop,
+                        () => RunServerActionAsync(name, "Stopping", s => s.StopInstanceAsync(id))));
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Navigation commands still work without the server list.
+        }
+
+        return commands;
+    }
+
+    private Command Go(string label, string icon, string path)
+        => new("Pages", label, icon, () => NavigateAsync(path));
+
+    private Task NavigateAsync(string path)
+    {
+        Nav.NavigateTo(path);
+        return Task.CompletedTask;
+    }
+
+    private async Task RunServerActionAsync(string name, string verb, Func<IServerInstanceService, Task> action)
+    {
+        Snackbar.Add($"{verb} {name}…", Severity.Info);
+        try
+        {
+            await action(ServerService);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{name}: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        _selected = 0;
+        Filter();
+    }
+
+    private void Filter()
+    {
+        var terms = _query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _results = _all
+            .Where(c => terms.All(t => c.Label.Contains(t, StringComparison.OrdinalIgnoreCase)
+                                    || c.Group.Contains(t, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(c => c.Group switch { "Servers" => 0, "Actions" => 1, _ => 2 })
+            .Take(40)
+            .ToList();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        _preventKey = e.Key is "ArrowDown" or "ArrowUp" or "Enter";
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                if (_results.Count > 0) _selected = (_selected + 1) % _results.Count;
+                break;
+            case "ArrowUp":
+                if (_results.Count > 0) _selected = (_selected - 1 + _results.Count) % _results.Count;
+                break;
+            case "Enter":
+                if (_selected < _results.Count) await RunAsync(_results[_selected]);
+                break;
+            case "Escape":
+                await CloseAsync();
+                break;
+        }
+    }
+
+    private async Task RunAsync(Command command)
+    {
+        await CloseAsync();
+        await command.Run();
+    }
+
+    private async Task CloseAsync()
+    {
+        Open = false;
+        _wasOpen = false;
+        await OpenChanged.InvokeAsync(false);
+    }
+}

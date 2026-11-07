@@ -1,75 +1,57 @@
-﻿@inherits LayoutComponentBase
-@implements IDisposable
+@inherits LayoutComponentBase
+@implements IAsyncDisposable
 @using KAST.UI.Themes
 
 @inject ThemeService ThemeService
-@inject NavigationManager NavigationManager
 @inject KeyboardShortcutService KeyboardShortcuts
 
-<MudThemeProvider Theme="@_theme" IsDarkMode="_isDark" />
-<div class="artoria-root @(_isDark ? null : "full-dress")">
+<MudThemeProvider @ref="_themeProvider" Theme="@_theme" IsDarkMode="@ThemeService.IsDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
-<MudLayout>
-    <MudAppBar Elevation="1" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@DrawerToggle" />
-        <img src="caster-wordmark.svg" alt="CASTER" class="ml-2 artoria-wordmark" draggable="false" />
-        <MudText Typo="Typo.caption" Class="ml-1 mud-text-secondary" Style="opacity:.5">
-            Arma Server Tool — Enterprise Edition
-        </MudText>
-        <MudMenu>
-            <ActivatorContent>
-                <MudIconButton Icon="@Icons.Material.Filled.FlashOn" Color="Color.Inherit" aria-label="Quick Actions" />
-            </ActivatorContent>
-            <ChildContent>
-                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/servers/new"))" Icon="@Icons.Material.Filled.Add">New Server Instance</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/mods"))" Icon="@Icons.Material.Filled.Extension">Add Workshop Mod</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/mods"))" Icon="@Icons.Material.Filled.Refresh">Check for Updates</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/servers"))" Icon="@Icons.Material.Filled.Storage">Server List</MudMenuItem>
-            </ChildContent>
-        </MudMenu>
-        <MudSpacer />
-        <SteamAccountWidget />
-        <AccountWidget />
-        <MudTooltip Text="@(_isDark ? "Full Dress (light)" : "Regulation (dark)")" Placement="Placement.Bottom">
-            <MudIconButton Icon="@(_isDark ? Icons.Material.Outlined.WbSunny : Icons.Material.Outlined.NightsStay)"
-                           Color="Color.Inherit" OnClick="@ToggleModeAsync" aria-label="Toggle Full Dress mode" />
-        </MudTooltip>
-    </MudAppBar>
-    <MudDrawer id="nav-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2"
-               Width="248px" Breakpoint="Breakpoint.Md">
-        <NavMenu />
-    </MudDrawer>
-    <MudMainContent Class="pt-16 pb-10 pa-4">
-        <MudBreadcrumbs Items="@_breadcrumbItems" Class="mb-4" />
-        @Body
-    </MudMainContent>
-    <FooterBar />
+
+<div class="caster-root @(ThemeService.IsDarkMode ? "caster-dark" : "caster-light")">
+    <MudLayout>
+        <MudAppBar Elevation="0">
+            <MudIconButton Icon="@Icons.Material.Outlined.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                           OnClick="@(() => _drawerOpen = !_drawerOpen)" aria-label="Toggle navigation" />
+            <a href="" class="k-brand" aria-label="CASTER home">
+                <img src="brand/logo-64.png" alt="" class="k-brand-mark" draggable="false" />
+                <span class="k-brand-name">CASTER</span>
+            </a>
+            <MudSpacer />
+            <CommandPaletteButton />
+            <SteamAccountWidget />
+            <AccountWidget />
+        </MudAppBar>
+
+        <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Breakpoint="Breakpoint.Md">
+            <NavMenu />
+        </MudDrawer>
+
+        <MudMainContent>
+            <div class="k-page">
+                @Body
+            </div>
+        </MudMainContent>
+
+        <FooterBar />
     </MudLayout>
 
-    @* ── Keyboard Shortcuts Help Overlay ── *@
+    <CommandPalette @bind-Open="_paletteOpen" />
+
     @if (_showShortcutsHelp)
     {
         <MudOverlay Visible="true" OnClick="@(() => _showShortcutsHelp = false)" DarkBackground="true" ZIndex="2000">
-            <MudPaper Class="pa-6" Style="max-width:420px; margin:12vh auto;" Elevation="25">
-                <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight:700;">
-                    <MudIcon Icon="@Icons.Material.Filled.Keyboard" Size="Size.Small" Class="mr-2" />Keyboard Shortcuts
-                </MudText>
-                <MudDivider Class="mb-3" />
-                <div style="display:flex; flex-direction:column; gap:8px;">
-                    <div class="d-flex align-center" style="gap:12px;">
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Style="font-family:monospace; min-width:100px; text-align:center;">Ctrl+Shift+L</MudChip>
-                        <MudText Typo="Typo.body2">Toggle log console</MudText>
-                    </div>
-                    <div class="d-flex align-center" style="gap:12px;">
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Style="font-family:monospace; min-width:100px; text-align:center;">?</MudChip>
-                        <MudText Typo="Typo.body2">Show this help</MudText>
-                    </div>
-                </div>
-                <MudDivider Class="my-3" />
-                <div class="d-flex" style="justify-content:flex-end;">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => _showShortcutsHelp = false)">Close</MudButton>
+            <MudPaper Class="k-shortcuts pa-5" Elevation="8" @onclick:stopPropagation="true">
+                <MudText Typo="Typo.h6" Class="mb-3">Keyboard shortcuts</MudText>
+                <dl class="k-shortcuts-list">
+                    <dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Command palette</dd>
+                    <dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd></dt><dd>Toggle the log panel</dd>
+                    <dt><kbd>?</kbd></dt><dd>Show this help</dd>
+                </dl>
+                <div class="d-flex justify-end mt-4">
+                    <MudButton Variant="Variant.Text" OnClick="@(() => _showShortcutsHelp = false)">Close</MudButton>
                 </div>
             </MudPaper>
         </MudOverlay>
@@ -79,65 +61,47 @@
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">×</span>
 </div>
 
 @code {
+    private readonly MudTheme _theme = CasterTheme.Build();
+    private MudThemeProvider? _themeProvider;
     private bool _drawerOpen = true;
-    private bool _isDark = true;
-    private MudTheme? _theme = null;
-    private List<BreadcrumbItem> _breadcrumbItems = new();
-
+    private bool _paletteOpen;
     private bool _showShortcutsHelp;
-    private bool _keyboardShortcutsInitialized;
 
-    private Action? _themeChangeHandler;
-
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await base.OnInitializedAsync();
-        await ThemeService.InitializeAsync();
-
-        _isDark = ThemeService.IsDarkMode;
-        _theme = ArtoriaTheme.Build();
-        ApplyAccent();
-
-        _themeChangeHandler = () =>
-        {
-            _isDark = ThemeService.IsDarkMode;
-            ApplyAccent();
-            InvokeAsync(StateHasChanged);
-        };
-        ThemeService.OnChange += _themeChangeHandler;
-
-        BuildBreadcrumbs(NavigationManager.Uri);
-        NavigationManager.LocationChanged += OnLocationChanged;
+        ThemeService.OnChange += OnThemeChanged;
+        KeyboardShortcuts.OpenCommandPalette += OnOpenCommandPalette;
     }
-
-    private void ApplyAccent()
-    {
-        _theme!.PaletteDark.Secondary = ThemeService.AccentColor;
-        _theme.PaletteLight.Secondary = ArtoriaTheme.ToDaylightAccent(ThemeService.AccentColor);
-    }
-
-    private async Task ToggleModeAsync()
-        => await ThemeService.SetDarkModeAsync(!_isDark);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _keyboardShortcutsInitialized)
+        if (!firstRender)
             return;
 
-        _keyboardShortcutsInitialized = true;
-        await KeyboardShortcuts.InitializeAsync();
-        KeyboardShortcuts.Register("ctrl+shift+l", async () =>
+        await ThemeService.InitializeAsync();
+
+        if (_themeProvider is not null)
         {
-            // The FooterBar owns the log toggle; this shortcut is handled
-            // by the service.  Handlers from different components overlay
-            // the same key-combo, so place component-specific toggles where
-            // they live.  For now this serves as a placeholder for
-            // centrally-triggered actions.
-        });
+            try
+            {
+                ThemeService.SetSystemPreference(await _themeProvider.GetSystemDarkModeAsync());
+                await _themeProvider.WatchSystemDarkModeAsync(prefersDark =>
+                {
+                    ThemeService.SetSystemPreference(prefersDark);
+                    return Task.CompletedTask;
+                });
+            }
+            catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or InvalidOperationException)
+            {
+                // Circuit going away; nothing to follow.
+            }
+        }
+
+        await KeyboardShortcuts.InitializeAsync();
         KeyboardShortcuts.Register("?", async () =>
         {
             _showShortcutsHelp = true;
@@ -145,74 +109,18 @@
         });
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnOpenCommandPalette() => InvokeAsync(() =>
     {
-        BuildBreadcrumbs(e.Location);
-        InvokeAsync(StateHasChanged);
-    }
+        _paletteOpen = true;
+        StateHasChanged();
+    });
 
-    private void BuildBreadcrumbs(string uri)
+    public ValueTask DisposeAsync()
     {
-        _breadcrumbItems.Clear();
-
-        // Path only — query strings (e.g. settings?tab=steam) never belong in a crumb.
-        var relativePath = NavigationManager.ToBaseRelativePath(uri).Split('?', '#')[0];
-
-        // Always start with Dashboard as the root
-        _breadcrumbItems.Add(new BreadcrumbItem("Dashboard", href: "/"));
-
-        if (string.IsNullOrEmpty(relativePath))
-            return;
-
-        var segments = relativePath.Trim('/').Split('/');
-
-        switch (segments[0].ToLowerInvariant())
-        {
-            case "servers":
-                _breadcrumbItems.Add(new BreadcrumbItem("Servers", href: "/servers"));
-
-                if (segments.Length > 1)
-                {
-                    if (segments[1].Equals("new", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _breadcrumbItems.Add(new BreadcrumbItem("New Instance", href: "/servers/new"));
-                    }
-                    else
-                    {
-                        _breadcrumbItems.Add(new BreadcrumbItem($"Instance {segments[1]}", href: $"/servers/{segments[1]}"));
-                    }
-                }
-                break;
-
-            case "mods":
-                _breadcrumbItems.Add(new BreadcrumbItem("Mods", href: "/mods"));
-                break;
-
-            case "monitoring":
-                _breadcrumbItems.Add(new BreadcrumbItem("Monitoring", href: "/monitoring"));
-                break;
-
-            case "settings":
-                _breadcrumbItems.Add(new BreadcrumbItem("Settings", href: "/settings"));
-                break;
-
-            case "about":
-                _breadcrumbItems.Add(new BreadcrumbItem("About", href: "/about"));
-                break;
-
-            default:
-                // Unknown route — show the segment as-is
-                _breadcrumbItems.Add(new BreadcrumbItem(segments[0], href: $"/{segments[0]}"));
-                break;
-        }
-    }
-
-    private void DrawerToggle() => _drawerOpen = !_drawerOpen;
-
-    public void Dispose()
-    {
-        if (_themeChangeHandler != null)
-            ThemeService.OnChange -= _themeChangeHandler;
-        NavigationManager.LocationChanged -= OnLocationChanged;
+        ThemeService.OnChange -= OnThemeChanged;
+        KeyboardShortcuts.OpenCommandPalette -= OnOpenCommandPalette;
+        return ValueTask.CompletedTask;
     }
 }

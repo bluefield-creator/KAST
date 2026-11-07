@@ -1,0 +1,286 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   CASTER global stylesheet
+   ─────────────────────────────────────────────────────────────────────────
+   Colours come from Themes/CasterTheme.cs only. MudBlazor publishes them as
+   --mud-palette-* variables; this file maps a small semantic --k-* layer on
+   top and holds the few rules MudBlazor's theme cannot express.
+   Rules: no hex colours here except the console palette; no
+   per-component styling (that belongs in the component's .razor.css).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Fonts (self-hosted: no CDN, works air-gapped) ─────────────────────── */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("../lib/fonts/Inter-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("../lib/fonts/Inter-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("../lib/fonts/Inter-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap; src: url("../lib/fonts/Inter-Bold.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("../lib/fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("../lib/fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+
+/* ── Tokens ────────────────────────────────────────────────────────────── */
+:root {
+  /* colour: semantic aliases of the MudBlazor palette */
+  --k-background:         var(--mud-palette-background);
+  --k-surface:            var(--mud-palette-surface);
+  --k-surface-sunken:     var(--mud-palette-background-gray);
+  --k-foreground:         var(--mud-palette-text-primary);
+  --k-muted-foreground:   var(--mud-palette-text-secondary);
+  --k-disabled:           var(--mud-palette-text-disabled);
+  --k-border:             var(--mud-palette-lines-default);
+  --k-border-strong:      var(--mud-palette-lines-inputs);
+  --k-input:              var(--mud-palette-lines-inputs);
+  --k-primary:            var(--mud-palette-primary);
+  --k-primary-hover:      var(--mud-palette-primary-darken);
+  --k-primary-foreground: var(--mud-palette-primary-text);
+  --k-primary-text:       var(--mud-palette-primary);      /* red used as text; lifted in dark mode */
+  --k-primary-wash:       color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+  --k-hover:              color-mix(in srgb, var(--mud-palette-text-primary) 6%, transparent);
+  --k-ring:               var(--mud-palette-primary);
+  --k-accent:             var(--mud-palette-primary);
+  --k-success:            var(--mud-palette-success);
+  --k-warning:            var(--mud-palette-warning);
+  --k-destructive:        var(--mud-palette-error);
+  --k-info:               var(--mud-palette-info);
+
+  /* type */
+  --k-font-sans: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --k-font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  --k-font-feat: "cv11", "tnum";
+  --k-text-xs:   .75rem;    /* 12 */
+  --k-text-sm:   .8125rem;  /* 13 */
+  --k-text-base: .875rem;   /* 14 */
+  --k-text-lg:   1rem;      /* 16 */
+  --k-text-xl:   1.25rem;   /* 20 */
+  --k-text-2xl:  1.5rem;    /* 24 */
+
+  /* space: 4px grid */
+  --k-space-1: 4px;  --k-space-2: 8px;  --k-space-3: 12px;
+  --k-space-4: 16px; --k-space-6: 24px; --k-space-8: 32px;
+
+  /* shape */
+  --k-radius-sm: 4px;
+  --k-radius:    6px;
+  --k-radius-lg: 8px;
+
+  /* motion */
+  --k-ease:     cubic-bezier(.2, 0, 0, 1);
+  --k-dur-fast: 100ms;
+  --k-dur:      150ms;
+
+  /* consoles: always dark, in both modes (the only hex outside CasterTheme.cs) */
+  --k-console-bg:    #0B0C0F;
+  --k-console-fg:    #D6D9DF;
+  --k-console-dim:   #6B7280;
+  --k-console-muted: #9AA0AC;
+  --k-console-info:  #38BDF8;
+  --k-console-ok:    #22C55E;
+  --k-console-warn:  #F59E0B;
+  --k-console-err:   #F87171;
+  --k-console-hover: rgba(255, 255, 255, .04);
+}
+
+/* Red as text on dark surfaces needs a lighter grade (6.4:1 vs 3.6:1). */
+.caster-dark {
+  --k-primary-text: var(--mud-palette-primary-lighten);
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+html, body {
+  font-family: var(--k-font-sans);
+  font-feature-settings: var(--k-font-feat);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--k-background);
+  color: var(--k-foreground);
+}
+
+code, kbd, pre, samp, .k-mono {
+  font-family: var(--k-font-mono);
+  font-size: .95em;
+}
+
+.k-num { font-variant-numeric: tabular-nums; }
+
+:focus-visible {
+  outline: 2px solid var(--k-ring);
+  outline-offset: 2px;
+}
+
+/* ── MudBlazor: what the theme cannot express ──────────────────────────── */
+
+/* No Material ripples. */
+.mud-ripple::after,
+.mud-ripple-icon::after {
+  display: none !important;
+}
+
+/* Flat surfaces: in-flow paper is separated by a hairline, not a shadow. */
+.mud-paper:is(.mud-elevation-0, .mud-elevation-1, .mud-elevation-2, .mud-elevation-3):not(.mud-appbar):not(.mud-drawer),
+.mud-card {
+  border: 1px solid var(--k-border);
+}
+
+.mud-appbar {
+  border-bottom: 1px solid var(--k-border);
+}
+
+.mud-drawer {
+  border-right: 1px solid var(--k-border);
+}
+
+/* Tables: quiet header, numbers align. */
+.mud-table-head .mud-table-cell {
+  font-size: var(--k-text-xs);
+  font-weight: 600;
+  color: var(--k-muted-foreground);
+  background: var(--k-surface-sunken);
+}
+
+.mud-table-cell { font-variant-numeric: tabular-nums; }
+
+/* Red as text (links, text/outlined buttons, active tab) follows --k-primary-text. */
+.caster-root .mud-primary-text,
+.caster-root .mud-button-text-primary,
+.caster-root .mud-button-outlined-primary,
+.caster-root .mud-tab.mud-tab-active.mud-primary-text {
+  color: var(--k-primary-text) !important;
+}
+
+.mud-breadcrumbs { padding: 0; }
+.mud-breadcrumbs .mud-breadcrumb-item,
+.mud-breadcrumbs .mud-breadcrumb-item a {
+  font-size: var(--k-text-sm);
+  color: var(--k-muted-foreground);
+}
+.mud-breadcrumbs .mud-breadcrumb-item:last-child { color: var(--k-foreground); }
+
+.mud-tooltip {
+  font-size: var(--k-text-xs);
+  border-radius: var(--k-radius-sm);
+}
+
+.mud-progress-linear { border-radius: 999px; overflow: hidden; }
+.mud-progress-linear .mud-progress-linear-bar { border-radius: 999px; }
+
+/* ── Shared atoms ──────────────────────────────────────────────────────── */
+/* Status dot (status bar, navigation, lists). */
+.k-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--k-disabled);
+}
+.k-dot-ok   { background: var(--k-success); }
+.k-dot-warn { background: var(--k-warning); }
+.k-dot-err  { background: var(--k-destructive); }
+.k-dot-info { background: var(--k-info); }
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border: 1px solid var(--k-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--k-radius-sm);
+  font-size: var(--k-text-xs);
+  text-align: center;
+  color: var(--k-foreground);
+  background: var(--k-surface-sunken);
+}
+
+/* ── App bar chips and menus (menus render in popovers, outside component scope) ── */
+.k-appbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  margin-left: 4px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--k-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--k-text-sm);
+  cursor: pointer;
+}
+.k-appbar-chip:hover { background: var(--k-hover); }
+.k-appbar-chip-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.k-avatar-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--k-primary-foreground);
+  background: var(--k-primary);
+}
+
+.k-user-menu { min-width: 240px; }
+.k-menu-header { padding: 10px 16px; }
+.k-menu-title { font-size: var(--k-text-sm); font-weight: 600; color: var(--k-foreground); }
+.k-menu-subtitle { font-size: var(--k-text-xs); color: var(--k-muted-foreground); }
+.k-menu-section {
+  padding: 8px 16px 2px;
+  font-size: var(--k-text-xs);
+  font-weight: 600;
+  color: var(--k-muted-foreground);
+}
+.k-menu-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--k-destructive);
+  font: inherit;
+  font-size: var(--k-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.k-menu-button:hover { background: var(--k-hover); }
+
+/* ── Consoles ──────────────────────────────────────────────────────────── */
+.kast-console,
+.kast-log-console {
+  font-family: var(--k-font-mono);
+  background: var(--k-console-bg);
+  color: var(--k-console-fg);
+}
+
+/* ── Scrollbars ────────────────────────────────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: var(--k-border-strong) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--k-border-strong); border-radius: 999px; }
+
+/* ── Motion ────────────────────────────────────────────────────────────── */
+.mud-button-root, .mud-input, .mud-chip, .mud-list-item, .mud-menu-item, .mud-tab {
+  transition-duration: var(--k-dur);
+  transition-timing-function: var(--k-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

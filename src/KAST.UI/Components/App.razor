@@ -6,121 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..800;1,14..32,400..600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="preload" href="lib/fonts/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="lib/fonts/Inter-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
+    <link rel="stylesheet" href="@Assets["css/caster.css"]" />
     <link rel="stylesheet" href="@Assets["KAST.UI.styles.css"]" />
-    <link rel="stylesheet" href="@Assets["css/artoria-tokens.css"]" />
-    <link rel="stylesheet" href="@Assets["css/artoria.css"]" />
     <ImportMap />
-    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-    <link rel="icon" type="image/ico" href="favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <link rel="icon" type="image/png" sizes="64x64" href="brand/logo-64.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <HeadOutlet @rendermode="InteractiveServer" />
-    <style id="ks">
-      #kast-splash {
-        position:fixed;inset:0;z-index:10000;
-        background:radial-gradient(ellipse at 50% 55%, #1A1A3E 0%, #0E0E24 70%);
-        display:flex;flex-direction:column;align-items:center;justify-content:center;
-        transition:opacity .55s cubic-bezier(.4,0,1,1);
-      }
-      #kast-splash.ks-out { opacity:0; pointer-events:none; }
-      .ks-forge { position:relative; width:340px; height:150px; margin-bottom:14px; }
-      .ks-spark {
-        position:absolute; border-radius:50%;
-        width:var(--s,4px); height:var(--s,4px); background:var(--c,#CFCEF0);
-        animation:ks-rise var(--d,1.3s) ease-in var(--t,0s) infinite;
-      }
-      @@keyframes ks-rise {
-        0%   { opacity:1; transform:translate(0,0) scale(1); }
-        60%  { opacity:.8; }
-        100% { opacity:0; transform:translate(var(--x,0px),-80px) scale(.2); }
-      }
-
-      .ks-word {
-        position:absolute;
-        left:0;
-        top:26px;
-        display:flex;
-        align-items:center;
-      }
-
-      .ks-k-wrap {
-        width:340px;
-        height:92px;
-        position:relative;
-        transform:scale(.94);
-        transform-origin:50% 60%;
-        transition:transform .52s cubic-bezier(.2,.7,.2,1);
-      }
-
-      .ks-k-base,
-      .ks-k-fill {
-        position:absolute;
-        inset:0;
-        width:100%;
-        height:100%;
-        object-fit:contain;
-        filter:drop-shadow(0 0 10px rgba(90,87,168,.45));
-      }
-
-      .ks-k-base {
-        opacity:.28;
-        filter:grayscale(.2) brightness(.62) drop-shadow(0 0 4px rgba(90,87,168,.25));
-      }
-
-      .ks-k-fill {
-        clip-path:inset(0 100% 0 0);
-        animation:ks-fill 1s linear forwards;
-      }
-
-      @@keyframes ks-fill {
-        from { clip-path:inset(0 100% 0 0); }
-        to   { clip-path:inset(0 0 0 0); }
-      }
-
-      #kast-splash.ks-ready .ks-k-wrap {
-        transform:scale(1);
-      }
-
-      .ks-forge::after {
-        content:'';
-        position:absolute;
-        left:24px;
-        right:24px;
-        bottom:8px;
-        height:24px;
-        border-radius:20px;
-        background:radial-gradient(ellipse at 50% 50%, rgba(90,87,168,.28), rgba(90,87,168,0));
-        filter:blur(6px);
-        pointer-events:none;
-      }
-
-      .ks-tagline {
-        font-family:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
-        font-size:11px; letter-spacing:.28em; text-transform:uppercase;
-        color:rgba(255,255,255,.22); margin-top:4px; margin-bottom:28px;
-      }
-      .ks-dots { display:flex; gap:10px; }
-      .ks-dot  { width:7px; height:7px; border-radius:50%; animation:ks-pulse 1.4s ease-in-out infinite; }
-      .ks-dot:nth-child(1) { background:#5A57A8; animation-delay:0s;  }
-      .ks-dot:nth-child(2) { background:#CFCEF0; animation-delay:.2s; }
-      .ks-dot:nth-child(3) { background:#C89A5E; animation-delay:.4s; }
-      @@keyframes ks-pulse {
-        0%,80%,100% { transform:scale(.45); opacity:.25; }
-        40%         { transform:scale(1.15); opacity:1; }
-      }
-    </style>
 </head>
 
 <body>
-    <SplashScreen @rendermode="InteractiveServer" />
-
     <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="@Assets["lib/chartjs/chart.umd.min.js"]"></script>
     <script>
         window.KAST = {
             scrollToBottom: function (el) {
@@ -144,6 +48,8 @@
                 init: function (dotNetRef) {
                     this._ref = dotNetRef;
                     this._handler = function (e) {
+                        // Ctrl+K / Cmd+K → command palette
+                        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); dotNetRef.invokeMethodAsync('OnKeyDown', 'ctrl+k'); return; }
                         // Ctrl+Shift+L → toggle-log
                         if (e.ctrlKey && e.shiftKey && e.key === 'L') { e.preventDefault(); dotNetRef.invokeMethodAsync('OnKeyDown', 'ctrl+shift+l'); }
                         // ? → show-shortcuts
@@ -160,8 +66,8 @@
         window._kastChartInstances = {};
 
         window.kastCharts = {
-            // Resolves "var(--token)suffix" strings against the live Artoria
-            // theme so chart colors follow the cape palette without hardcoding.
+            // Resolves "var(--token)suffix" strings against the live theme
+            // so chart colours follow light/dark mode without hard-coding.
             _resolveColors: function (node) {
                 if (typeof node === 'string') {
                     var m = node.match(/^var\((--[\w-]+)\)(.*)$/);

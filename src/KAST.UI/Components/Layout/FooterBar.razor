@@ -2,11 +2,9 @@
 @inject KastLogStore LogStore
 @inject ISteamService SteamService
 @inject MonitoringStateService MonitoringState
+@inject KeyboardShortcutService KeyboardShortcuts
 @inject IJSRuntime JSRuntime
 
-
-
-@* ── Drag-resize capture overlay ── *@
 @if (_isResizing)
 {
     <div class="resize-overlay"
@@ -14,115 +12,79 @@
          @onmouseup="StopResize"></div>
 }
 
-@* ── Fixed footer bar ── *@
-<div class="footer-bar" style="background:var(--mud-palette-appbar-background); border-top:1px solid var(--mud-palette-lines-default);">
-
-    @* ══ Left: service status pills ══ *@
-    <div class="d-flex align-center gap-2 service-pills">
-        @* API *@
-        <div class="d-flex align-center gap-1">
-            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{GetApiColor(MonitoringState.ApiStatus)};" )" />
-            <MudText Typo="Typo.caption" HtmlTag="span" Style="color:var(--mud-palette-text-secondary); font-size:11px;">API</MudText>
-        </div>
-        @* DB *@
-        <div class="d-flex align-center gap-1">
-            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(MonitoringState.IsDbOk ? "var(--k-success)" : "var(--k-destructive)")};" )" />
-            <MudText Typo="Typo.caption" HtmlTag="span" Style="color:var(--mud-palette-text-secondary); font-size:11px;">DB</MudText>
-        </div>
-        @* Steam *@
-        <div class="d-flex align-center gap-1">
-            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(SteamService.IsAuthenticated ? "var(--k-success)" : SteamService.IsConnected ? "var(--k-warning)" : "var(--k-destructive)")};" )" />
-            <MudText Typo="Typo.caption" HtmlTag="span" Style="color:var(--mud-palette-text-secondary); font-size:11px;">Steam@(SteamService.IsAuthenticated && SteamService.Profile?.PersonaName != null ? $" · {SteamService.Profile.PersonaName}" : "")</MudText>
-        </div>
-        @* Monitoring *@
-        <div class="d-flex align-center gap-1">
-            <MudIcon Icon="@Icons.Material.Filled.Circle" Style="@($"font-size:8px; color:{(MonitoringState.IsMonitoringOk ? "var(--k-success)" : "var(--k-destructive)")};" )" />
-            <MudText Typo="Typo.caption" HtmlTag="span" Style="color:var(--mud-palette-text-secondary); font-size:11px;">Monitor</MudText>
-        </div>
-        @* Error badge *@
+<footer class="k-statusbar">
+    <div class="k-statusbar-items">
+        <span class="k-statusbar-item" title="Web API health"><span class="k-dot @ApiClass(MonitoringState.ApiStatus)"></span>API</span>
+        <span class="k-statusbar-item" title="Database"><span class="k-dot @(MonitoringState.IsDbOk ? "k-dot-ok" : "k-dot-err")"></span>Database</span>
+        <span class="k-statusbar-item" title="Steam connection">
+            <span class="k-dot @(SteamService.IsAuthenticated ? "k-dot-ok" : SteamService.IsConnected ? "k-dot-warn" : "k-dot-err")"></span>
+            Steam@(SteamService.IsAuthenticated && SteamService.Profile?.PersonaName != null ? $" · {SteamService.Profile.PersonaName}" : "")
+        </span>
+        <span class="k-statusbar-item" title="Monitoring"><span class="k-dot @(MonitoringState.IsMonitoringOk ? "k-dot-ok" : "k-dot-err")"></span>Monitoring</span>
         @if (_errorCount > 0)
         {
-            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
-                     Style="height:18px; padding:0 6px; font-size:10px; font-weight:600;"
-                     OnClick="@(() => { _logOpen = true; _filterLevel = LogLevel.Error; })">
+            <button type="button" class="k-statusbar-errors" @onclick="@(() => { _logOpen = true; _filterLevel = LogLevel.Error; })">
                 @_errorCount error@(_errorCount == 1 ? "" : "s")
-            </MudChip>
+            </button>
         }
     </div>
 
-        @* ══ Right: log console toggle ══ *@
-        <div class="d-flex align-center gap-2" style="flex-shrink:0;">
-            @if (!_logOpen && _lastMessage != "")
-            {
-                <MudText Typo="Typo.caption" HtmlTag="span" Style="font-family:monospace; color:var(--mud-palette-text-disabled); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px;">@_lastMessage</MudText>
-            }
-            <MudIconButton Icon="@(_logOpen ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.Terminal)"
-                           Size="Size.Small" Style="width:22px; height:22px; padding:2px;"
-                           Class="@(_errorCount > 0 && !_logOpen ? "kast-log-pulse" : "")"
+    <div class="k-statusbar-right">
+        @if (!_logOpen && _lastMessage != "")
+        {
+            <span class="k-statusbar-last k-mono">@_lastMessage</span>
+        }
+        <MudTooltip Text="Logs (Ctrl+Shift+L)" Placement="Placement.Top">
+            <MudIconButton Icon="@(_logOpen ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.Terminal)"
+                           Size="Size.Small" Class="k-statusbar-btn"
                            Color="@(_errorCount > 0 ? Color.Error : (_logOpen ? Color.Primary : Color.Default))"
-                           OnClick="@(() => _logOpen = !_logOpen)" aria-label="Toggle log console" />
-        </div>
+                           OnClick="@(() => _logOpen = !_logOpen)" aria-label="Toggle log panel" />
+        </MudTooltip>
     </div>
+</footer>
 
-    @* ══ Log console panel (fixed overlay, never shifts content) ══ *@
-    @if (_logOpen)
-    {
-    <div class="log-panel" style="width:@(_panelWidth)px;">
-        <div style="display:flex; flex-direction:column; height:100%; position:relative;">
+@if (_logOpen)
+{
+    <aside class="log-panel" style="width:@(_panelWidth)px;" aria-label="Application log">
+        <div class="resize-handle" @onmousedown="StartResize" @onmousedown:preventDefault="true" title="Drag to resize"></div>
 
-            @* Resize handle (left edge) *@
-            <div class="resize-handle"
-                 @onmousedown="StartResize" @onmousedown:preventDefault="true" title="Drag to resize"></div>
-
-            @* Toolbar *@
-            <div class="d-flex align-center gap-1 px-2 log-toolbar">
-                <MudIcon Icon="@Icons.Material.Filled.Terminal" Size="Size.Small" Style="opacity:.6; font-size:14px;" />
-                <MudText Typo="Typo.caption" Style="font-weight:600; font-size:11px; letter-spacing:.05em;">LOG CONSOLE
-                </MudText>
-                <MudSpacer />
-                @* Level filter chips *@
-                @foreach (var item in _filterOptions)
-                {
-                    <MudChip T="string" Size="Size.Small"
-                             Color="@GetLevelMudColor(item.Level)"
-                             Variant="@(_filterLevel == item.Level ? Variant.Filled : Variant.Text)"
-                             Style="height:18px; padding:0 7px; font-size:10px; font-weight:600; min-width:0;"
-                             OnClick="@(() => _filterLevel = (_filterLevel == item.Level ? null : (LogLevel?)item.Level))">
-                        @item.Label
-                    </MudChip>
-                }
-                <MudDivider Vertical="true" FlexItem="true" Style="margin:4px 4px;" />
-                <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignTop" Size="Size.Small"
-                               Style="width:20px; height:20px; padding:2px;" aria-label="Jump to top"
-                               OnClick="@ScrollToTop" />
-                <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" Size="Size.Small"
-                               Style="width:20px; height:20px; padding:2px;" aria-label="Clear log"
-                               OnClick="@(() => LogStore.Clear())" />
-            </div>
-
-            @* Log output *@
-            <div @ref="_logScrollRef" class="log-output">
-                @{
-                    var entries = GetFilteredEntries();
-                }
-                @if (entries.Count == 0)
-                {
-                    <span style="color:var(--mud-palette-text-disabled);">No log entries.</span>
-                }
-                @foreach (var entry in entries)
-                {
-                    <div class="log-entry">
-                        <span class="log-timestamp" style="color:var(--mud-palette-text-disabled);">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
-                        <span
-                        style="flex-shrink:0; min-width:30px; color:@GetLevelFg(entry.Level);">@GetLevelTag(entry.Level)</span>
-                        <span class="log-category" style="color:var(--mud-palette-text-secondary); opacity:.65;" title="@entry.Category">@ShortCategory(entry.Category)</span>
-                        <span class="log-message" style="color:var(--mud-palette-text-primary);">@entry.Message</span>
-                    </div>
-                }
-            </div>
+        <div class="log-toolbar">
+            <span class="log-title">Application log</span>
+            <MudSpacer />
+            @foreach (var item in _filterOptions)
+            {
+                <button type="button"
+                        class="log-filter @LevelClass(item.Level) @(_filterLevel == item.Level ? "active" : null)"
+                        title="Show @item.Label and above"
+                        @onclick="@(() => _filterLevel = (_filterLevel == item.Level ? null : (LogLevel?)item.Level))">
+                    @item.Label
+                </button>
+            }
+            <MudIconButton Icon="@Icons.Material.Outlined.VerticalAlignTop" Size="Size.Small" aria-label="Jump to top" OnClick="@ScrollToTop" />
+            <MudIconButton Icon="@Icons.Material.Outlined.DeleteSweep" Size="Size.Small" aria-label="Clear log" OnClick="@(() => LogStore.Clear())" />
+            <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small" aria-label="Close log panel" OnClick="@(() => _logOpen = false)" />
         </div>
-    </div>
-    }
+
+        <div @ref="_logScrollRef" class="log-output kast-log-console">
+            @{
+                var entries = GetFilteredEntries();
+            }
+            @if (entries.Count == 0)
+            {
+                <span class="log-empty">No log entries.</span>
+            }
+            @foreach (var entry in entries)
+            {
+                <div class="log-entry">
+                    <span class="log-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                    <span class="log-level @LevelClass(entry.Level)">@GetLevelTag(entry.Level)</span>
+                    <span class="log-category" title="@entry.Category">@ShortCategory(entry.Category)</span>
+                    <span class="log-message">@entry.Message</span>
+                </div>
+            }
+        </div>
+    </aside>
+}
 
 @code {
     private bool _logOpen;
@@ -170,6 +132,11 @@
 
     protected override void OnInitialized()
     {
+        KeyboardShortcuts.Register("ctrl+shift+l", () => InvokeAsync(() =>
+        {
+            _logOpen = !_logOpen;
+            StateHasChanged();
+        }));
         MonitoringState.EnsureStarted();
         MonitoringState.OnDataChanged += HandleMonitoringChanged;
         LogStore.OnNewEntry += OnNewLog;
@@ -233,32 +200,24 @@
         _ => "???"
     };
 
-    private static string GetLevelFg(LogLevel? l) => l switch
+    private static string LevelClass(LogLevel? l) => l switch
     {
-        LogLevel.Trace       => "var(--mud-palette-text-disabled)",
-        LogLevel.Debug       => "var(--mud-palette-text-secondary)",
-        LogLevel.Information => "var(--mud-palette-info)",
-        LogLevel.Warning     => "var(--mud-palette-warning)",
-        LogLevel.Error or LogLevel.Critical => "var(--mud-palette-error)",
-        _                    => "var(--mud-palette-text-secondary)",
-    };
-
-    private static Color GetLevelMudColor(LogLevel? l) => l switch
-    {
-        LogLevel.Information => Color.Info,
-        LogLevel.Warning => Color.Warning,
-        LogLevel.Error or LogLevel.Critical => Color.Error,
-        _ => Color.Default
+        LogLevel.Trace       => "lvl-trace",
+        LogLevel.Debug       => "lvl-debug",
+        LogLevel.Information => "lvl-info",
+        LogLevel.Warning     => "lvl-warn",
+        LogLevel.Error or LogLevel.Critical => "lvl-error",
+        _                    => "lvl-debug",
     };
 
     private static string ShortCategory(string cat) =>
         cat.Contains('.') ? cat[(cat.LastIndexOf('.') + 1)..] : cat;
 
-    private static string GetApiColor(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus status) => status switch
+    private static string ApiClass(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus status) => status switch
     {
-        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "var(--k-success)",
-        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "var(--k-warning)",
-        _ => "var(--k-destructive)"
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "k-dot-ok",
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "k-dot-warn",
+        _ => "k-dot-err"
     };
 
     public void Dispose()

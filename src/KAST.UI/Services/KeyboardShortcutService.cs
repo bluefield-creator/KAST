@@ -19,6 +19,11 @@ public class KeyboardShortcutService : IAsyncDisposable
         _initialized = true;
     }
 
+    /// <summary>Raised by Ctrl+K / ⌘K and by the app-bar search button.</summary>
+    public event Action? OpenCommandPalette;
+
+    public void RequestCommandPalette() => OpenCommandPalette?.Invoke();
+
     public void Register(string combo, Func<Task> handler)
     {
         _shortcuts[combo.ToLower()] = handler;
@@ -27,6 +32,12 @@ public class KeyboardShortcutService : IAsyncDisposable
     [JSInvokable]
     public async Task OnKeyDown(string combo)
     {
+        if (combo.Equals("ctrl+k", StringComparison.OrdinalIgnoreCase))
+        {
+            RequestCommandPalette();
+            return;
+        }
+
         if (_shortcuts.TryGetValue(combo.ToLower(), out var handler))
             await handler();
     }

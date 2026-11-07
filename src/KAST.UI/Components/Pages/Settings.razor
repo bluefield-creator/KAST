@@ -1,4 +1,5 @@
 @page "/settings"
+@page "/settings/{Section}"
 @attribute [Authorize]
 @implements IDisposable
 @inject IApiKeyService ApiKeyService
@@ -22,7 +23,7 @@
 
 <MudText Typo="Typo.h5" Class="mb-4">Settings</MudText>
 
-<MudTabs @bind-ActivePanelIndex="_activePanelIndex" Elevation="2" Rounded="true" ApplyEffectsToContainer="true">
+<MudTabs ActivePanelIndex="_activePanelIndex" ActivePanelIndexChanged="OnSectionChanged" Elevation="0" ApplyEffectsToContainer="true">
 
     @* ════ General ════ *@
     <MudTabPanel Text="General">
@@ -120,24 +121,15 @@
 
                 <MudText Typo="Typo.subtitle1" Class="mb-3">Appearance</MudText>
 
-                @* ── Accent colour swatches — curated Artoria accents ── *@
-                <MudText Typo="Typo.body2" Class="mb-2">Accent Color</MudText>
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    @foreach (var opt in ThemeService.CuratedAccents)
-                    {
-                        var selected = IsAccentSelected(opt.Value);
-                        <MudTooltip Text="@opt.Label" Placement="Placement.Top">
-                            <div @onclick="@(() => SelectAccent(opt.Value))"
-                                 style="@SwatchStyle(opt.Value, selected)" />
-                        </MudTooltip>
-                    }
-                </div>
-
-                <div class="d-flex align-center gap-3 flex-wrap">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Default"
-                               StartIcon="@Icons.Material.Filled.SettingsBackupRestore"
-                               OnClick="ResetToDefaults">Reset Defaults</MudButton>
-                </div>
+                <MudToggleGroup T="ThemeMode" Value="ThemeService.Mode" ValueChanged="ThemeService.SetModeAsync"
+                                Color="Color.Primary" Size="Size.Small" Outlined="true">
+                    <MudToggleItem Value="ThemeMode.Dark" Text="Dark" />
+                    <MudToggleItem Value="ThemeMode.Light" Text="Light" />
+                    <MudToggleItem Value="ThemeMode.System" Text="Match system" />
+                </MudToggleGroup>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">
+                    Stored per browser.
+                </MudText>
             </MudCardContent>
         </MudCard>
     </MudTabPanel>
@@ -1006,27 +998,32 @@
         _updateChannels = AppUpdateService.GetChannels();
         _updateChannelId = settings.UpdateChannelId;
         _autoUpdateCheckEnabled = settings.AutoUpdateCheckEnabled;
-        _selectedAccent = ThemeService.AccentColor;
         await LoadServiceStatus();
         LoadCrashReports();
-
-        // Check if we should navigate to a specific tab.
-        var uri = new Uri(Navigation.Uri);
-        var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
-        _activePanelIndex = queryParams["tab"] switch
-        {
-            "accounts" => 1,
-            "steam" => 2,
-            "api-keys" => 3,
-            "service" => 4,
-            "updates" => 5,
-            _ => _activePanelIndex
-        };
 
         // Defer the network-bound update check so the first render is not
         // blocked on an HTTP call; CheckForUpdate handles its own errors.
         if (_autoUpdateCheckEnabled)
             _ = InvokeAsync(() => CheckForUpdate(showSnackbar: false));
+    }
+
+    /// <summary>Route section: /settings/{general|accounts|steam|api-keys|service|updates}.</summary>
+    [Parameter] public string? Section { get; set; }
+
+    private static readonly string[] Sections = ["general", "accounts", "steam", "api-keys", "service", "updates"];
+
+    protected override void OnParametersSet()
+    {
+        // Legacy links used ?tab=<section>; the route wins when both are present.
+        var legacyTab = System.Web.HttpUtility.ParseQueryString(new Uri(Navigation.Uri).Query)["tab"];
+        var index = Array.IndexOf(Sections, (Section ?? legacyTab ?? "general").ToLowerInvariant());
+        _activePanelIndex = index < 0 ? 0 : index;
+    }
+
+    private void OnSectionChanged(int index)
+    {
+        _activePanelIndex = index;
+        Navigation.NavigateTo($"settings/{Sections[index]}");
     }
 
     private void OnAuthStateChanged() => InvokeAsync(StateHasChanged);
@@ -1785,31 +1782,6 @@
     private async Task ApplyBenchmark(int parallelism) { _parallelDownloads = parallelism; await SaveGeneralSettings(); }
 
     private BenchmarkResult GetBestBenchmark() => _benchmarkResults!.OrderByDescending(r => r.MbPerSecond).First();
-
-    private string _selectedAccent = ThemeService.DefaultAccent;
-
-    private async Task SelectAccent(string color)
-    {
-        _selectedAccent = color;
-        await ThemeService.SetAccentAsync(color);
-        Snackbar.Add("Accent color updated", Severity.Success);
-    }
-
-    private bool IsAccentSelected(string color) =>
-        string.Equals(_selectedAccent, color, StringComparison.OrdinalIgnoreCase);
-
-    private static string SwatchStyle(string color, bool selected) =>
-        $"width:28px;height:28px;border-radius:50%;background:{color};cursor:pointer;" +
-        $"border:2px solid {(selected ? "var(--k-ring)" : "transparent")};" +
-        $"outline:{(selected ? "1px solid var(--k-border-strong)" : "none")};outline-offset:2px;" +
-        "transition:transform var(--k-dur-fast) var(--k-ease);";
-
-    private async Task ResetToDefaults()
-    {
-        _selectedAccent = ThemeService.DefaultAccent;
-        await ThemeService.SetAccentAsync(ThemeService.DefaultAccent);
-        Snackbar.Add("Theme reset to defaults", Severity.Success);
-    }
 
     private async Task CreateApiKey()
     {

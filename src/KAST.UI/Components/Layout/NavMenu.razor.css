@@ -1,237 +1,135 @@
-/* ═══ Dense navigation ═════════════════════════════════════════════════
-   Edge-to-edge grouped list. Each group is a small-caps label over a run
-   of 32px rows (icon · label · trailing meta); sub-rows indent under
-   their parent. Active rows wear the brass rail on the left and a faint
-   indigo wash; hover is the aubergine bridge. Doctrine: docs/DESIGN.md. */
-
 .k-nav {
     display: flex;
     flex-direction: column;
-    padding: 6px 0 12px;
-    font-family: var(--k-font-sans);
-    font-feature-settings: var(--k-font-feat);
-    -webkit-font-smoothing: antialiased;
+    gap: 16px;
+    padding: 12px 8px 48px;
 }
 
 .k-nav-group {
     display: flex;
     flex-direction: column;
-    padding: 6px 0 4px;
-    border-bottom: 1px solid rgb(59 58 134 / 0.35);
-}
-
-.k-nav-group:last-child {
-    border-bottom: 0;
+    gap: 1px;
 }
 
 .k-nav-group-label {
-    padding: 4px 14px 3px;
-    font-size: 10px;
+    padding: 0 10px 4px;
+    font-size: var(--k-text-xs);
     font-weight: 600;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--mist-500);
-    line-height: 1.4;
-    user-select: none;
+    color: var(--k-muted-foreground);
 }
 
-/* ── Rows ── */
 ::deep .k-nav-row {
     position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
     height: 32px;
-    padding: 0 12px 0 14px;
-    margin: 0;
+    padding: 0 10px;
+    border-radius: var(--k-radius);
+    color: var(--mud-palette-drawer-text);
+    font-size: var(--k-text-sm);
     text-decoration: none;
-    color: var(--mist-300);
-    border-left: 2px solid transparent;
-    transition: background-color var(--k-dur-fast) var(--k-ease),
-                color var(--k-dur-fast) var(--k-ease),
-                border-color var(--k-dur-fast) var(--k-ease);
+    transition: background-color var(--k-dur) var(--k-ease);
 }
 
 ::deep .k-nav-row:hover {
-    background: var(--aubergine-wash);
-    color: var(--tunic-1);
+    background: var(--k-hover);
+    color: var(--k-foreground);
 }
 
 ::deep .k-nav-row.active {
-    background: rgb(59 58 134 / 0.28);
-    border-left-color: var(--brass);
-    color: var(--tunic-0);
+    background: var(--k-primary-wash);
+    color: var(--k-foreground);
+    font-weight: 500;
 }
 
-::deep .k-nav-row:focus-visible {
-    outline: 2px solid var(--k-ring);
-    outline-offset: -2px;
+::deep .k-nav-row.active::before {
+    content: "";
+    position: absolute;
+    left: -8px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--k-primary);
+}
+
+::deep .k-nav-row-sub {
+    height: 28px;
+    padding-left: 36px;
+    font-size: var(--k-text-sm);
+}
+
+::deep .k-nav-row-sub .k-dot {
+    margin-left: -18px;
+    margin-right: 2px;
 }
 
 ::deep .k-nav-icon {
-    flex: none;
-    width: 18px;
-    height: 18px;
     font-size: 18px;
-    color: var(--mist-500);
-    transition: color var(--k-dur-fast) var(--k-ease);
+    color: var(--mud-palette-drawer-icon);
+}
+
+::deep .k-nav-row.active .k-nav-icon {
+    color: var(--k-primary-text);
 }
 
 ::deep .k-nav-icon-sm {
-    width: 15px;
-    height: 15px;
-    font-size: 15px;
+    font-size: 16px;
+    margin-left: -24px;
 }
 
-::deep .k-nav-row:hover .k-nav-icon { color: var(--mist-300); }
-::deep .k-nav-row.active .k-nav-icon { color: var(--cream); }
+::deep .k-nav-row-action {
+    color: var(--k-muted-foreground);
+}
 
+.k-nav-label,
 ::deep .k-nav-label {
     flex: 1;
     min-width: 0;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: -.005em;
-    line-height: 1;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-::deep .k-nav-row.active .k-nav-label {
-    font-weight: 600;
-}
-
-/* ── Trailing meta: counts, badges, player tallies ── */
 ::deep .k-nav-meta {
-    flex: none;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
-    color: var(--mist-500);
-    font-variant-numeric: tabular-nums;
+    font-size: var(--k-text-xs);
+    color: var(--k-muted-foreground);
 }
 
 ::deep .k-nav-mono {
     font-family: var(--k-font-mono);
-    font-size: 10.5px;
-    color: var(--k-success);
 }
 
 ::deep .k-nav-count {
-    min-width: 18px;
-    text-align: right;
-    font-weight: 500;
+    font-variant-numeric: tabular-nums;
 }
 
 ::deep .k-nav-badge {
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 ::deep .k-nav-badge-live {
-    background: rgb(78 140 126 / .18);
-    border: 1px solid rgb(78 140 126 / .55);
     color: var(--k-success);
+    background: color-mix(in srgb, var(--k-success) 16%, transparent);
 }
 
 ::deep .k-nav-badge-warn {
-    background: rgb(221 163 137 / .16);
-    border: 1px solid rgb(221 163 137 / .5);
     color: var(--k-warning);
+    background: color-mix(in srgb, var(--k-warning) 16%, transparent);
 }
 
-/* ── Sub-rows: instances and Settings tabs ── */
-::deep .k-nav-row-sub {
-    height: 28px;
-    padding-left: 38px;
-}
-
-::deep .k-nav-row-sub .k-nav-label {
-    font-size: 12.5px;
-    font-weight: 450;
-    color: var(--mist-400, var(--mist-300));
-}
-
-::deep .k-nav-row-sub:hover .k-nav-label,
-::deep .k-nav-row-sub.active .k-nav-label {
-    color: var(--tunic-0);
-}
-
-::deep .k-nav-row-action .k-nav-label {
-    color: var(--mist-500);
-}
-
-::deep .k-nav-row-action {
-    padding-left: 36px;
-}
-
-/* Settings sub-rows carry a small tick in the icon column. */
-::deep .k-nav-tick {
-    flex: none;
-    width: 4px;
-    height: 4px;
-    margin-left: 6px;
-    margin-right: 6px;
-    border-radius: 50%;
-    background: var(--indigo-400);
-}
-
-::deep .k-nav-row-sub.active .k-nav-tick {
-    background: var(--brass);
-}
-
-/* Status fitting on instance rows: square, rotated. */
-::deep .k-nav-status {
-    flex: none;
-    width: 6px;
-    height: 6px;
-    margin-left: 5px;
-    margin-right: 5px;
-    transform: rotate(45deg);
-    border: 1px solid var(--indigo-400);
-    background: var(--indigo-600);
-}
-
-::deep .k-nav-status-running {
-    border-color: rgb(78 140 126 / .8);
-    background: var(--k-success);
-}
-
-::deep .k-nav-status-crashed,
-::deep .k-nav-status-faulted {
-    border-color: var(--crimson-3);
-    background: var(--crimson-2);
-}
-
-::deep .k-nav-status-starting,
-::deep .k-nav-status-stopping,
-::deep .k-nav-status-restarting,
-::deep .k-nav-status-downloading {
-    border-color: rgb(221 163 137 / .8);
-    background: var(--k-warning);
-}
-
-.k-nav-filter {
-    padding: 2px 12px 4px 36px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    ::deep .k-nav-badge-live {
-        animation: k-nav-badge-breathe 2.4s var(--k-ease) infinite;
-    }
-}
-
-@keyframes k-nav-badge-breathe {
-    0%, 100% { box-shadow: 0 0 0 0 rgb(78 140 126 / 0.35); }
-    50%      { box-shadow: 0 0 0 3px rgb(78 140 126 / 0); }
+::deep .k-nav-filter {
+    padding: 4px 4px 6px;
 }

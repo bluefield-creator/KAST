@@ -1,0 +1,7 @@
+@inject KeyboardShortcutService KeyboardShortcuts
+
+<button type="button" class="k-search" @onclick="KeyboardShortcuts.RequestCommandPalette" aria-label="Open command palette">
+    <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+    <span class="k-search-label">Search or run a command</span>
+    <span class="k-search-keys"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+</button>

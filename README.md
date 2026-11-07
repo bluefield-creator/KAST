@@ -17,13 +17,6 @@
 ***CI / Quality***  
 [![CI](https://github.com/bluefield-creator/KAST/actions/workflows/ci.yml/badge.svg?branch=caster)](https://github.com/bluefield-creator/KAST/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/bluefield-creator/KAST/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/bluefield-creator/KAST/actions/workflows/codeql-analysis.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=bluefield-creator_KAST&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=bluefield-creator_KAST)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=bluefield-creator_KAST&metric=coverage)](https://sonarcloud.io/summary/new_code?id=bluefield-creator_KAST)
-
-***Docker***  
-[![Docker Image](https://ghcr-badge.egpl.dev/bluefield-creator/kast/latest_tag?trim=major&label=nightly&style=flat-square)](https://github.com/bluefield-creator/KAST/pkgs/container/kast)
-
-[![Discord](https://img.shields.io/discord/366955806777671681?label=Discord&logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/2BUuZa3)
 
 ## Intro
 
@@ -192,7 +185,6 @@ automated deployment, and more dependable server management.
 ## Issues and Feedback
 
 Report issues on the [GitHub repository](https://github.com/bluefield-creator/KAST/issues).
-For general discussion, join us on [Discord](https://discord.gg/2BUuZa3).
 
 ## Documentation
 

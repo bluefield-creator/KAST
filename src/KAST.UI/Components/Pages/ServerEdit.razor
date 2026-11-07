@@ -9,71 +9,95 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject IServerInstanceService ServerService
+@inject IDialogService Dialogs
 @implements IDisposable
 
-<PageTitle>CASTER -- @(_isNew ? "New Server" : _instance.Name)</PageTitle>
+<PageTitle>@(_isNew ? "New server" : _instance.Name) · CASTER</PageTitle>
 
-@* ── Toolbar ── *@
-<div class="d-flex align-center gap-2 mb-4 flex-wrap">
-    <MudTooltip Text="Back to server instances">
-        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                       Color="Color.Default"
-                       OnClick="@(() => Nav.NavigateTo("/servers"))" />
-    </MudTooltip>
-    <MudIcon Icon="@UiHelpers.GetStatusIcon(_instance.Status)" Color="@UiHelpers.GetStatusColor(_instance.Status)" />
-    <MudText Typo="Typo.h5" Class="mr-2" Style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:300px;">
-        @(_isNew ? "New Server Instance" : _instance.Name)
-    </MudText>
-    @if (!_isNew)
-    {
-        <MudChip T="string" Size="Size.Small" Color="@UiHelpers.GetStatusColor(_instance.Status)" Variant="Variant.Filled">@_instance.Status</MudChip>
-    }
-    <MudSpacer />
-    @if (HasUnsavedChanges)
-    {
-        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
-                 Icon="@Icons.Material.Filled.Circle">
-            Unsaved changes
-        </MudChip>
-    }
-    @if (!_isNew && _instances.Count > 1)
-    {
-        <MudSelect T="int"
-                   Value="@_instance.Id"
-                   ValueChanged="NavigateToInstance"
-                   Dense="true"
-                   Variant="Variant.Outlined"
-                   Label="Instance"
-                   Style="min-width:220px;">
-            @foreach (var instance in _instances)
-            {
-                <MudSelectItem Value="@instance.Id">@instance.Name</MudSelectItem>
-            }
-        </MudSelect>
-    }
-    <MudButtonGroup Color="Color.Primary" Variant="Variant.Filled" DropShadow="true">
-        <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="Save">Save</MudButton>
+<PageHeader Title="@(_isNew ? "New server" : _instance.Name)" Breadcrumbs="Crumbs">
+    <TitleContent>
         @if (!_isNew)
         {
-            @if (_instance.Status is ServerInstanceStatus.Running or ServerInstanceStatus.Starting)
+            <StatusBadge Status="_instance.Status" />
+        }
+        @if (HasUnsavedChanges)
+        {
+            <span class="k-status k-status-warn" title="Save to keep your changes">Unsaved changes</span>
+        }
+    </TitleContent>
+    <Actions>
+        @if (!_isNew && _instances.Count > 1)
+        {
+            <MudMenu Label="Switch server" EndIcon="@Icons.Material.Outlined.ExpandMore" Variant="Variant.Text" Dense="true"
+                     AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                @foreach (var instance in _instances)
+                {
+                    var id = instance.Id;
+                    <MudMenuItem OnClick="@(() => NavigateToInstance(id))">
+                        <span class="k-dot @UiHelpers.GetStatusDotClass(instance.Status)"></span>&nbsp; @instance.Name
+                    </MudMenuItem>
+                }
+            </MudMenu>
+        }
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Save" OnClick="Save">
+            @(_isNew ? "Create" : "Save")
+        </MudButton>
+        @if (!_isNew)
+        {
+            @if (_instance.Status is ServerInstanceStatus.Running)
             {
-                <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Stop" OnClick="StopServer">Stop</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.RestartAlt" OnClick="RestartServer">Restart</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Stop" OnClick="StopServer">Stop</MudButton>
+            }
+            else if (UiHelpers.IsTransitional(_instance.Status))
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Stop" OnClick="StopServer"
+                           Disabled="@(_instance.Status == ServerInstanceStatus.Downloading)">
+                    Stop
+                </MudButton>
             }
             else
             {
-                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.PlayArrow"
-                        OnClick="LaunchServer"
-                        Disabled="@(!_instance.InstalledAt.HasValue || _instance.Status == ServerInstanceStatus.Downloading)">
-                    Launch
-                </MudButton>
+                <MudTooltip Text="@(_instance.InstalledAt.HasValue ? "Save and start the server" : "Install the server files first (Installation tab)")">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.PlayArrow"
+                               OnClick="LaunchServer" Disabled="@(!_instance.InstalledAt.HasValue)">
+                        Start
+                    </MudButton>
+                </MudTooltip>
             }
         }
-    </MudButtonGroup>
-</div>
+    </Actions>
+    <ChildContent>
+        @if (!_isNew)
+        {
+            <span>Port <span class="k-mono">@_instance.Port</span></span>
+            @if (_instance.ProcessId is { } pid)
+            {
+                <span>PID <span class="k-mono">@pid</span></span>
+            }
+            @if (_instance.Status == ServerInstanceStatus.Running)
+            {
+                <span>Up <span class="k-num">@UiHelpers.FormatUptime(_instance.StartedAt)</span></span>
+            }
+            <span>@_instance.Mods.Count mod@(_instance.Mods.Count == 1 ? "" : "s")</span>
+            @if (_instance.HeadlessClientCount > 0)
+            {
+                <span>@_instance.HeadlessClientCount headless client@(_instance.HeadlessClientCount == 1 ? "" : "s")</span>
+            }
+            <span>@(_instance.InstalledAt.HasValue ? $"Build {_instance.InstalledBuildId ?? "installed"}" : "Server files not installed")</span>
+        }
+    </ChildContent>
+</PageHeader>
 
-<MudTabs @bind-ActivePanelIndex="_activeTab" Elevation="2" Rounded="true" ApplyEffectsToContainer="true">
+<MudTabs @bind-ActivePanelIndex="_activeTab" Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-4" Class="k-tabs">
 
-    @* ════════════ GENERAL ════════════ *@
+    <MudTabPanel Text="Overview" Disabled="_isNew">
+        @if (!_isNew)
+        {
+            <MonitorTab Instance="_instance" OnStatusChanged="StateHasChanged" />
+        }
+    </MudTabPanel>
+
     <MudTabPanel Text="General">
         <GeneralTab Instance="_instance"
                     ServerConfig="_serverConfig"
@@ -82,8 +106,7 @@
                     OnServerConfigChanged="OnServerConfigChanged" />
     </MudTabPanel>
 
-    @* ════════════ SERVER CONFIG ════════════ *@
-    <MudTabPanel Text="Server Config">
+    <MudTabPanel Text="server.cfg">
         <ServerConfigTab Config="_serverConfig"
                          Instance="_instance"
                          MissionDownloadBaseUrl="_missionDownloadBaseUrl"
@@ -93,15 +116,13 @@
                          OnRawContentChanged="OnServerCfgRawChanged" />
     </MudTabPanel>
 
-    @* ════════════ BASIC CONFIG ════════════ *@
-    <MudTabPanel Text="Basic Config">
+    <MudTabPanel Text="basic.cfg">
         <BasicConfigTab Config="_basicConfig"
                         RawContent="@_basicCfgRaw"
                         OnConfigChanged="OnBasicConfigChanged"
                         OnRawContentChanged="OnBasicCfgRawChanged" />
     </MudTabPanel>
 
-    @* ════════════ DIFFICULTY ════════════ *@
     <MudTabPanel Text="Difficulty">
         <DifficultyTab Profile="_profileData"
                        RawContent="@_profileRaw"
@@ -109,29 +130,20 @@
                        OnRawContentChanged="OnProfileRawChanged" />
     </MudTabPanel>
 
-    @* ════════════ MODS ════════════ *@
-    <MudTabPanel Text="Mods" BadgeData="@_instance.Mods.Count.ToString()" BadgeColor="Color.Primary">
+    <MudTabPanel Text="@($"Mods ({_instance.Mods.Count})")">
         <ModsTab Instance="_instance" IsNew="_isNew" />
     </MudTabPanel>
 
-    @* ════════════ INSTALL ════════════ *@
-    <MudTabPanel Text="Install"
+    <MudTabPanel Text="Missions">
+        <MissionsTab Instance="_instance" />
+    </MudTabPanel>
+
+    <MudTabPanel Text="Installation"
                  BadgeData="@(!_instance.InstalledAt.HasValue && !_isNew ? "!" : null)"
                  BadgeColor="Color.Warning">
         <InstallTab Instance="_instance"
                     IsNew="_isNew"
                     OnInstallComplete="HandleInstallComplete" />
-    </MudTabPanel>
-    @* ════════════ MISSIONS ════════════ *@
-    <MudTabPanel Text="Missions">
-        <MissionsTab Instance="_instance" />
-    </MudTabPanel>
-
-    @* ════════════ MONITOR ════════════ *@
-    <MudTabPanel Text="Monitor"
-                 BadgeDot="@(_instance.Status == ServerInstanceStatus.Running || _instance.Status == ServerInstanceStatus.Crashed || _instance.Status == ServerInstanceStatus.Starting)"
-                 BadgeColor="@(_instance.Status == ServerInstanceStatus.Running ? Color.Success : _instance.Status == ServerInstanceStatus.Crashed ? Color.Error : _instance.Status == ServerInstanceStatus.Starting ? Color.Warning : Color.Default)">
-        <MonitorTab Instance="_instance" OnStatusChanged="StateHasChanged" />
     </MudTabPanel>
 
 </MudTabs>
@@ -143,8 +155,11 @@
     private bool _isNew => Id == null || Id == 0;
     private int _activeTab;
     private string _serversDirectory = "./servers";
-    private const int MonitorTabIndex = 7;
+    private const int OverviewTabIndex = 0;
+    private const int GeneralTabIndex = 1;
     private IReadOnlyList<ServerInstance> _instances = [];
+
+    private IReadOnlyList<(string, string)> Crumbs => [("Servers", "servers")];
     private int? _loadedId;
     private bool _hasLoadedParameters;
 
@@ -257,6 +272,7 @@
 
     private void ResetEditorState()
     {
+        _activeTab = _isNew ? GeneralTabIndex : OverviewTabIndex;
         _instance = new ServerInstance();
         _serverConfig = new ServerConfigData();
         _basicConfig = new BasicConfigData();
@@ -362,15 +378,35 @@
 
             await WithServerServiceAsync(s => s.StartInstanceAsync(_instance.Id));
             _instance = (await WithServerServiceAsync(s => s.GetInstanceByIdAsync(_instance.Id)))!;
-            _activeTab = MonitorTabIndex;
+            _activeTab = OverviewTabIndex;
             StateHasChanged();
         }
         catch (Exception ex) { Snackbar.Add($"Failed to launch: {OutputSanitizer.SanitizeException(ex)}", Severity.Error); }
     }
 
+    private async Task RestartServer()
+    {
+        if (_isNew) return;
+        if (!await Dialogs.ConfirmAsync("Restart server", $"Restart {_instance.Name}? Connected players are disconnected.", "Restart"))
+            return;
+        try
+        {
+            await WithServerServiceAsync(s => s.RestartInstanceAsync(_instance.Id));
+            await RefreshCurrentInstance();
+            Snackbar.Add("Server restarted", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            await RefreshCurrentInstance();
+            Snackbar.Add($"Failed to restart: {OutputSanitizer.SanitizeException(ex)}", Severity.Error);
+        }
+    }
+
     private async Task StopServer()
     {
         if (_isNew) return;
+        if (!await Dialogs.ConfirmAsync("Stop server", $"Stop {_instance.Name}? Connected players are disconnected.", "Stop", destructive: true))
+            return;
         try
         {
             await WithServerServiceAsync(s => s.StopInstanceAsync(_instance.Id));

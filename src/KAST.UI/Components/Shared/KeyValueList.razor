@@ -1,0 +1,17 @@
+@* Two-column fact list (label / value). Values listed in MonoKeys render in the mono face. *@
+<dl class="k-kv">
+    @foreach (var (key, value) in Items)
+    {
+        <dt>@key</dt>
+        <dd class="@(Mono || (MonoKeys?.Contains(key) ?? false) ? "k-mono" : null)">@(string.IsNullOrEmpty(value) ? "—" : value)</dd>
+    }
+</dl>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<(string Key, string? Value)> Items { get; set; } = [];
+
+    /// <summary>Render every value in the monospace face.</summary>
+    [Parameter] public bool Mono { get; set; }
+
+    [Parameter] public IReadOnlySet<string>? MonoKeys { get; set; }
+}

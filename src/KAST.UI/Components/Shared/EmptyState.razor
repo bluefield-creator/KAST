@@ -1,0 +1,25 @@
+@* Centered placeholder for empty lists and first-run states. *@
+<div class="k-empty">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <MudIcon Icon="@Icon" Class="k-empty-icon" />
+    }
+    <div class="k-empty-title">@Title</div>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <div class="k-empty-description">@Description</div>
+    }
+    @if (ChildContent is not null)
+    {
+        <div class="k-empty-actions">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Icon { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Call-to-action buttons.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

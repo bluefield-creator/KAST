@@ -1,0 +1,51 @@
+.k-section {
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-surface);
+    min-width: 0;
+}
+
+.k-section + .k-section {
+    margin-top: 16px;
+}
+
+.k-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--k-border);
+}
+
+.k-section-heading {
+    min-width: 0;
+}
+
+.k-section-title {
+    margin: 0;
+    font-size: var(--k-text-base);
+    font-weight: 600;
+    color: var(--k-foreground);
+}
+
+.k-section-description {
+    margin: 2px 0 0;
+    font-size: var(--k-text-sm);
+    color: var(--k-muted-foreground);
+}
+
+.k-section-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.k-section-body {
+    padding: 16px;
+}
+
+.k-section-body-flush {
+    padding: 0;
+}

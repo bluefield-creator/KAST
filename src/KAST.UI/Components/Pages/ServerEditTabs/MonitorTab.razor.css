@@ -1,13 +1,23 @@
-/* ── Server console — resizable ── */
 .kast-console {
-    height: calc(100vh - 400px);
-    min-height: 160px;
-    min-width: 300px;
-    max-width: 100%;
+    height: calc(100vh - 520px);
+    min-height: 240px;
     overflow: auto;
-    resize: both;
-    box-sizing: border-box;
+    resize: vertical;
+    padding: 10px 12px;
+    border-radius: 0 0 var(--k-radius-lg) var(--k-radius-lg);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
+
+.c-ts {
+    color: var(--k-console-dim);
+    user-select: none;
+}
+
+.c-warn { color: var(--k-console-warn); }
+.c-err  { color: var(--k-console-err); }
 
 .kast-runtime-events {
     max-height: 220px;

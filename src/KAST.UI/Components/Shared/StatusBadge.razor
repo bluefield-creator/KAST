@@ -1,0 +1,18 @@
+@* Server status pill: dot + label, colours from UiHelpers (the one status vocabulary). *@
+<span class="k-status @Tone" title="@Title">
+    <span class="k-status-dot"></span>
+    @UiHelpers.GetStatusLabel(Status)
+</span>
+
+@code {
+    [Parameter, EditorRequired] public ServerInstanceStatus Status { get; set; }
+    [Parameter] public string? Title { get; set; }
+
+    private string Tone => UiHelpers.GetStatusColor(Status) switch
+    {
+        Color.Success => "k-status-ok",
+        Color.Error => "k-status-err",
+        Color.Warning => "k-status-warn",
+        _ => "k-status-neutral"
+    };
+}

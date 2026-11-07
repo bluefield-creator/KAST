@@ -1,116 +1,106 @@
 @page "/servers"
 @attribute [Authorize]
+@implements IDisposable
 @using KAST.Infrastructure.Services.Content
 @inject IServerInstanceService ServerService
 @inject IOutputSanitizer OutputSanitizer
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 @inject ContentProgressTracker ContentProgress
+@inject MonitoringSnapshotService Snapshots
 @inject IJSRuntime JS
 
-<PageTitle>CASTER -- Servers</PageTitle>
+<PageTitle>Servers · CASTER</PageTitle>
 
-<div class="d-flex align-center justify-space-between mb-4">
-    <MudText Typo="Typo.h5">Server Instances</MudText>
-    <div class="d-flex align-center" style="gap: 8px;">
+<PageHeader Title="Servers" Subtitle="Arma 3 dedicated server instances on this host.">
+    <Actions>
         <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="OnImportFileSelected">
             <CustomContent>
-                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.FileUpload">
-                    Import
-                </MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.FileUpload">Import</MudButton>
             </CustomContent>
         </MudFileUpload>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                   OnClick="@(() => Nav.NavigateTo("/servers/new"))">
-            New Instance
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add" Href="servers/new">
+            New server
         </MudButton>
-    </div>
-</div>
+    </Actions>
+</PageHeader>
 
-@if (_instances.Count == 0)
-{
-    <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="1">
-        <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
-        <MudText Typo="Typo.h6" Color="Color.Secondary">No server instances</MudText>
-        <MudText Color="Color.Secondary" Class="mb-3">Create your first Arma 3 server instance to get started.</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Nav.NavigateTo("/servers/new"))">
-            Create Instance
-        </MudButton>
-    </MudPaper>
-}
-else
-{
-    <MudGrid Spacing="3">
-        @foreach (var instance in _instances)
-        {
-            <MudItem xs="12" sm="6" lg="4">
-                <MudCard Elevation="2" Style="cursor:pointer;" @onclick="@(() => Nav.NavigateTo($"/servers/{instance.Id}"))">
-                    <MudCardContent>
-                        <div class="d-flex align-center gap-2 mb-2">
-                            <MudIcon Icon="@UiHelpers.GetStatusIcon(instance.Status)" Color="@UiHelpers.GetStatusColor(instance.Status)" />
-                            <MudText Typo="Typo.subtitle1" Style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                                @instance.Name
-                            </MudText>
-                            <MudChip T="string" Size="Size.Small" Color="@UiHelpers.GetStatusColor(instance.Status)" Variant="Variant.Filled">
-                                @instance.Status
-                            </MudChip>
-                        </div>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            Port: @instance.Port | Mods: @instance.Mods.Count | HC: @instance.HeadlessClientCount
-                        </MudText>
-                        @if (instance.Status == ServerInstanceStatus.Downloading)
-                        {
-                            <MudProgressLinear Indeterminate="true" Color="Color.Warning" Class="mt-2" />
-                            <MudText Typo="Typo.caption" Color="Color.Warning">Installing server files...</MudText>
-                        }
-                        @if (instance.StartedAt.HasValue)
-                        {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                Running since @instance.StartedAt.Value.ToString("g")
-                            </MudText>
-                        }
-                    </MudCardContent>
-                    <MudCardActions @onclick:stopPropagation="true">
-                        @if (instance.Status == ServerInstanceStatus.Running)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning"
-                                       StartIcon="@Icons.Material.Filled.Stop"
-                                       OnClick="@(() => StopInstance(instance.Id))">Stop</MudButton>
-                            <MudButton Size="Size.Small" Variant="Variant.Text"
-                                       StartIcon="@Icons.Material.Filled.Refresh"
-                                       OnClick="@(() => RestartInstance(instance.Id))">Restart</MudButton>
-                        }
-                        else if (instance.Status == ServerInstanceStatus.Stopped)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success"
-                                       StartIcon="@Icons.Material.Filled.PlayArrow"
-                                       OnClick="@(() => StartInstance(instance.Id))"
-                                       Disabled="@(!instance.InstalledAt.HasValue || instance.Status == ServerInstanceStatus.Downloading)">Start</MudButton>
-                        }
-                        <MudSpacer />
-                        <MudIconButton Icon="@Icons.Material.Filled.FileDownload" Size="Size.Small"
-                                       OnClick="@(() => ExportInstance(instance.Id))" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                                       OnClick="@(() => PromptDelete(instance))" />
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-        }
-    </MudGrid>
-}
+<SectionCard Flush="true">
+    @if (_instances.Count == 0)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.Dns" Title="No servers yet"
+                    Description="Create a server instance, install the Arma 3 server files and assign mods.">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add" Href="servers/new">
+                New server
+            </MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" Class="k-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th class="k-num-col">Port</th>
+                    <th class="k-num-col">Players</th>
+                    <th class="k-num-col">Mods</th>
+                    <th class="k-num-col">HC</th>
+                    <th>Uptime</th>
+                    <th class="k-actions-col"><span class="k-sr-only">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var instance in _instances)
+                {
+                    var id = instance.Id;
+                    <tr class="k-row-link" @onclick="@(() => Nav.NavigateTo($"servers/{id}"))">
+                        <td>
+                            <div class="k-cell-title">@instance.Name</div>
+                            @if (!instance.InstalledAt.HasValue && instance.Status != ServerInstanceStatus.Downloading)
+                            {
+                                <div class="k-cell-sub">Server files not installed</div>
+                            }
+                        </td>
+                        <td><StatusBadge Status="instance.Status" /></td>
+                        <td class="k-num-col k-mono">@instance.Port</td>
+                        <td class="k-num-col">@GetPlayers(instance)</td>
+                        <td class="k-num-col">@instance.Mods.Count</td>
+                        <td class="k-num-col">@instance.HeadlessClientCount</td>
+                        <td class="k-cell-muted">@(instance.Status == ServerInstanceStatus.Running ? UiHelpers.FormatUptime(instance.StartedAt) : "—")</td>
+                        <td class="k-actions-col" @onclick:stopPropagation="true">
+                            @if (instance.Status == ServerInstanceStatus.Running)
+                            {
+                                <MudTooltip Text="Restart"><MudIconButton Icon="@Icons.Material.Outlined.RestartAlt" Size="Size.Small" aria-label="Restart" OnClick="@(() => RestartInstance(instance))" /></MudTooltip>
+                                <MudTooltip Text="Stop"><MudIconButton Icon="@Icons.Material.Outlined.Stop" Size="Size.Small" aria-label="Stop" OnClick="@(() => StopInstance(instance))" /></MudTooltip>
+                            }
+                            else if (instance.Status is ServerInstanceStatus.Stopped or ServerInstanceStatus.Crashed)
+                            {
+                                <MudTooltip Text="@(instance.InstalledAt.HasValue ? "Start" : "Install the server files first")">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow" Size="Size.Small" aria-label="Start"
+                                                   Disabled="@(!instance.InstalledAt.HasValue)" OnClick="@(() => StartInstance(id))" />
+                                </MudTooltip>
+                            }
+                            <MudMenu Icon="@Icons.Material.Outlined.MoreVert" Size="Size.Small" Dense="true" aria-label="More actions"
+                                     AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                <MudMenuItem Icon="@Icons.Material.Outlined.FileDownload" OnClick="@(() => ExportInstance(id))">Export</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Outlined.Delete" IconColor="Color.Error" OnClick="@(() => PromptDelete(instance))">Delete…</MudMenuItem>
+                            </MudMenu>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</SectionCard>
 
-<MudDialog @bind-Visible="_deleteDialogVisible">
-    <TitleContent>
-        <MudText Typo="Typo.h6">Delete Server Instance</MudText>
-    </TitleContent>
+<MudDialog @bind-Visible="_deleteDialogVisible" Options="new DialogOptions { MaxWidth = MaxWidth.ExtraSmall }">
+    <TitleContent>Delete server</TitleContent>
     <DialogContent>
-        <MudText>
-            Permanently delete @(_instancePendingDelete?.Name ?? "this instance") from CASTER?
+        <MudText Typo="Typo.body1">
+            Delete <strong>@(_instancePendingDelete?.Name ?? "this server")</strong> from CASTER? A running server is stopped first.
         </MudText>
-        <MudCheckBox @bind-Value="_deleteInstanceFiles"
-                     Label="Also delete server files from disk"
-                     Color="Color.Error"
-                     Class="mt-3" />
+        <MudCheckBox @bind-Value="_deleteInstanceFiles" Label="Also delete the server files from disk" Color="Color.Error" Class="mt-3" />
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@CancelDelete">Cancel</MudButton>
@@ -124,7 +114,42 @@ else
     private bool _deleteDialogVisible;
     private bool _deleteInstanceFiles;
 
-    protected override async Task OnInitializedAsync() => await RefreshInstances();
+    [Inject] private IDialogService Dialogs { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshInstances();
+        Snapshots.Changed += OnSnapshotChanged;
+    }
+
+    /// <summary>Re-query when the 5 s metrics snapshot reports a status this list does not show.</summary>
+    private void OnSnapshotChanged()
+    {
+        var live = Snapshots.Current.Instances.ToDictionary(i => i.Id, i => i.Status);
+        var stale = _instances.Any(i => live.TryGetValue(i.Id, out var s)
+                ? s != i.Status
+                : i.Status != ServerInstanceStatus.Stopped);
+        if (stale)
+            _ = InvokeAsync(async () =>
+            {
+                try { await RefreshInstances(); StateHasChanged(); }
+                catch (Exception) { /* next snapshot retries */ }
+            });
+        else
+            _ = InvokeAsync(StateHasChanged); // player counts / uptime
+    }
+
+    private string GetPlayers(ServerInstance instance)
+    {
+        if (instance.Status != ServerInstanceStatus.Running)
+            return "—";
+        var metrics = Snapshots.Current.InstanceMetrics.FirstOrDefault(m => m.ServerInstanceId == instance.Id);
+        if (metrics is null)
+            return "—";
+        return metrics.MaxPlayers > 0 ? $"{metrics.PlayerCount}/{metrics.MaxPlayers}" : $"{metrics.PlayerCount}";
+    }
+
+    public void Dispose() => Snapshots.Changed -= OnSnapshotChanged;
 
     private async Task RefreshInstances()
         => _instances = await ServerService.GetAllInstancesAsync();
@@ -150,16 +175,22 @@ else
         catch (System.ComponentModel.Win32Exception ex) { Snackbar.Add($"Failed to start: {OutputSanitizer.SanitizeException(ex)}", Severity.Error); await RefreshInstances(); }
     }
 
-    private async Task StopInstance(int id)
+    private async Task StopInstance(ServerInstance instance)
     {
+        var id = instance.Id;
+        if (!await Dialogs.ConfirmAsync("Stop server", $"Stop {instance.Name}? Connected players are disconnected.", "Stop", destructive: true))
+            return;
         try { await ServerService.StopInstanceAsync(id); Snackbar.Add("Server stopped", Severity.Success); }
         catch (InvalidOperationException ex) { Snackbar.Add($"Failed to stop: {OutputSanitizer.SanitizeException(ex)}", Severity.Error); }
         catch (System.ComponentModel.Win32Exception ex) { Snackbar.Add($"Failed to stop: {OutputSanitizer.SanitizeException(ex)}", Severity.Error); }
         finally { await RefreshInstances(); }
     }
 
-    private async Task RestartInstance(int id)
+    private async Task RestartInstance(ServerInstance instance)
     {
+        var id = instance.Id;
+        if (!await Dialogs.ConfirmAsync("Restart server", $"Restart {instance.Name}? Connected players are disconnected.", "Restart"))
+            return;
         try { await ServerService.RestartInstanceAsync(id); Snackbar.Add("Server restarted", Severity.Success); }
         catch (InvalidOperationException ex) { Snackbar.Add($"Failed to restart: {OutputSanitizer.SanitizeException(ex)}", Severity.Error); }
         catch (System.ComponentModel.Win32Exception ex) { Snackbar.Add($"Failed to restart: {OutputSanitizer.SanitizeException(ex)}", Severity.Error); }

@@ -1,0 +1,17 @@
+@* Mod status pill, same visual language as StatusBadge. *@
+<span class="k-status @Tone">
+    <span class="k-status-dot"></span>
+    @UiHelpers.GetModStatusLabel(Status)
+</span>
+
+@code {
+    [Parameter, EditorRequired] public ModStatus Status { get; set; }
+
+    private string Tone => UiHelpers.GetModStatusColor(Status) switch
+    {
+        Color.Success => "k-status-ok",
+        Color.Error => "k-status-err",
+        Color.Warning => "k-status-warn",
+        _ => "k-status-neutral"
+    };
+}

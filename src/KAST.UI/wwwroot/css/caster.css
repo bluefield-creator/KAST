@@ -105,6 +105,13 @@ code, kbd, pre, samp, .k-mono {
   outline-offset: 2px;
 }
 
+/* Blazor's FocusOnNavigate moves focus to the page <h1> for screen readers;
+   that programmatic focus should not draw a ring. */
+h1:focus,
+h1:focus-visible {
+  outline: none;
+}
+
 /* ── MudBlazor: what the theme cannot express ──────────────────────────── */
 
 /* No Material ripples. */
@@ -137,11 +144,27 @@ code, kbd, pre, samp, .k-mono {
 
 .mud-table-cell { font-variant-numeric: tabular-nums; }
 
+/* Tabs: underline style on the page background, sentence case. */
+.mud-tabs-tabbar {
+  background: transparent !important;
+  border-bottom: 1px solid var(--k-border);
+  border-radius: 0 !important;
+}
+.mud-tab {
+  min-width: 0 !important;
+  padding: 6px 14px !important;
+  font-weight: 500;
+  text-transform: none !important;
+  color: var(--k-muted-foreground);
+}
+.mud-tab:hover { color: var(--k-foreground); }
+.mud-tab.mud-tab-active { color: var(--k-foreground); }
+.mud-tab-slider { background: var(--k-primary) !important; height: 2px !important; }
+
 /* Red as text (links, text/outlined buttons, active tab) follows --k-primary-text. */
-.caster-root .mud-primary-text,
+.caster-root .mud-primary-text:not(.mud-tab),
 .caster-root .mud-button-text-primary,
-.caster-root .mud-button-outlined-primary,
-.caster-root .mud-tab.mud-tab-active.mud-primary-text {
+.caster-root .mud-button-outlined-primary {
   color: var(--k-primary-text) !important;
 }
 
@@ -161,6 +184,77 @@ code, kbd, pre, samp, .k-mono {
 .mud-progress-linear { border-radius: 999px; overflow: hidden; }
 .mud-progress-linear .mud-progress-linear-bar { border-radius: 999px; }
 
+/* ── Layout utilities ─────────────────────────────────────────────────── */
+.k-grid-2, .k-grid-3, .k-grid-4 { display: grid; gap: 16px; }
+.k-grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.k-grid-3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.k-grid-4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.k-stack > * + * { margin-top: 16px; }
+
+.k-muted  { color: var(--k-muted-foreground); font-size: var(--k-text-sm); }
+.k-strong { color: var(--k-foreground); font-weight: 600; }
+
+/* Segmented control (filters). */
+.k-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--k-border);
+  border-radius: var(--k-radius);
+  background: var(--k-surface-sunken);
+}
+.k-segmented button {
+  border: 0;
+  border-radius: var(--k-radius-sm);
+  padding: 3px 10px;
+  background: transparent;
+  color: var(--k-muted-foreground);
+  font: inherit;
+  font-size: var(--k-text-xs);
+  font-weight: 500;
+  cursor: pointer;
+}
+.k-segmented button:hover { color: var(--k-foreground); }
+.k-segmented button.active {
+  color: var(--k-foreground);
+  background: var(--k-surface);
+  box-shadow: 0 0 0 1px var(--k-border);
+}
+
+/* ── Tables (MudSimpleTable with Class="k-table") ──────────────────────── */
+.k-table { background: transparent !important; }
+.k-table table { width: 100%; }
+.k-table th {
+  height: 36px;
+  padding: 0 12px !important;
+  font-size: var(--k-text-xs) !important;
+  font-weight: 600 !important;
+  color: var(--k-muted-foreground) !important;
+  background: var(--k-surface-sunken);
+  white-space: nowrap;
+}
+.k-table td {
+  height: 48px;
+  padding: 4px 12px !important;
+  font-size: var(--k-text-sm);
+  border-bottom: 1px solid var(--mud-palette-table-lines) !important;
+}
+.k-table tbody tr:last-child td { border-bottom: 0 !important; }
+.k-row-link { cursor: pointer; }
+.k-num-col { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.k-actions-col { width: 1%; text-align: right !important; white-space: nowrap; }
+.k-cell-title { font-weight: 500; color: var(--k-foreground); }
+.k-cell-sub { font-size: var(--k-text-xs); color: var(--k-muted-foreground); }
+.k-cell-muted { color: var(--k-muted-foreground); }
+
+.k-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* ── Shared atoms ──────────────────────────────────────────────────────── */
 /* Status dot (status bar, navigation, lists). */
 .k-dot {
@@ -175,6 +269,32 @@ code, kbd, pre, samp, .k-mono {
 .k-dot-warn { background: var(--k-warning); }
 .k-dot-err  { background: var(--k-destructive); }
 .k-dot-info { background: var(--k-info); }
+
+/* Status pill (StatusBadge, ModStatusBadge, ad-hoc tags). */
+.k-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: var(--k-text-xs);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--k-muted-foreground);
+  background: color-mix(in srgb, var(--k-muted-foreground) 14%, transparent);
+}
+.k-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.k-status-ok   { color: var(--k-success);     background: color-mix(in srgb, var(--k-success) 14%, transparent); }
+.k-status-warn { color: var(--k-warning);     background: color-mix(in srgb, var(--k-warning) 14%, transparent); }
+.k-status-err  { color: var(--k-destructive); background: color-mix(in srgb, var(--k-destructive) 14%, transparent); }
+.k-status-info { color: var(--k-info);        background: color-mix(in srgb, var(--k-info) 14%, transparent); }
 
 kbd {
   display: inline-block;

@@ -1,0 +1,37 @@
+@* A bordered panel with an optional header (title, description, actions). *@
+<section class="k-section @Class">
+    @if (!string.IsNullOrWhiteSpace(Title) || Actions is not null)
+    {
+        <div class="k-section-header">
+            <div class="k-section-heading">
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <h2 class="k-section-title">@Title</h2>
+                }
+                @if (!string.IsNullOrWhiteSpace(Description))
+                {
+                    <p class="k-section-description">@Description</p>
+                }
+            </div>
+            @if (Actions is not null)
+            {
+                <div class="k-section-actions">@Actions</div>
+            }
+        </div>
+    }
+    <div class="k-section-body @(Flush ? "k-section-body-flush" : null)">
+        @ChildContent
+    </div>
+</section>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>No body padding (tables, lists that run edge to edge).</summary>
+    [Parameter] public bool Flush { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+}

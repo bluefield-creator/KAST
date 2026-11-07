@@ -1,0 +1,51 @@
+@* Page title row: optional breadcrumb trail, title + subtitle, right-aligned actions,
+   and an optional meta row (ChildContent) under the title. *@
+<header class="k-page-header">
+    @if (Breadcrumbs is { Count: > 0 })
+    {
+        <nav class="k-crumbs" aria-label="Breadcrumb">
+            @foreach (var (label, href) in Breadcrumbs)
+            {
+                <a href="@href">@label</a>
+                <span class="k-crumbs-sep" aria-hidden="true">/</span>
+            }
+            <span aria-current="page">@Title</span>
+        </nav>
+    }
+    <div class="k-page-header-row">
+        <div class="k-page-header-text">
+            <div class="k-page-title-line">
+                <h1 class="k-page-title">@Title</h1>
+                @TitleContent
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                <p class="k-page-subtitle">@Subtitle</p>
+            }
+        </div>
+        @if (Actions is not null)
+        {
+            <div class="k-page-actions">@Actions</div>
+        }
+    </div>
+    @if (ChildContent is not null)
+    {
+        <div class="k-page-meta">@ChildContent</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>Ancestor pages as (label, href); the current page is the Title.</summary>
+    [Parameter] public IReadOnlyList<(string Label, string Href)>? Breadcrumbs { get; set; }
+
+    /// <summary>Inline content after the title (e.g. a status badge).</summary>
+    [Parameter] public RenderFragment? TitleContent { get; set; }
+
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    /// <summary>Meta row under the title (key facts such as PID, port, uptime).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

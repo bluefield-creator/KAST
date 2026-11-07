@@ -1,0 +1,59 @@
+.k-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-surface);
+}
+
+.k-metric-link {
+    cursor: pointer;
+}
+
+.k-metric-link:hover {
+    border-color: var(--k-border-strong);
+}
+
+.k-metric-label {
+    font-size: var(--k-text-sm);
+    color: var(--k-muted-foreground);
+}
+
+.k-metric-value {
+    font-size: var(--k-text-2xl);
+    font-weight: 600;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    color: var(--k-foreground);
+}
+
+.k-tone-ok { color: var(--k-success); }
+.k-tone-warn { color: var(--k-warning); }
+.k-tone-err { color: var(--k-destructive); }
+
+.k-metric-detail {
+    font-size: var(--k-text-xs);
+    color: var(--k-muted-foreground);
+    font-variant-numeric: tabular-nums;
+}
+
+.k-metric-bar {
+    height: 4px;
+    margin-top: 8px;
+    border-radius: 2px;
+    background: var(--k-surface-sunken);
+    overflow: hidden;
+}
+
+.k-metric-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width var(--k-dur) var(--k-ease);
+}
+
+.k-bar-ok { background: var(--k-success); }
+.k-bar-warn { background: var(--k-warning); }
+.k-bar-err { background: var(--k-destructive); }

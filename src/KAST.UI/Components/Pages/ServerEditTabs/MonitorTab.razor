@@ -10,154 +10,120 @@
 
 @if (!_monitoringConnected && _monitoringError is not null)
 {
-    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mt-3">
-        Monitoring unavailable. Console and metrics updates are disconnected.
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mb-4">
+        Live monitoring is disconnected. Console and metrics are not updating.
     </MudAlert>
 }
 
-<MudGrid Class="mt-3" Spacing="3">
-    <MudItem xs="12" sm="4">
-        <MudCard Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.overline" Color="Color.Secondary">CPU</MudText>
-                <MudText Typo="Typo.h5">@_monitorCpu.ToString("F1")%</MudText>
-                <MudProgressLinear Value="@_monitorCpu" Color="Color.Info" />
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-    <MudItem xs="12" sm="4">
-        <MudCard Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.overline" Color="Color.Secondary">Memory</MudText>
-                <MudText Typo="Typo.h5">@UiHelpers.FormatBytes(_monitorMemory)</MudText>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-    <MudItem xs="12" sm="4">
-        <MudCard Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.overline" Color="Color.Secondary">Players</MudText>
-                <MudText Typo="Typo.h5">@_monitorPlayerCount@(_monitorMaxPlayers > 0 ? $" / {_monitorMaxPlayers}" : "")</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Uptime @GetUptime()</MudText>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-</MudGrid>
+<div class="k-grid-4">
+    <MetricTile Label="CPU" Value="@($"{_monitorCpu:F1}%")" Percent="_monitorCpu" />
+    <MetricTile Label="Memory" Value="@UiHelpers.FormatBytes(_monitorMemory)" />
+    <MetricTile Label="Players" Value="@($"{_monitorPlayerCount}{(_monitorMaxPlayers > 0 ? $" / {_monitorMaxPlayers}" : "")}")" />
+    <MetricTile Label="Uptime" Value="@GetUptime()" />
+</div>
 
-<MudGrid Class="mt-4" Spacing="3">
-    <MudItem xs="12" md="4">
-        <MudPaper Class="pa-3 h-100" Elevation="1">
-            <MudText Typo="Typo.overline" Color="Color.Secondary">Mission</MudText>
-            @if (_latestMission is null)
-            {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">No mission detected yet.</MudText>
-            }
-            else
-            {
-                <MudText Typo="Typo.subtitle2">@(_latestMission.MissionFile ?? "Mission running")</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    @FirstNonBlank(_latestMission.MissionWorld, _latestMission.MissionDirectory, "Unknown world")
-                </MudText>
-            }
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" md="4">
-        <MudPaper Class="pa-3 h-100" Elevation="1">
-            <MudText Typo="Typo.overline" Color="Color.Secondary">Steam</MudText>
-            @if (_latestSteamEvent is null)
-            {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">No Steam status detected yet.</MudText>
-            }
-            else
-            {
-                <MudText Typo="Typo.subtitle2">@_latestSteamEvent.Title</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">@_latestSteamEvent.Message</MudText>
-            }
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" md="4">
-        <MudPaper Class="pa-3 h-100" Elevation="1">
-            <MudText Typo="Typo.overline" Color="Color.Secondary">Admin Activity</MudText>
-            @if (_latestAdminEvent is null)
-            {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">No admin activity detected yet.</MudText>
-            }
-            else
-            {
-                <MudText Typo="Typo.subtitle2">@_latestAdminEvent.Title</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">@_latestAdminEvent.Message</MudText>
-            }
-        </MudPaper>
-    </MudItem>
-</MudGrid>
+<div class="k-grid-3 mt-4">
+    <SectionCard Title="Mission">
+        @if (_latestMission is null)
+        {
+            <div class="k-muted">No mission detected yet.</div>
+        }
+        else
+        {
+            <div class="k-strong">@(_latestMission.MissionFile ?? "Mission running")</div>
+            <div class="k-muted">@FirstNonBlank(_latestMission.MissionWorld, _latestMission.MissionDirectory, "Unknown world")</div>
+        }
+    </SectionCard>
+    <SectionCard Title="Steam">
+        @if (_latestSteamEvent is null)
+        {
+            <div class="k-muted">No Steam status reported yet.</div>
+        }
+        else
+        {
+            <div class="k-strong">@_latestSteamEvent.Title</div>
+            <div class="k-muted">@_latestSteamEvent.Message</div>
+        }
+    </SectionCard>
+    <SectionCard Title="Admin activity">
+        @if (_latestAdminEvent is null)
+        {
+            <div class="k-muted">No admin activity yet.</div>
+        }
+        else
+        {
+            <div class="k-strong">@_latestAdminEvent.Title</div>
+            <div class="k-muted">@_latestAdminEvent.Message</div>
+        }
+    </SectionCard>
+</div>
 
 @if (AlertEvents.Count > 0)
 {
-    <MudPaper Class="pa-3 mt-3" Elevation="1">
-        <div class="d-flex align-center justify-space-between mb-2">
-            <MudText Typo="Typo.subtitle2">Server Events</MudText>
+    <SectionCard Title="Server events" Class="mt-4">
+        <Actions>
             <MudTooltip Text="Clear detected server events">
-                <MudIconButton Icon="@Icons.Material.Outlined.DeleteSweep"
-                               Size="Size.Small"
-                               OnClick="ClearRuntimeEvents" />
+                <MudIconButton Icon="@Icons.Material.Outlined.DeleteSweep" Size="Size.Small" aria-label="Clear server events" OnClick="ClearRuntimeEvents" />
             </MudTooltip>
-        </div>
-        <div class="kast-runtime-events">
-            @foreach (var runtimeEvent in AlertEvents.TakeLast(8).Reverse())
-            {
-                <MudAlert Severity="@ToMudSeverity(runtimeEvent.Severity)"
-                          Variant="Variant.Outlined"
-                          Dense="true"
-                          Class="mb-1">
-                    <div class="d-flex flex-column">
-                        <span>@runtimeEvent.Title</span>
-                        <span class="mud-typography-caption">@runtimeEvent.Message</span>
-                    </div>
-                </MudAlert>
-            }
-        </div>
-    </MudPaper>
+        </Actions>
+        <ChildContent>
+            <div class="kast-runtime-events">
+                @foreach (var runtimeEvent in AlertEvents.TakeLast(8).Reverse())
+                {
+                    <MudAlert Severity="@ToMudSeverity(runtimeEvent.Severity)" Variant="Variant.Outlined" Dense="true" Class="mb-1">
+                        <div class="d-flex flex-column">
+                            <span>@runtimeEvent.Title</span>
+                            <span class="mud-typography-caption">@runtimeEvent.Message</span>
+                        </div>
+                    </MudAlert>
+                }
+            </div>
+        </ChildContent>
+    </SectionCard>
 }
 
-<div class="d-flex align-center justify-space-between mt-4 mb-1">
-    <MudText Typo="Typo.subtitle2">Server Console</MudText>
-    <div class="d-flex align-center gap-1">
-        <MudButtonGroup Variant="Variant.Text" Size="Size.Small" OverrideStyles="false">
-            <MudButton Color="@(_consoleFilter == ConsoleFilter.All     ? Color.Primary : Color.Default)" OnClick="@(() => _consoleFilter = ConsoleFilter.All)">All</MudButton>
-            <MudButton Color="@(_consoleFilter == ConsoleFilter.Info    ? Color.Info    : Color.Default)" OnClick="@(() => _consoleFilter = ConsoleFilter.Info)">Info</MudButton>
-            <MudButton Color="@(_consoleFilter == ConsoleFilter.Warning ? Color.Warning : Color.Default)" OnClick="@(() => _consoleFilter = ConsoleFilter.Warning)">Warn</MudButton>
-            <MudButton Color="@(_consoleFilter == ConsoleFilter.Error   ? Color.Error   : Color.Default)" OnClick="@(() => _consoleFilter = ConsoleFilter.Error)">Error</MudButton>
-        </MudButtonGroup>
-        <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
-        <MudTooltip Text='@(_followConsole ? "Auto-scroll on \u2014 click to disable" : "Auto-scroll off \u2014 click to enable")'>
-            <MudIconButton Icon="@(_followConsole ? Icons.Material.Filled.LockOpen : Icons.Material.Outlined.VerticalAlignBottom)"
-                           Color="@(_followConsole ? Color.Primary : Color.Default)"
-                           Size="Size.Small"
+<SectionCard Title="Console" Class="mt-4" Flush="true">
+    <Actions>
+        <div class="k-segmented" role="group" aria-label="Console filter">
+            @foreach (var filter in Enum.GetValues<ConsoleFilter>())
+            {
+                var f = filter;
+                <button type="button" class="@(_consoleFilter == f ? "active" : null)" @onclick="@(() => _consoleFilter = f)">@FilterLabel(f)</button>
+            }
+        </div>
+        <MudTooltip Text="@(_followConsole ? "Following new output (click to pause)" : "Paused (click to follow new output)")">
+            <MudIconButton Icon="@(_followConsole ? Icons.Material.Outlined.PauseCircle : Icons.Material.Outlined.VerticalAlignBottom)"
+                           Size="Size.Small" aria-label="Toggle auto-scroll"
                            OnClick="@(() => { _followConsole = !_followConsole; if (_followConsole) _scrollConsole = true; })" />
         </MudTooltip>
-        <MudTooltip Text='@($"Clear {(_consoleFilter == ConsoleFilter.All ? "all" : _consoleFilter.ToString().ToLower())} entries")'>
-            <MudIconButton Icon="@Icons.Material.Outlined.DeleteSweep"
-                           Size="Size.Small"
-                           OnClick="ClearConsole" />
+        <MudTooltip Text="Clear console">
+            <MudIconButton Icon="@Icons.Material.Outlined.DeleteSweep" Size="Size.Small" aria-label="Clear console" OnClick="ClearConsole" />
         </MudTooltip>
-    </div>
-</div>
-<div @ref="_consoleRef" class="kast-console"
-     style="background:var(--mud-palette-background-grey); padding:8px; font-family:monospace; font-size:12px; border-radius:4px;">
-    @foreach (var entry in FilteredConsoleLines)
-    {
-        <div style="@(entry.Type == ConsoleFilter.Error ? "color:var(--mud-palette-error-text);" : entry.Type == ConsoleFilter.Warning ? "color:var(--mud-palette-warning-text);" : "")">
-            <span style="color:var(--mud-palette-text-secondary);">@entry.Timestamp.ToString("HH:mm:ss")</span>
-            <span> @entry.Line</span>
+    </Actions>
+    <ChildContent>
+        <div @ref="_consoleRef" class="kast-console">
+            @foreach (var entry in FilteredConsoleLines)
+            {
+                <div class="@(entry.Type == ConsoleFilter.Error ? "c-err" : entry.Type == ConsoleFilter.Warning ? "c-warn" : null)">
+                    <span class="c-ts">@entry.Timestamp.ToString("HH:mm:ss")</span> @entry.Line
+                </div>
+            }
         </div>
-    }
-</div>
+    </ChildContent>
+</SectionCard>
 
 @code {
     [Parameter, EditorRequired] public ServerInstance Instance { get; set; } = default!;
     [Parameter] public EventCallback OnStatusChanged { get; set; }
 
     private enum ConsoleFilter { All, Info, Warning, Error }
+
+    private static string FilterLabel(ConsoleFilter f) => f switch
+    {
+        ConsoleFilter.Warning => "Warnings",
+        ConsoleFilter.Error => "Errors",
+        _ => f.ToString()
+    };
     private record ConsoleEntry(DateTime Timestamp, string Line, ConsoleFilter Type);
 
     private HubConnection? _hubConnection;

@@ -1,0 +1,41 @@
+@* A single number with label, optional detail line and optional usage bar (0–100). *@
+<div class="k-metric @(Href is not null ? "k-metric-link" : null)" @onclick="Navigate">
+    <div class="k-metric-label">@Label</div>
+    <div class="k-metric-value @ToneClass">@Value</div>
+    @if (!string.IsNullOrWhiteSpace(Detail))
+    {
+        <div class="k-metric-detail">@Detail</div>
+    }
+    @if (Percent is { } pct)
+    {
+        <div class="k-metric-bar" role="progressbar" aria-valuenow="@((int)pct)" aria-valuemin="0" aria-valuemax="100">
+            <div class="k-metric-bar-fill @BarClass(pct)" style="width:@(Math.Clamp(pct, 0, 100).ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Detail { get; set; }
+
+    /// <summary>Optional 0–100 usage bar; turns amber at 75 and red at 90.</summary>
+    [Parameter] public double? Percent { get; set; }
+
+    /// <summary>ok | warn | err | null (neutral) — colours the value.</summary>
+    [Parameter] public string? Tone { get; set; }
+
+    [Parameter] public string? Href { get; set; }
+
+    private string? ToneClass => Tone is null ? null : $"k-tone-{Tone}";
+
+    private static string BarClass(double pct) => pct >= 90 ? "k-bar-err" : pct >= 75 ? "k-bar-warn" : "k-bar-ok";
+
+    private void Navigate()
+    {
+        if (Href is not null)
+            Nav.NavigateTo(Href);
+    }
+}

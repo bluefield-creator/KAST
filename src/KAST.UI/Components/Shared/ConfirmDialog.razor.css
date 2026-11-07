@@ -1,0 +1,11 @@
+.k-confirm-title {
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+.k-confirm-message {
+    max-width: 440px;
+    font-size: var(--k-text-base);
+    color: var(--k-muted-foreground);
+    white-space: pre-line;
+}

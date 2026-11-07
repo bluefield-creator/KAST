@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using KAST.Core.Interfaces;
@@ -13,6 +14,16 @@ namespace KAST.Infrastructure.Services;
 
 public partial class ProcessManagerService(ILogger<ProcessManagerService> logger, IServiceScopeFactory scopeFactory) : IProcessManagerService
 {
+    /// <summary>How long a process gets to exit after a delivered SIGTERM / close request.</summary>
+    internal static TimeSpan GracePeriod { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Upper bound on waiting for a killed process to disappear. A process stuck
+    /// in uninterruptible I/O or held by a crash handler must never hang a stop
+    /// (and with it the panel's Stopping state) forever.
+    /// </summary>
+    internal static TimeSpan KillWaitTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
     public async Task<int> StartServerProcessAsync(string executablePath, string arguments,
         Action<int, string>? onOutputLine = null, Action<int, int>? onProcessExited = null,
         CancellationToken ct = default)
@@ -30,7 +41,9 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError = true
+            RedirectStandardError = true,
+            // Nothing ever writes to the server's stdin; never let it inherit ours.
+            RedirectStandardInput = false
         };
 
         ct.ThrowIfCancellationRequested();
@@ -38,35 +51,45 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
         var process = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start server process.");
 
-        logger.LogInformation("Process started with PID {Pid}", process.Id);
-        activity?.SetTag("process.pid", process.Id);
-
         var pid = process.Id;
+        logger.LogInformation("Process started with PID {Pid}", pid);
+        activity?.SetTag("process.pid", pid);
 
-        // Stream stdout/stderr lines to the callback
-        if (onOutputLine is not null)
+        // Always drain stdout/stderr: an unread redirected pipe fills up and
+        // blocks the server's next write, freezing it until someone kills it.
+        process.OutputDataReceived += (_, e) =>
         {
-            process.OutputDataReceived += (_, e) =>
-            {
-                if (e.Data is not null) onOutputLine(pid, e.Data);
-            };
-            process.ErrorDataReceived += (_, e) =>
-            {
-                if (e.Data is not null) onOutputLine(pid, e.Data);
-            };
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-        }
+            if (e.Data is not null) SafeInvoke(onOutputLine, pid, e.Data);
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is not null) SafeInvoke(onOutputLine, pid, e.Data);
+        };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
-        // Monitor for exit and invoke callback. The Process object is owned by
-        // the watcher — it disposes it once the process has exited.
+        // Exit watcher. Uses the Exited event instead of WaitForExitAsync:
+        // WaitForExitAsync also waits for EOF on the redirected pipes, which
+        // never arrives while any grandchild still holds an inherited handle —
+        // the exit callback then never fires and the panel shows a dead server
+        // as Running.
+        var exitSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) => exitSignal.TrySetResult();
+        if (process.HasExited)
+            exitSignal.TrySetResult();
+
         _ = Task.Run(async () =>
         {
             try
             {
-                await process.WaitForExitAsync(CancellationToken.None);
-                logger.LogInformation("Process {Pid} exited with code {Code}", pid, process.ExitCode);
-                onProcessExited?.Invoke(pid, process.ExitCode);
+                await exitSignal.Task.ConfigureAwait(false);
+                int exitCode;
+                try { exitCode = process.ExitCode; }
+                catch (InvalidOperationException) { exitCode = -1; }
+
+                logger.LogInformation("Process {Pid} exited with code {Code}", pid, exitCode);
+                onProcessExited?.Invoke(pid, exitCode);
             }
             catch (Exception ex)
             {
@@ -74,11 +97,21 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             }
             finally
             {
-                process.Dispose();
+                // Give the async readers a moment to flush the last lines, then
+                // release the handle regardless of pipe state.
+                try { await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false); } catch { }
+                try { process.Dispose(); } catch { }
             }
         }, CancellationToken.None);
 
         return pid;
+    }
+
+    private void SafeInvoke(Action<int, string>? callback, int pid, string line)
+    {
+        if (callback is null) return;
+        try { callback(pid, line); }
+        catch (Exception ex) { logger.LogDebug(ex, "Output callback failed for PID {Pid}", pid); }
     }
 
     public async Task StopProcessAsync(int processId, CancellationToken ct = default)
@@ -87,19 +120,10 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             "kast.process.stop", ActivityKind.Internal);
         activity?.SetTag("process.pid", processId);
 
-        Process process;
-        try
+        var process = TryGetProcess(processId);
+        if (process is null)
         {
-            process = Process.GetProcessById(processId);
-        }
-        catch (ArgumentException)
-        {
-            logger.LogWarning("Process {Pid} is not running", processId);
-            return;
-        }
-        catch (InvalidOperationException)
-        {
-            logger.LogWarning("Process {Pid} has already exited", processId);
+            logger.LogInformation("Process {Pid} is not running", processId);
             return;
         }
 
@@ -113,17 +137,23 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
                 return;
             }
 
+            if (HasExitedSafe(process))
+                return;
+
             logger.LogInformation("Stopping process {Pid}", processId);
 
-            if (!process.HasExited)
+            // Only wait out the grace period when a stop request was actually
+            // delivered. arma3server has no window when launched headless or
+            // from a service, so CloseMainWindow is usually a no-op — waiting
+            // 30 s for nothing just makes every stop slow.
+            if (RequestGracefulExit(process))
             {
-                try { process.CloseMainWindow(); } catch { /* best effort */ }
-
-                using var graceCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                using var graceCts = new CancellationTokenSource(GracePeriod);
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, graceCts.Token);
                 try
                 {
                     await process.WaitForExitAsync(linkedCts.Token);
+                    logger.LogInformation("Process {Pid} exited gracefully", processId);
                     return;
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -132,35 +162,26 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
                 }
             }
 
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(ct);
-            }
+            ct.ThrowIfCancellationRequested();
+
+            if (!await KillAndWaitAsync(process, processId))
+                throw new TimeoutException(
+                    $"Process {processId} is still alive {KillWaitTimeout.TotalSeconds:F0}s after being killed.");
         }
     }
 
     public async Task<bool> KillProcessAsync(int processId, CancellationToken ct = default)
     {
-        Process process;
-        try
+        var process = TryGetProcess(processId);
+        if (process is null)
         {
-            process = Process.GetProcessById(processId);
-        }
-        catch (ArgumentException)
-        {
-            logger.LogWarning("KillProcess: PID {Pid} is not running", processId);
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            logger.LogWarning("KillProcess: PID {Pid} has already exited", processId);
+            logger.LogInformation("KillProcess: PID {Pid} is not running", processId);
             return true;
         }
 
         using (process)
         {
-            if (process.HasExited)
+            if (HasExitedSafe(process))
                 return true;
 
             if (!IsKnownServerProcess(process))
@@ -170,10 +191,96 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             }
 
             logger.LogInformation("KillProcess: Force-killing process {Pid}", processId);
-            process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync(ct);
-            return process.HasExited;
+            ct.ThrowIfCancellationRequested();
+            return await KillAndWaitAsync(process, processId);
         }
+    }
+
+    /// <summary>
+    /// Kills the process tree and waits (bounded) for it to disappear.
+    /// Returns false when the process is still alive afterwards.
+    /// </summary>
+    private async Task<bool> KillAndWaitAsync(Process process, int processId)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex) when (ex is Win32Exception or AggregateException or InvalidOperationException or NotSupportedException)
+        {
+            // Partial tree failures (a child already gone, access denied on a
+            // descendant) must not stop us from killing the main process.
+            logger.LogWarning(ex, "Tree kill of PID {Pid} reported errors; killing the main process only", processId);
+            try { process.Kill(entireProcessTree: false); }
+            catch (Exception inner) when (inner is Win32Exception or InvalidOperationException)
+            {
+                logger.LogWarning(inner, "Kill of PID {Pid} failed", processId);
+            }
+        }
+
+        using var waitCts = new CancellationTokenSource(KillWaitTimeout);
+        try
+        {
+            await process.WaitForExitAsync(waitCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // fall through to the liveness check
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            logger.LogDebug(ex, "Wait for PID {Pid} failed", processId);
+        }
+
+        var exited = HasExitedSafe(process);
+        if (!exited)
+            logger.LogError("Process {Pid} survived a force-kill for {Seconds:F0}s", processId, KillWaitTimeout.TotalSeconds);
+        return exited;
+    }
+
+    private bool RequestGracefulExit(Process process)
+    {
+        if (!OperatingSystem.IsWindows())
+            return ProcessNative.TrySendTerminate(process.Id);
+
+        try
+        {
+            return process.CloseMainWindow();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            logger.LogDebug(ex, "CloseMainWindow failed for PID {Pid}", process.Id);
+            return false;
+        }
+    }
+
+    private static Process? TryGetProcess(int processId)
+    {
+        try
+        {
+            return Process.GetProcessById(processId);
+        }
+        catch (ArgumentException)
+        {
+            return null; // not running
+        }
+        catch (InvalidOperationException)
+        {
+            return null; // exited during lookup
+        }
+    }
+
+    /// <summary>
+    /// HasExited that never throws. Access denied (Win32Exception) means the
+    /// process exists but we cannot open it — report it as still running so a
+    /// live server is never mistaken for a dead one.
+    /// </summary>
+    private static bool HasExitedSafe(Process process)
+    {
+        try { return process.HasExited; }
+        catch (InvalidOperationException) { return true; }
+        catch (Win32Exception) { return false; }
+        catch (NotSupportedException) { return false; }
     }
 
     private static bool IsKnownServerProcess(Process process)
@@ -189,6 +296,10 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
             // Process exited between resolution and the name read
             return false;
         }
+        catch (Win32Exception)
+        {
+            return false;
+        }
     }
 
     internal static readonly string[] KnownServerProcessNames =
@@ -201,18 +312,50 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
 
     public bool IsProcessRunning(int processId)
     {
-        try
-        {
-            using var process = Process.GetProcessById(processId);
-            if (process.HasExited)
-                return false;
-
-            return IsKnownServerProcess(process);
-        }
-        catch
-        {
+        using var process = TryGetProcess(processId);
+        if (process is null)
             return false;
+
+        return !HasExitedSafe(process) && IsKnownServerProcess(process);
+    }
+
+    public IReadOnlyList<KastProcessInfo> FindKastServerProcesses()
+    {
+        var found = new List<KastProcessInfo>();
+        var seen = new HashSet<int>();
+
+        foreach (var procName in KnownServerProcessNames)
+        {
+            Process[] processes;
+            try { processes = Process.GetProcessesByName(procName); }
+            catch { continue; }
+
+            foreach (var process in processes)
+            {
+                using (process)
+                {
+                    int pid;
+                    try { pid = process.Id; }
+                    catch { continue; }
+
+                    if (!seen.Add(pid) || HasExitedSafe(process))
+                        continue;
+
+                    var commandLine = ProcessNative.TryGetCommandLine(pid);
+                    if (!ProcessNative.TryParseInstanceTag(commandLine, out var instanceId, out var hcIndex))
+                        continue;
+
+                    found.Add(new KastProcessInfo(
+                        pid,
+                        instanceId,
+                        hcIndex,
+                        ProcessNative.TryGetExecutablePath(pid),
+                        commandLine));
+                }
+            }
         }
+
+        return found;
     }
 
     public async Task<(double CpuPercent, long MemoryBytes)?> GetProcessMetricsAsync(int processId, CancellationToken ct = default)
@@ -228,6 +371,7 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
 
             await Task.Delay(500, ct);
 
+            process.Refresh();
             var endCpu = process.TotalProcessorTime;
             var endTime = DateTime.UtcNow;
 
@@ -250,15 +394,37 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<KastDbContext>();
 
-        var managedPids = await db.ServerInstances
-            .Where(s => s.ProcessId != null)
+        var instances = await db.ServerInstances
+            .AsNoTracking()
             .Select(s => new { s.Id, s.Name, s.ProcessId })
-            .ToDictionaryAsync(s => s.ProcessId!.Value, s => (s.Id, s.Name), ct);
+            .ToListAsync(ct);
+        var managedPids = instances
+            .Where(s => s.ProcessId != null)
+            .ToDictionary(s => s.ProcessId!.Value, s => (s.Id, s.Name));
+        var instanceNames = instances.ToDictionary(s => s.Id, s => s.Name);
+        var headlessPids = await db.HeadlessClients
+            .AsNoTracking()
+            .Where(h => h.ProcessId != null)
+            .Select(h => new { h.ProcessId, h.ServerInstanceId })
+            .ToListAsync(ct);
+        foreach (var hc in headlessPids)
+        {
+            if (instanceNames.TryGetValue(hc.ServerInstanceId, out var name))
+                managedPids.TryAdd(hc.ProcessId!.Value, (hc.ServerInstanceId, name));
+        }
 
         var processes = new List<Process>();
+        var seen = new HashSet<int>();
         foreach (var procName in KnownServerProcessNames)
         {
-            try { processes.AddRange(Process.GetProcessesByName(procName)); }
+            try
+            {
+                foreach (var p in Process.GetProcessesByName(procName))
+                {
+                    if (seen.Add(p.Id)) processes.Add(p);
+                    else p.Dispose();
+                }
+            }
             catch { continue; }
         }
 
@@ -273,8 +439,6 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
 
         await Parallel.ForEachAsync(processes, options, async (process, token) =>
         {
-            // Dispose covers the early HasExited return too — the handle used to
-            // leak when the process had already exited.
             using (process)
             {
                 try
@@ -282,9 +446,7 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
                     if (process.HasExited)
                         return;
 
-                    string? cmdLine = null;
-                    try { cmdLine = GetProcessCommandLine(process); }
-                    catch { }
+                    var cmdLine = ProcessNative.TryGetCommandLine(process.Id);
 
                     int? port = null;
                     if (cmdLine != null)
@@ -301,7 +463,7 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
                         var metrics = await GetProcessMetricsAsync(process.Id, token);
                         if (metrics.HasValue) cpuPercent = metrics.Value.CpuPercent;
                     }
-                    catch { }
+                    catch (Exception ex) when (ex is not OperationCanceledException) { }
 
                     results.Add(new RunningProcessInfo(
                         process.Id,
@@ -323,28 +485,6 @@ public partial class ProcessManagerService(ILogger<ProcessManagerService> logger
         });
 
         return results.ToList();
-    }
-
-    private static string? GetProcessCommandLine(Process process)
-    {
-        try
-        {
-            if (OperatingSystem.IsLinux())
-            {
-                var cmdlinePath = $"/proc/{process.Id}/cmdline";
-                if (File.Exists(cmdlinePath))
-                {
-                    var bytes = File.ReadAllBytes(cmdlinePath);
-                    // /proc/pid/cmdline uses null bytes as separators
-                    var args = System.Text.Encoding.UTF8.GetString(bytes)
-                        .Split('\0', StringSplitOptions.RemoveEmptyEntries);
-                    return string.Join(" ", args);
-                }
-            }
-        }
-        catch { }
-
-        return null;
     }
 
     [GeneratedRegex(@"-port=(\d+)", RegexOptions.IgnoreCase)]

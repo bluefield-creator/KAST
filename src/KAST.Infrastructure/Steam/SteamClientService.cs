@@ -723,6 +723,35 @@ public class SteamClientService : ISteamService, IDisposable
     // Arma 3 AppID — used as both appId and depotId for workshop items (same as FASTER & BytexDigital)
     private const uint Arma3AppId = 107410;
 
+    private static string DescribeMissingContent(long workshopId, PublishedFileDetails details)
+        => DescribeMissingContent(workshopId, (EResult)details.result, details.file_type, details.banned,
+            details.visibility, details.file_url, details.consumer_appid);
+
+    /// <summary>
+    /// Explains why a workshop item has no depot manifest (hcontent_file = 0)
+    /// in terms an admin can act on, instead of the raw field name.
+    /// </summary>
+    internal static string DescribeMissingContent(long workshopId, EResult result, uint fileType, bool banned,
+        uint visibility, string? fileUrl, uint consumerAppId)
+    {
+        const uint collectionFileType = 2; // EWorkshopFileType.Collection
+        var prefix = $"Workshop item {workshopId} cannot be downloaded: ";
+
+        if (result is not (EResult.OK or EResult.Invalid))
+            return prefix + $"Steam reports it as {result} (removed, hidden or not visible to this account).";
+        if (banned)
+            return prefix + "it has been banned/removed by Steam.";
+        if (fileType == collectionFileType)
+            return prefix + "it is a collection, not a mod. Import the collection's items instead.";
+        if (consumerAppId != 0 && consumerAppId != Arma3AppId)
+            return prefix + $"it belongs to app {consumerAppId}, not Arma 3.";
+        if (visibility is 1 or 2)
+            return prefix + "it is private or friends-only. Ask the author to make it public or unlisted.";
+        if (!string.IsNullOrWhiteSpace(fileUrl))
+            return prefix + "it is a legacy single-file upload without Steam depot content, which KAST cannot install.";
+        return prefix + "it has no published content (the author has not uploaded files, or the item was emptied).";
+    }
+
     public async Task<ulong> DownloadWorkshopItemAsync(
         long workshopId, string destinationPath,
         IProgress<double>? progress = null,
@@ -759,7 +788,7 @@ public class SteamClientService : ISteamService, IDisposable
                 ?? throw new InvalidOperationException($"Workshop item {workshopId} not found");
 
             if (details.hcontent_file == 0)
-                throw new InvalidOperationException($"Workshop item {workshopId} has no downloadable content (hcontent_file=0)");
+                throw new InvalidOperationException(DescribeMissingContent(workshopId, details));
 
             uint appId = Arma3AppId;
             uint depotId = Arma3AppId;
@@ -2161,9 +2190,20 @@ public class SteamClientService : ISteamService, IDisposable
         {
             while (Volatile.Read(ref _callbackLoopRunning) == 1 && !cts.Token.IsCancellationRequested)
             {
-                _callbackManager.RunWaitCallbacks(TimeSpan.FromSeconds(1));
+                try
+                {
+                    _callbackManager.RunWaitCallbacks(TimeSpan.FromSeconds(1));
+                }
+                catch (Exception ex)
+                {
+                    // A throwing callback handler used to fault this task: the
+                    // pump died silently (surfacing later only as an
+                    // UnobservedTaskException) and every Steam operation after
+                    // it hung waiting for callbacks that were never dispatched.
+                    _logger.LogError(ex, "Steam callback handler failed; callback pump continues");
+                }
             }
-        }, cts.Token);
+        }, CancellationToken.None);
     }
 
     private void StopCallbackLoop()
@@ -2255,7 +2295,15 @@ public class SteamClientService : ISteamService, IDisposable
             if (CurrentUsername != null && _currentRefreshToken != null)
                 _pendingAccessToken = _currentRefreshToken;
 
-            _steamClient.Connect();
+            try
+            {
+                _steamClient.Connect();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Steam reconnect attempt failed; scheduling another");
+                ScheduleReconnect();
+            }
         }, CancellationToken.None);
     }
 

@@ -19,7 +19,10 @@ public static class DependencyInjection
         services.AddDbContext<KastDbContext>((sp, options) =>
             options.UseSqlite(connectionString,
                     o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
-                .AddInterceptors(sp.GetRequiredService<SqliteConnectionPragmaInterceptor>()));
+                .AddInterceptors(sp.GetRequiredService<SqliteConnectionPragmaInterceptor>()),
+            contextLifetime: ServiceLifetime.Scoped,
+            optionsLifetime: ServiceLifetime.Singleton);
+        services.AddSingleton<IDbContextFactory<KastDbContext>, KastDbContextFactory>();
 
         // Steam services
         services.TryAddSingleton<IOutputSanitizer, OutputSanitizer>();

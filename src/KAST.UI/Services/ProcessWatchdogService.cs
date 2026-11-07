@@ -3,13 +3,23 @@ using KAST.Core.Events;
 using KAST.Core.Interfaces;
 using KAST.Core.Models;
 using KAST.Infrastructure.Data;
+using KAST.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace KAST.UI.Services;
 
 /// <summary>
-/// Monitors running server instances for crashed processes and restarts them per RestartPolicy.
-/// Also detects and cleans up orphaned headless client processes.
+/// Keeps the database honest about the processes on the host. Every sweep:
+/// <list type="number">
+/// <item>reaps orphaned Arma processes (adopts a lost server, kills strays),</item>
+/// <item>marks Running instances whose process died as Crashed,</item>
+/// <item>resolves instances stranded in Starting/Stopping/Restarting,</item>
+/// <item>applies the RestartPolicy to crashes — including those recorded by
+/// the process exit handler, which used to win the race and leave the
+/// watchdog with nothing to restart.</item>
+/// </list>
+/// Every change to an instance is made under its lifecycle lock, and an
+/// instance with an operation in flight is skipped until the next sweep.
 /// </summary>
 public class ProcessWatchdogService(
     IServiceScopeFactory scopeFactory,
@@ -19,7 +29,14 @@ public class ProcessWatchdogService(
     ILogger<ProcessWatchdogService> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(10);
+
+    /// <summary>A server that stays up this long has its crash budget reset.</summary>
+    internal static TimeSpan StableRunReset { get; set; } = TimeSpan.FromMinutes(5);
+
     private readonly Dictionary<int, int> _restartAttempts = [];
+    private readonly Dictionary<int, int> _autoStartedPids = [];
+    private readonly HashSet<int> _pendingRetry = [];
+    private DateTime _lastCrashScanUtc = DateTime.UtcNow;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -44,124 +61,217 @@ public class ProcessWatchdogService(
     {
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<KastDbContext>();
+        var serverService = scope.ServiceProvider.GetRequiredService<IServerInstanceService>();
 
-        // ── 1. Running instances with dead processes ──
-
-        var runningInstances = await db.ServerInstances
-            .Where(s => s.Status == ServerInstanceStatus.Running && s.ProcessId != null)
-            .ToListAsync(ct);
-
-        // A manual start (or any other path to Running) resets the crash budget:
-        // a stale counter must not refuse the next restart after the user has
-        // already brought the server back up by hand.
-        foreach (var instance in runningInstances)
+        // ── 0. Process hunting ──
+        try
         {
-            if (_restartAttempts.Remove(instance.Id))
-                logger.LogInformation("Server {Name}: cleared restart attempt counter (instance running)", instance.Name);
+            await serverService.ReapOrphanedProcessesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Orphaned process sweep failed");
         }
 
-        foreach (var instance in runningInstances.Where(instance => !processManager.IsProcessRunning(instance.ProcessId!.Value)))
+        var crashed = new HashSet<int>();
+
+        // ── 1. Running instances with dead processes ──
+        var runningIds = await db.ServerInstances
+            .AsNoTracking()
+            .Where(s => s.Status == ServerInstanceStatus.Running && s.ProcessId != null)
+            .Select(s => s.Id)
+            .ToListAsync(ct);
+
+        foreach (var id in runningIds)
         {
-            var deadPid = instance.ProcessId!.Value;
-            logger.LogWarning("Server {Name} (PID {Pid}) has crashed", instance.Name, deadPid);
+            using var gate = await InstanceLifecycleLocks.TryEnterAsync(id, TimeSpan.Zero, ct);
+            if (gate is null)
+                continue; // operation in flight
+
+            var instance = await LoadFreshAsync(db, id, ct);
+            if (instance is not { Status: ServerInstanceStatus.Running, ProcessId: { } pid })
+                continue;
+
+            if (processManager.IsProcessRunning(pid))
+            {
+                ResetBudgetIfDeserved(instance, pid);
+                // Re-attach the RPT tailer (idempotent) — e.g. after an adoption.
+                consoleLogTailer.StartFollowing(instance, instance.StartedAt ?? DateTime.UtcNow, replayExistingContent: false);
+                continue;
+            }
+
+            logger.LogWarning("Server {Name} (PID {Pid}) has crashed", instance.Name, pid);
             await consoleLogTailer.StopFollowingAsync(instance.Id);
 
-            CloseHistoryEntry(db, instance.Id, deadPid, "Crashed");
-
+            CloseHistoryEntry(db, instance.Id, pid, "Crashed");
             instance.ProcessId = null;
             instance.Status = ServerInstanceStatus.Crashed;
             instance.StartedAt = null;
+            await KillHeadlessClientsAsync(instance);
             await db.SaveChangesAsync(ct);
             await broadcaster.BroadcastServerStatusChangedAsync(
                 new ServerStatusChangedEvent(instance.Id, instance.Status));
 
-            switch (instance.RestartPolicy)
-            {
-                case RestartPolicy.None:
-                    logger.LogInformation("Server {Name}: RestartPolicy=None, leaving crashed", instance.Name);
-                    _restartAttempts.Remove(instance.Id);
-                    break;
-
-                case RestartPolicy.OnCrash:
-                case RestartPolicy.Always:
-                    await TryRestartAsync(instance, scope.ServiceProvider, ct);
-                    break;
-                default:
-                    logger.LogWarning("Server {Name}: Unknown restart policy {Policy}", instance.Name, instance.RestartPolicy);
-                    break;
-            }
+            crashed.Add(instance.Id);
         }
 
-        // ── 2. Re-attach log tailers for alive instances ──
-
-        // Section 1 nulls ProcessId on crashed instances; re-filter safely.
-        foreach (var instance in runningInstances.Where(instance =>
-                     instance.ProcessId is { } pid && processManager.IsProcessRunning(pid)))
-        {
-            consoleLogTailer.StartFollowing(
-                instance,
-                instance.StartedAt ?? DateTime.UtcNow,
-                replayExistingContent: false);
-        }
-
-        // ── 3. Orphaned headless clients ──
-
-        var orphanedHCs = await db.HeadlessClients
-            .Where(h => h.Status == ServerInstanceStatus.Running && h.ProcessId != null)
+        // ── 2. Instances stranded in a transitional state ──
+        var transitionalIds = await db.ServerInstances
+            .AsNoTracking()
+            .Where(s => s.Status == ServerInstanceStatus.Starting
+                     || s.Status == ServerInstanceStatus.Stopping
+                     || s.Status == ServerInstanceStatus.Restarting)
+            .Select(s => s.Id)
             .ToListAsync(ct);
 
-        foreach (var hc in orphanedHCs.Where(h => !processManager.IsProcessRunning(h.ProcessId!.Value)))
+        foreach (var id in transitionalIds)
         {
-            logger.LogWarning("Headless client {Id} (PID {Pid}) was orphaned", hc.Id, hc.ProcessId);
+            using var gate = await InstanceLifecycleLocks.TryEnterAsync(id, TimeSpan.Zero, ct);
+            if (gate is null)
+                continue; // the operation that owns the state is still running
+
+            var instance = await LoadFreshAsync(db, id, ct);
+            if (instance is null || instance.Status is not (ServerInstanceStatus.Starting
+                    or ServerInstanceStatus.Stopping or ServerInstanceStatus.Restarting))
+                continue;
+
+            var alive = instance.ProcessId is { } pid && processManager.IsProcessRunning(pid);
+            var previous = instance.Status;
+            if (alive)
+            {
+                instance.Status = ServerInstanceStatus.Running;
+            }
+            else
+            {
+                if (instance.ProcessId is { } deadPid)
+                    CloseHistoryEntry(db, instance.Id, deadPid, "Lost");
+                instance.ProcessId = null;
+                instance.StartedAt = null;
+                instance.Status = previous == ServerInstanceStatus.Restarting
+                    ? ServerInstanceStatus.Crashed
+                    : ServerInstanceStatus.Stopped;
+            }
+
+            logger.LogWarning("Server {Name} was stuck in {Previous}; resolved to {Status}",
+                instance.Name, previous, instance.Status);
+            await db.SaveChangesAsync(ct);
+            await broadcaster.BroadcastServerStatusChangedAsync(
+                new ServerStatusChangedEvent(instance.Id, instance.Status));
+        }
+
+        // ── 3. Orphaned headless client rows ──
+        var orphanedHCs = await db.HeadlessClients
+            .Where(h => h.ProcessId != null)
+            .ToListAsync(ct);
+
+        var hcChanged = false;
+        foreach (var hc in orphanedHCs.Where(h => !InstanceLifecycleLocks.IsBusy(h.ServerInstanceId)
+                                               && !processManager.IsProcessRunning(h.ProcessId!.Value)))
+        {
+            logger.LogWarning("Headless client {Id} (PID {Pid}) is gone; clearing", hc.Id, hc.ProcessId);
             hc.ProcessId = null;
             hc.Status = ServerInstanceStatus.Stopped;
+            hc.StartedAt = null;
+            hcChanged = true;
         }
 
-        if (orphanedHCs.Any(h => h.ProcessId == null))
+        if (hcChanged)
             await db.SaveChangesAsync(ct);
 
-        // ── 4. Retry Crashed instances with pending restart attempts ──
+        // ── 4. Crashes recorded by the exit handler since the last sweep ──
+        var scanEnd = DateTime.UtcNow;
+        var scanStart = _lastCrashScanUtc;
+        _lastCrashScanUtc = scanEnd;
 
-        var retryIds = _restartAttempts.Keys.ToList();
-        if (retryIds.Count > 0)
-        {
-            var crashedInstances = await db.ServerInstances
-                .Where(s => retryIds.Contains(s.Id) && s.Status == ServerInstanceStatus.Crashed)
-                .ToListAsync(ct);
-
-            foreach (var instance in crashedInstances)
-                await TryRestartAsync(instance, scope.ServiceProvider, ct);
-        }
-
-        // ── 5. Restarting instances stuck from a previous crash ──
-
-        var stuckRestarting = await db.ServerInstances
-            .Where(s => s.Status == ServerInstanceStatus.Restarting)
+        var exits = await db.ServerInstanceProcessHistories
+            .AsNoTracking()
+            .Where(h => h.EndedAt > scanStart && h.EndedAt <= scanEnd
+                     && (h.TerminationReason == "Crashed" || h.TerminationReason == "Exited"))
+            .Select(h => new { h.ServerInstanceId, h.TerminationReason })
             .ToListAsync(ct);
 
-        foreach (var instance in stuckRestarting)
+        var cleanExits = new HashSet<int>();
+        foreach (var exit in exits)
         {
-            logger.LogWarning("Server {Name} was stuck in Restarting state, resetting to Crashed", instance.Name);
-            instance.Status = ServerInstanceStatus.Crashed;
+            if (exit.TerminationReason == "Crashed")
+                crashed.Add(exit.ServerInstanceId);
+            else
+                cleanExits.Add(exit.ServerInstanceId);
         }
 
-        if (stuckRestarting.Count > 0)
-            await db.SaveChangesAsync(ct);
+        // ── 5. Apply restart policies ──
+        var candidates = crashed.Concat(cleanExits).Concat(_pendingRetry).Distinct().ToList();
+        foreach (var id in candidates)
+        {
+            var instance = await LoadFreshAsync(db, id, ct);
+            if (instance is null)
+            {
+                Forget(id);
+                continue;
+            }
+
+            if (instance.ProcessId is not null
+                || instance.Status is not (ServerInstanceStatus.Crashed or ServerInstanceStatus.Stopped))
+            {
+                _pendingRetry.Remove(id);
+                continue; // someone already brought it back (or is doing so)
+            }
+
+            var wantsRestart = instance.RestartPolicy switch
+            {
+                RestartPolicy.OnCrash => crashed.Contains(id) || (_pendingRetry.Contains(id) && instance.Status == ServerInstanceStatus.Crashed),
+                RestartPolicy.Always => true,
+                _ => false
+            };
+
+            if (!wantsRestart)
+            {
+                _pendingRetry.Remove(id);
+                continue;
+            }
+
+            await TryRestartAsync(instance, serverService, ct);
+        }
     }
 
-    private async Task TryRestartAsync(
-        ServerInstance instance,
-        IServiceProvider sp,
-        CancellationToken ct)
+    private static async Task<ServerInstance?> LoadFreshAsync(KastDbContext db, int id, CancellationToken ct)
+    {
+        var instance = await db.ServerInstances
+            .Include(s => s.HeadlessClients)
+            .FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (instance is not null)
+            await db.Entry(instance).ReloadAsync(ct); // the scope may already track a stale copy
+        return instance;
+    }
+
+    private void ResetBudgetIfDeserved(ServerInstance instance, int pid)
+    {
+        if (!_restartAttempts.ContainsKey(instance.Id))
+            return;
+
+        // A start the watchdog did not make (manual, schedule) or a run that
+        // stayed up long enough proves the crash loop is over.
+        var manualStart = !_autoStartedPids.TryGetValue(instance.Id, out var autoPid) || autoPid != pid;
+        var stable = instance.StartedAt is { } started && DateTime.UtcNow - started >= StableRunReset;
+        if (!manualStart && !stable)
+            return;
+
+        _restartAttempts.Remove(instance.Id);
+        _autoStartedPids.Remove(instance.Id);
+        logger.LogInformation("Server {Name}: cleared restart attempt counter ({Reason})",
+            instance.Name, manualStart ? "started outside the watchdog" : "stable run");
+    }
+
+    private async Task TryRestartAsync(ServerInstance instance, IServerInstanceService serverService, CancellationToken ct)
     {
         _restartAttempts.TryGetValue(instance.Id, out var attempts);
 
         if (attempts >= instance.MaxRestartAttempts)
         {
             logger.LogError(
-                "Server {Name}: exceeded max restart attempts ({Max}), leaving crashed",
-                instance.Name, instance.MaxRestartAttempts);
-            _restartAttempts.Remove(instance.Id);
+                "Server {Name}: exceeded max restart attempts ({Max}), leaving {Status}",
+                instance.Name, instance.MaxRestartAttempts, instance.Status);
+            _pendingRetry.Remove(instance.Id);
             return;
         }
 
@@ -173,14 +283,37 @@ public class ProcessWatchdogService(
 
         try
         {
-            var serverService = sp.GetRequiredService<IServerInstanceService>();
             await serverService.StartInstanceAsync(instance.Id, ct);
-            _restartAttempts.Remove(instance.Id);
+            _pendingRetry.Remove(instance.Id);
+
+            var started = await serverService.GetInstanceByIdAsync(instance.Id, ct);
+            if (started?.ProcessId is { } newPid)
+                _autoStartedPids[instance.Id] = newPid;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
+            _pendingRetry.Add(instance.Id);
             logger.LogError(ex, "Server {Name}: restart attempt {Attempt} failed", instance.Name, attempts + 1);
         }
+    }
+
+    private async Task KillHeadlessClientsAsync(ServerInstance instance)
+    {
+        foreach (var hc in instance.HeadlessClients.Where(h => h.ProcessId.HasValue))
+        {
+            try { await processManager.KillProcessAsync(hc.ProcessId!.Value, CancellationToken.None); }
+            catch (Exception ex) { logger.LogWarning(ex, "Failed to kill headless client {Pid} of crashed server {Name}", hc.ProcessId, instance.Name); }
+            hc.ProcessId = null;
+            hc.Status = ServerInstanceStatus.Stopped;
+            hc.StartedAt = null;
+        }
+    }
+
+    private void Forget(int id)
+    {
+        _restartAttempts.Remove(id);
+        _autoStartedPids.Remove(id);
+        _pendingRetry.Remove(id);
     }
 
     private static void CloseHistoryEntry(KastDbContext db, int instanceId, int processId, string reason)

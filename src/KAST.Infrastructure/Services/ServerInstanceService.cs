@@ -13,8 +13,24 @@ using Microsoft.Extensions.Logging;
 
 namespace KAST.Infrastructure.Services;
 
+/// <summary>
+/// Server instance CRUD and process lifecycle.
+/// <para>
+/// Every operation runs on its own short-lived <see cref="KastDbContext"/>
+/// when a context factory is available. The service is resolved per Blazor
+/// circuit, so a shared context lives for hours: it hands back stale tracked
+/// rows (a stop then kills a PID that is long gone and orphans the real one)
+/// and is used concurrently by hub callbacks ("A second operation was started
+/// on this context instance"), which aborted lifecycle writes half-way and
+/// stranded instances in Starting/Stopping.
+/// </para>
+/// <para>
+/// Lifecycle changes (start/stop/restart/exit handling/reaping) are serialized
+/// per instance through <see cref="InstanceLifecycleLocks"/>.
+/// </para>
+/// </summary>
 public class ServerInstanceService(
-    KastDbContext db,
+    KastDbContext scopedDb,
     IProcessManagerService processManager,
     IAppEventBroadcaster broadcaster,
     ILogger<ServerInstanceService> logger,
@@ -22,37 +38,62 @@ public class ServerInstanceService(
     IServiceScopeFactory scopeFactory,
     IServerConsoleLogTailer? consoleLogTailer = null,
     IHostEnvironment? hostEnvironment = null,
-    IServerConfigService? serverConfigService = null) : IServerInstanceService
+    IServerConfigService? serverConfigService = null,
+    IDbContextFactory<KastDbContext>? contextFactory = null) : IServerInstanceService
 {
-    // The service is scoped, so the per-instance start gate must be static.
-    // It serializes concurrent StartInstanceAsync calls (user click racing the
-    // scheduler) that would otherwise both pass the status check and launch two
-    // processes on the same port.
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, SemaphoreSlim> StartLocks = new();
+    /// <summary>How long the exit handler waits for an in-flight stop/restart to finish.</summary>
+    private static readonly TimeSpan ExitHandlerLockTimeout = TimeSpan.FromMinutes(2);
+
+    // ── DbContext lease ──────────────────────────────────────────────────────
+
+    private DbLease OpenDb()
+        => contextFactory is null
+            ? new DbLease(scopedDb, owned: false)
+            : new DbLease(contextFactory.CreateDbContext(), owned: true);
+
+    private readonly struct DbLease(KastDbContext context, bool owned) : IAsyncDisposable
+    {
+        public KastDbContext Db => context;
+
+        public ValueTask DisposeAsync() => owned ? context.DisposeAsync() : ValueTask.CompletedTask;
+    }
+
+    // ── Queries ──────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ServerInstance>> GetAllInstancesAsync(CancellationToken ct = default)
-        => await db.ServerInstances
+    {
+        await using var lease = OpenDb();
+        return await lease.Db.ServerInstances
             .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
             .Include(s => s.HeadlessClients)
             .AsNoTracking()
             .OrderBy(s => s.Name)
             .ToListAsync(ct);
+    }
 
     public async Task<IReadOnlyList<ServerInstance>> GetLightInstancesAsync(CancellationToken ct = default)
-        => await db.ServerInstances
+    {
+        await using var lease = OpenDb();
+        return await lease.Db.ServerInstances
             .AsNoTracking()
             .Where(s => s.Status != ServerInstanceStatus.Stopped)
             .OrderBy(s => s.Name)
             .Select(s => new ServerInstance { Id = s.Id, Name = s.Name, Status = s.Status, Port = s.Port })
             .ToListAsync(ct);
+    }
 
     public async Task<ServerInstance?> GetInstanceByIdAsync(int id, CancellationToken ct = default)
-        => await db.ServerInstances
+    {
+        await using var lease = OpenDb();
+        return await lease.Db.ServerInstances
             .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
             .Include(s => s.HeadlessClients)
             .AsNoTracking()
             .OrderBy(s => s.Id)
             .FirstOrDefaultAsync(s => s.Id == id, ct);
+    }
+
+    // ── CRUD ─────────────────────────────────────────────────────────────────
 
     public async Task<ServerInstance> CreateInstanceAsync(ServerInstance instance, CancellationToken ct = default)
     {
@@ -64,15 +105,19 @@ public class ServerInstanceService(
         instance.CreatedAt = DateTime.UtcNow;
 
         // Clear SteamMod navigations — EF only needs the FK (SteamModId) to write the join rows.
-        // The navigation objects may already be tracked by this context from a prior query,
-        // which causes an identity-map conflict when db.Add() walks the object graph.
         foreach (var sim in instance.Mods)
             sim.SteamMod = null!;
 
+        await using var lease = OpenDb();
+        var db = lease.Db;
         db.ServerInstances.Add(instance);
         await db.SaveChangesAsync(ct);
 
-        await ReconcileHeadlessClientsAsync(instance.Id, instance.HeadlessClientCount, ct);
+        await ReconcileHeadlessClientsAsync(db, instance.Id, instance.HeadlessClientCount, ct);
+
+        // Do not hand a tracked graph from a disposed context back to the UI.
+        if (contextFactory is not null)
+            db.ChangeTracker.Clear();
 
         activity?.SetTag("instance.id", instance.Id);
         return instance;
@@ -82,10 +127,11 @@ public class ServerInstanceService(
     {
         instance.LastModified = DateTime.UtcNow;
 
+        await using var lease = OpenDb();
+        var db = lease.Db;
+
         // Use ExecuteUpdateAsync to update only scalar properties via a direct SQL UPDATE.
-        // This avoids EF walking the navigation graph (Mods, HeadlessClients) which would
-        // conflict with ServerInstanceMod entities already tracked by earlier mod operations
-        // (AddModToInstanceAsync / UpdateModFlagsAsync / RemoveModFromInstanceAsync).
+        // This avoids EF walking the navigation graph (Mods, HeadlessClients).
         await db.ServerInstances
             .Where(s => s.Id == instance.Id)
             .ExecuteUpdateAsync(s => s
@@ -121,18 +167,16 @@ public class ServerInstanceService(
                 .SetProperty(x => x.LastModified, instance.LastModified),
             ct);
 
-        await ReconcileHeadlessClientsAsync(instance.Id, instance.HeadlessClientCount, ct);
+        await ReconcileHeadlessClientsAsync(db, instance.Id, instance.HeadlessClientCount, ct);
 
         return instance;
     }
 
     /// <summary>
     /// Keeps <c>HeadlessClients</c> rows in sync with the scalar
-    /// <c>HeadlessClientCount</c>. The launch loop iterates the collection, so
-    /// the count alone would never actually launch any headless clients.
-    /// Running clients are never removed when the count is lowered.
+    /// <c>HeadlessClientCount</c>. Running clients are never removed when the count is lowered.
     /// </summary>
-    private async Task ReconcileHeadlessClientsAsync(int instanceId, int targetCount, CancellationToken ct)
+    private async Task ReconcileHeadlessClientsAsync(KastDbContext db, int instanceId, int targetCount, CancellationToken ct)
     {
         targetCount = Math.Max(0, targetCount);
 
@@ -172,22 +216,40 @@ public class ServerInstanceService(
 
     public async Task DeleteInstanceAsync(int id, bool deleteFiles = false, CancellationToken ct = default)
     {
-        var instance = await db.ServerInstances
-            .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
-            .FirstOrDefaultAsync(s => s.Id == id, ct);
+        ServerInstance? snapshot;
+        await using (var probe = OpenDb())
+        {
+            snapshot = await probe.Db.ServerInstances
+                .Include(s => s.HeadlessClients)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == id, ct);
+        }
 
-        if (instance == null)
+        if (snapshot == null)
             return;
 
         using var activity = KastActivitySources.Instances.StartActivity(
             "kast.instance.delete", ActivityKind.Internal);
         activity?.SetTag("instance.id", id);
-        activity?.SetTag("instance.name", instance.Name);
+        activity?.SetTag("instance.name", snapshot.Name);
 
-        if (instance.Status == ServerInstanceStatus.Running)
+        // Anything that may still own a process must be stopped first — deleting
+        // the row would otherwise orphan the server with nobody tracking it.
+        var mayOwnProcess = snapshot.ProcessId.HasValue
+            || snapshot.HeadlessClients.Any(h => h.ProcessId.HasValue)
+            || snapshot.Status is not (ServerInstanceStatus.Stopped or ServerInstanceStatus.Crashed);
+        if (mayOwnProcess)
             await StopInstanceAsync(id, ct);
         else if (consoleLogTailer is not null)
             await consoleLogTailer.StopFollowingAsync(id);
+
+        await using var lease = OpenDb();
+        var db = lease.Db;
+        var instance = await db.ServerInstances
+            .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
+            .FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (instance == null)
+            return;
 
         // Capture install path & check whether it's shared with other instances
         // BEFORE we drop this row, so explicit file deletion cannot wipe shared data.
@@ -208,12 +270,7 @@ public class ServerInstanceService(
         }
         catch (Exception ex)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, sanitizer.Sanitize(ex.Message));
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-            {
-                ["exception.type"]    = ex.GetType().Name,
-                ["exception.message"] = sanitizer.Sanitize(ex.Message)
-            }));
+            RecordException(activity, ex);
             logger.LogError(ex,
                 "Failed to clean up files for deleted instance {Id} ({Name})",
                 id, instance.Name);
@@ -230,16 +287,12 @@ public class ServerInstanceService(
         if (string.IsNullOrWhiteSpace(instance.InstallPath))
             return;
 
-        // 1) Per-instance config/profile directory: {InstallPath}/KAST/{id}
         var configDir = GetInstanceConfigDirectory(instance);
         TryDeleteDirectory(configDir, recursive: true);
 
-        // 1b) On Linux, clean up the profile symlink we created in the system profiles dir.
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             CleanupLinuxProfileSymlink(instance);
 
-        // 2) Mod symlinks created for this instance's mods (don't touch the mod
-        //    source itself — that's shared and owned by ModService).
         var modsDir = GetInstanceModsDirectory(instance);
         if (Directory.Exists(modsDir))
         {
@@ -266,19 +319,14 @@ public class ServerInstanceService(
             }
         }
 
-        // 3) Full install path — only when no other instance is using it.
         if (wipeInstallPath)
         {
             TryDeleteDirectory(GetInstanceInstallDirectory(instance), recursive: true);
-            logger.LogInformation(
-                "Wiped install directory for instance {Id}",
-                instance.Id);
+            logger.LogInformation("Wiped install directory for instance {Id}", instance.Id);
         }
         else
         {
-            logger.LogInformation(
-                "Kept install directory shared with other instances for instance {Id}",
-                instance.Id);
+            logger.LogInformation("Kept install directory shared with other instances for instance {Id}", instance.Id);
         }
     }
 
@@ -297,22 +345,19 @@ public class ServerInstanceService(
         }
     }
 
+    // ── Start ────────────────────────────────────────────────────────────────
+
     public async Task StartInstanceAsync(int id, CancellationToken ct = default)
     {
-        var startLock = StartLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
-        await startLock.WaitAsync(ct);
-        try
-        {
+        using (await InstanceLifecycleLocks.EnterAsync(id, ct))
             await StartInstanceCoreAsync(id, ct);
-        }
-        finally
-        {
-            startLock.Release();
-        }
     }
 
     private async Task StartInstanceCoreAsync(int id, CancellationToken ct)
     {
+        await using var lease = OpenDb();
+        var db = lease.Db;
+
         var instance = await db.ServerInstances
             .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
             .Include(s => s.HeadlessClients)
@@ -320,12 +365,40 @@ public class ServerInstanceService(
             .FirstOrDefaultAsync(s => s.Id == id, ct)
             ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {id} not found");
 
+        if (instance.Status == ServerInstanceStatus.Downloading)
+            throw new InvalidOperationException(
+                $"Server instance {id} is being installed or updated. Wait for the install to finish before starting it.");
+
+        if (instance.ProcessId is { } existingPid && processManager.IsProcessRunning(existingPid))
+        {
+            // Already up. If the row was stranded in a transitional state, heal it.
+            if (instance.Status != ServerInstanceStatus.Running)
+            {
+                logger.LogWarning("Server {Name} was {Status} while its process {Pid} is alive; marking Running",
+                    instance.Name, instance.Status, existingPid);
+                instance.Status = ServerInstanceStatus.Running;
+                await db.SaveChangesAsync(CancellationToken.None);
+                await BroadcastStatusAsync(instance.Id, instance.Status);
+            }
+            return;
+        }
+
         if (instance.Status is ServerInstanceStatus.Running
             or ServerInstanceStatus.Starting
             or ServerInstanceStatus.Stopping
-            or ServerInstanceStatus.Restarting
-            or ServerInstanceStatus.Downloading)
-            return;
+            or ServerInstanceStatus.Restarting)
+        {
+            // We hold the lifecycle lock, so no operation is in flight: the row
+            // is stale (process gone). Close it out and start fresh rather than
+            // silently refusing — that refusal is what left admins unable to
+            // start a server until the panel was restarted.
+            logger.LogWarning("Server {Name} was {Status} but its process is gone; starting fresh",
+                instance.Name, instance.Status);
+            if (instance.ProcessId is { } stalePid)
+                await CloseProcessHistoryEntryAsync(db, id, stalePid, "Lost", ct: CancellationToken.None);
+            instance.ProcessId = null;
+            instance.StartedAt = null;
+        }
 
         using var activity = KastActivitySources.Instances.StartActivity(
             "kast.instance.start", ActivityKind.Internal);
@@ -333,41 +406,122 @@ public class ServerInstanceService(
         activity?.SetTag("instance.name", instance.Name);
         activity?.SetTag("instance.port", instance.Port);
 
-        await LinkModsAsync(id, ct);
+        // Anything still carrying this instance's tag is a leftover from an
+        // earlier run (panel crash, lost PID) and would hold the game port.
+        await KillStrayProcessesAsync(instance, new HashSet<int>(), "before start");
+        await StopLeftoverHeadlessClientsAsync(instance);
+
+        await LinkModsAsync(db, instance.Id, ct);
         activity?.AddEvent(new ActivityEvent("instance.mods_linked"));
 
-        // Write config files to disk before launch
         WriteConfigFiles(instance);
         activity?.AddEvent(new ActivityEvent("instance.config_written"));
 
         instance.Status = ServerInstanceStatus.Starting;
         await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
+        await BroadcastStatusAsync(instance.Id, instance.Status);
+
+        var sessionStartedUtc = DateTime.UtcNow;
+        var logChannel = CreateLogPump(id);
+        void OnOutputLine(int _, string line) => logChannel.Writer.TryWrite(new LogEntryEvent(id, line, DateTime.UtcNow));
+        void OnProcessExited(int pid, int exitCode) => HandleServerExit(id, pid, exitCode, logChannel.Writer);
+        void OnHeadlessClientExited(int pid, int exitCode) => HandleHeadlessClientExit(id, pid, exitCode);
+
+        string executable;
+        int serverPid;
+        try
+        {
+            executable = GetServerExecutable(instance);
+            var args = BuildLaunchArguments(instance);
+            activity?.SetTag("instance.executable", sanitizer.ToDisplayPath(executable));
+            logger.LogInformation("Starting server {Name}", instance.Name);
+
+            serverPid = await processManager.StartServerProcessAsync(executable, args, OnOutputLine, OnProcessExited, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to start server instance {Id}", id);
+            RecordException(activity, ex);
+            logChannel.Writer.TryComplete();
+
+            // The process never got a PID, so it never ran: Stopped, not Crashed.
+            instance.Status = ServerInstanceStatus.Stopped;
+            instance.StartedAt = null;
+            await PersistFinalStateAsync(db, instance);
+            throw;
+        }
+
+        // ── The server is running. From here on nothing may abandon it: the
+        // caller's token is ignored and every failure is contained, otherwise
+        // the PID is lost and the process becomes an orphan.
+        instance.ProcessId = serverPid;
+        instance.Status = ServerInstanceStatus.Running;
+        instance.StartedAt = DateTime.UtcNow;
+        db.ServerInstanceProcessHistories.Add(new ServerInstanceProcessHistory
+        {
+            ServerInstanceId = instance.Id,
+            ProcessId = serverPid,
+            StartedAt = instance.StartedAt.Value
+        });
+        await TrySaveAsync(db, $"record PID {serverPid} for instance {id}");
+
+        activity?.SetTag("instance.pid", serverPid);
+        activity?.AddEvent(new ActivityEvent("instance.process_started", tags: new ActivityTagsCollection { ["pid"] = serverPid }));
 
         try
         {
-            var sessionStartedUtc = DateTime.UtcNow;
-            var executable = GetServerExecutable(instance);
-            var args = BuildLaunchArguments(instance);
+            consoleLogTailer?.StartFollowing(instance, sessionStartedUtc, replayExistingContent: true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not follow the RPT log for instance {Id}", id);
+        }
 
-            activity?.SetTag("instance.executable", sanitizer.ToDisplayPath(executable));
-
-            logger.LogInformation("Starting server {Name}", instance.Name);
-
-            // Console output is funnelled through a bounded channel: a chatty Arma
-            // server can emit thousands of lines/second, and one fire-and-forget
-            // broadcast per line floods SignalR and the thread pool. Under burst the
-            // oldest lines are dropped rather than growing without bound.
-            var logChannel = System.Threading.Channels.Channel.CreateBounded<LogEntryEvent>(
-                new System.Threading.Channels.BoundedChannelOptions(2000)
-                {
-                    FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
-                    SingleReader = true
-                });
-
-            _ = Task.Run(async () =>
+        var hcIndex = 0;
+        foreach (var hc in instance.HeadlessClients.OrderBy(h => h.Id))
+        {
+            hcIndex++;
+            try
             {
-                var reader = logChannel.Reader;
+                var hcArgs = BuildHeadlessClientArguments(instance, hcIndex);
+                var hcPid = await processManager.StartServerProcessAsync(executable, hcArgs, OnOutputLine, OnHeadlessClientExited, CancellationToken.None);
+                hc.ProcessId = hcPid;
+                hc.Status = ServerInstanceStatus.Running;
+                hc.StartedAt = DateTime.UtcNow;
+                activity?.AddEvent(new ActivityEvent("instance.headless_client_started", tags: new ActivityTagsCollection { ["hc.pid"] = hcPid }));
+            }
+            catch (Exception ex)
+            {
+                // A headless client failing must not take the server down with it.
+                logger.LogError(ex, "Failed to start headless client {Index} for instance {Id}", hcIndex, id);
+                hc.ProcessId = null;
+                hc.Status = ServerInstanceStatus.Crashed;
+                hc.StartedAt = null;
+            }
+        }
+
+        await PersistFinalStateAsync(db, instance);
+    }
+
+    /// <summary>
+    /// Console output is funnelled through a bounded channel: a chatty Arma
+    /// server can emit thousands of lines/second. Under burst the oldest lines
+    /// are dropped rather than growing without bound.
+    /// </summary>
+    private System.Threading.Channels.Channel<LogEntryEvent> CreateLogPump(int instanceId)
+    {
+        var channel = System.Threading.Channels.Channel.CreateBounded<LogEntryEvent>(
+            new System.Threading.Channels.BoundedChannelOptions(2000)
+            {
+                FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
+                SingleReader = true
+            });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var reader = channel.Reader;
                 while (await reader.WaitToReadAsync(CancellationToken.None))
                 {
                     var drained = 0;
@@ -379,7 +533,7 @@ public class ServerInstanceService(
                         }
                         catch (Exception ex)
                         {
-                            logger.LogDebug(ex, "Failed to broadcast log entry for instance {InstanceId}", id);
+                            logger.LogDebug(ex, "Failed to broadcast log entry for instance {InstanceId}", instanceId);
                         }
 
                         drained++;
@@ -388,163 +542,130 @@ public class ServerInstanceService(
                     if (drained == 50)
                         await Task.Delay(50, CancellationToken.None); // burst — yield between batches
                 }
-            }, CancellationToken.None);
-
-            void OnOutputLine(int pid, string line)
-                => logChannel.Writer.TryWrite(new LogEntryEvent(id, line, DateTime.UtcNow));
-
-            void OnProcessExited(int pid, int exitCode)
-            {
-                // Exit handling must always complete, even if the start request was cancelled.
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await using var exitScope = scopeFactory.CreateAsyncScope();
-                        var exitDb = exitScope.ServiceProvider.GetRequiredService<KastDbContext>();
-
-                        var history = await exitDb.ServerInstanceProcessHistories
-                            .Where(h => h.ServerInstanceId == id && h.ProcessId == pid && h.EndedAt == null)
-                            .OrderByDescending(h => h.StartedAt)
-                            .FirstOrDefaultAsync(CancellationToken.None);
-                        if (history is not null)
-                        {
-                            history.EndedAt = DateTime.UtcNow;
-                            history.ExitCode = exitCode;
-                            history.TerminationReason = exitCode == 0 ? "Exited" : "Crashed";
-                            await exitDb.SaveChangesAsync(CancellationToken.None);
-                        }
-
-                        var newStatus = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
-
-                        // Persist the real state so pages and API reads don't report a
-                        // dead server as Running until the watchdog's next 10 s sweep.
-                        // Only touch the row when it still refers to this process — a
-                        // fast restart may already have a newer PID.
-                        var instanceRow = await exitDb.ServerInstances
-                            .FirstOrDefaultAsync(s => s.Id == id, CancellationToken.None);
-                        if (instanceRow is not null && instanceRow.ProcessId == pid)
-                        {
-                            instanceRow.Status = newStatus;
-                            instanceRow.ProcessId = null;
-                            instanceRow.StartedAt = null;
-                            await exitDb.SaveChangesAsync(CancellationToken.None);
-                        }
-
-                        await broadcaster.BroadcastServerStatusChangedAsync(
-                            new ServerStatusChangedEvent(id, newStatus));
-                        await broadcaster.BroadcastLogEntryAsync(
-                            new LogEntryEvent(id, $"Process exited with code {exitCode}", DateTime.UtcNow));
-                        if (consoleLogTailer is not null)
-                            await consoleLogTailer.StopFollowingAsync(id);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Error handling process exit for instance {Id}", id);
-                    }
-                    finally
-                    {
-                        logChannel.Writer.TryComplete();
-                    }
-                }, CancellationToken.None);
             }
-
-            void OnHeadlessClientExited(int pid, int exitCode)
+            catch (Exception ex)
             {
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await using var hcScope = scopeFactory.CreateAsyncScope();
-                        var hcDb = hcScope.ServiceProvider.GetRequiredService<KastDbContext>();
-                        var hcRow = await hcDb.HeadlessClients
-                            .FirstOrDefaultAsync(h => h.ServerInstanceId == id && h.ProcessId == pid, CancellationToken.None);
-                        if (hcRow is not null)
-                        {
-                            hcRow.Status = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
-                            hcRow.ProcessId = null;
-                            hcRow.StartedAt = null;
-                            await hcDb.SaveChangesAsync(CancellationToken.None);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Error handling headless client exit for instance {Id}", id);
-                    }
-                }, CancellationToken.None);
+                logger.LogWarning(ex, "Console pump for instance {InstanceId} stopped", instanceId);
             }
+        }, CancellationToken.None);
 
-            var pid = await processManager.StartServerProcessAsync(executable, args, OnOutputLine, OnProcessExited, ct);
-            consoleLogTailer?.StartFollowing(instance, sessionStartedUtc, replayExistingContent: true);
-            instance.ProcessId = pid;
-            instance.Status = ServerInstanceStatus.Running;
-            instance.StartedAt = DateTime.UtcNow;
+        return channel;
+    }
 
-            db.ServerInstanceProcessHistories.Add(new ServerInstanceProcessHistory
-            {
-                ServerInstanceId = instance.Id,
-                ProcessId = pid,
-                StartedAt = instance.StartedAt.Value
-            });
-
-            activity?.SetTag("instance.pid", pid);
-            activity?.AddEvent(new ActivityEvent("instance.process_started", tags: new ActivityTagsCollection
-            {
-                ["pid"] = pid
-            }));
-
-            // Start headless clients
-            var hcIndex = 0;
-            foreach (var hc in instance.HeadlessClients)
-            {
-                hcIndex++;
-                var hcArgs = BuildHeadlessClientArguments(instance, hcIndex);
-                var hcPid = await processManager.StartServerProcessAsync(executable, hcArgs, OnOutputLine, OnHeadlessClientExited, ct);
-                hc.ProcessId = hcPid;
-                hc.Status = ServerInstanceStatus.Running;
-                hc.StartedAt = DateTime.UtcNow;
-                activity?.AddEvent(new ActivityEvent("instance.headless_client_started", tags: new ActivityTagsCollection
-                {
-                    ["hc.pid"] = hcPid
-                }));
-            }
-        }
-        catch (Exception ex)
+    /// <summary>
+    /// Runs when the server process exits, for whatever reason. Waits for any
+    /// in-flight stop/restart so it never races it; only touches the row while
+    /// it still refers to this PID.
+    /// </summary>
+    private void HandleServerExit(int id, int pid, int exitCode,
+        System.Threading.Channels.ChannelWriter<LogEntryEvent> logWriter)
+    {
+        _ = Task.Run(async () =>
         {
-            logger.LogError(ex, "Failed to start server instance {Id}", id);
-            activity?.SetStatus(ActivityStatusCode.Error, sanitizer.Sanitize(ex.Message));
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-            {
-                ["exception.type"]    = ex.GetType().Name,
-                ["exception.message"] = sanitizer.Sanitize(ex.Message)
-            }));
-            // If the process never got a PID the server never actually ran — reset to Stopped
-            // so the user can try again. Crashed is reserved for processes that ran and then died.
-            instance.Status = instance.ProcessId.HasValue
-                ? ServerInstanceStatus.Crashed
-                : ServerInstanceStatus.Stopped;
-            instance.StartedAt = null;
-            throw;
-        }
-        finally
-        {
-            // Must run even when the caller's token is cancelled: aborting here
-            // would strand Status = Starting in the database and mask the real
-            // exception from the catch block above.
+            IDisposable? gate = null;
             try
             {
-                await db.SaveChangesAsync(CancellationToken.None);
-                await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
+                gate = await InstanceLifecycleLocks.TryEnterAsync(id, ExitHandlerLockTimeout);
+                if (gate is null)
+                    logger.LogWarning("Exit handler for instance {Id} timed out waiting for a lifecycle operation; continuing", id);
+
+                await using var exitScope = scopeFactory.CreateAsyncScope();
+                var exitDb = exitScope.ServiceProvider.GetRequiredService<KastDbContext>();
+
+                var instanceRow = await exitDb.ServerInstances
+                    .Include(s => s.HeadlessClients)
+                    .FirstOrDefaultAsync(s => s.Id == id, CancellationToken.None);
+                var unexpected = instanceRow is not null && instanceRow.ProcessId == pid;
+
+                // An exit the panel did not ask for: record it as Exited/Crashed.
+                // Intentional stops already closed the entry with "Stopped".
+                var reason = unexpected ? (exitCode == 0 ? "Exited" : "Crashed") : "Stopped";
+                await CloseProcessHistoryEntryAsync(exitDb, id, pid, reason, exitCode, CancellationToken.None);
+
+                ServerInstanceStatus? newStatus = null;
+                if (unexpected)
+                {
+                    newStatus = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
+                    instanceRow!.Status = newStatus.Value;
+                    instanceRow.ProcessId = null;
+                    instanceRow.StartedAt = null;
+
+                    // Headless clients of a dead server would retry the
+                    // connection forever as orphans.
+                    foreach (var hc in instanceRow.HeadlessClients.Where(h => h.ProcessId.HasValue))
+                    {
+                        try { await processManager.KillProcessAsync(hc.ProcessId!.Value, CancellationToken.None); }
+                        catch (Exception ex) { logger.LogWarning(ex, "Failed to kill headless client {Pid} of exited server {Id}", hc.ProcessId, id); }
+                        hc.ProcessId = null;
+                        hc.Status = ServerInstanceStatus.Stopped;
+                        hc.StartedAt = null;
+                    }
+
+                    logger.LogWarning("Server instance {Id} (PID {Pid}) exited unexpectedly with code {Code}", id, pid, exitCode);
+                }
+
+                await exitDb.SaveChangesAsync(CancellationToken.None);
+
+                if (newStatus is { } status)
+                {
+                    await BroadcastStatusAsync(id, status);
+                    if (consoleLogTailer is not null)
+                        await consoleLogTailer.StopFollowingAsync(id);
+                }
+
+                await broadcaster.BroadcastLogEntryAsync(
+                    new LogEntryEvent(id, $"Process exited with code {exitCode}", DateTime.UtcNow));
             }
-            catch (Exception persistEx)
+            catch (Exception ex)
             {
-                logger.LogError(persistEx, "Failed to persist final start state for instance {Id}", id);
+                logger.LogError(ex, "Error handling process exit for instance {Id}", id);
             }
-        }
+            finally
+            {
+                gate?.Dispose();
+                logWriter.TryComplete();
+            }
+        }, CancellationToken.None);
     }
+
+    private void HandleHeadlessClientExit(int id, int pid, int exitCode)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var hcScope = scopeFactory.CreateAsyncScope();
+                var hcDb = hcScope.ServiceProvider.GetRequiredService<KastDbContext>();
+                var hcRow = await hcDb.HeadlessClients
+                    .FirstOrDefaultAsync(h => h.ServerInstanceId == id && h.ProcessId == pid, CancellationToken.None);
+                if (hcRow is not null)
+                {
+                    hcRow.Status = exitCode == 0 ? ServerInstanceStatus.Stopped : ServerInstanceStatus.Crashed;
+                    hcRow.ProcessId = null;
+                    hcRow.StartedAt = null;
+                    await hcDb.SaveChangesAsync(CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error handling headless client exit for instance {Id}", id);
+            }
+        }, CancellationToken.None);
+    }
+
+    // ── Stop ─────────────────────────────────────────────────────────────────
 
     public async Task StopInstanceAsync(int id, CancellationToken ct = default)
     {
+        using (await InstanceLifecycleLocks.EnterAsync(id, ct))
+            await StopInstanceCoreAsync(id, ct);
+    }
+
+    private async Task StopInstanceCoreAsync(int id, CancellationToken ct)
+    {
+        await using var lease = OpenDb();
+        var db = lease.Db;
+
         var instance = await db.ServerInstances
             .Include(s => s.HeadlessClients)
             .OrderBy(s => s.Id)
@@ -560,71 +681,64 @@ public class ServerInstanceService(
 
         instance.Status = ServerInstanceStatus.Stopping;
         await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
+        await BroadcastStatusAsync(instance.Id, instance.Status);
 
+        // ── Point of no return. The caller's token is deliberately ignored from
+        // here: a closed browser tab or aborted HTTP request used to cancel the
+        // stop half-way and strand the instance in Stopping forever.
         var stopFailures = new List<Exception>();
-
-        // Stop headless clients first
-        foreach (var hc in instance.HeadlessClients.Where(h => h.ProcessId.HasValue))
+        var serverStillRunning = false;
+        try
         {
-            var pid = hc.ProcessId!.Value;
-            try
+            foreach (var hc in instance.HeadlessClients.Where(h => h.ProcessId.HasValue))
             {
-                await processManager.StopProcessAsync(pid, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogWarning(ex, "Failed to stop headless client process {Pid} for instance {Id}", pid, id);
-                if (processManager.IsProcessRunning(pid))
+                var pid = hc.ProcessId!.Value;
+                if (await TryStopProcessAsync(pid, "headless client", id, stopFailures))
+                {
+                    hc.ProcessId = null;
+                    hc.Status = ServerInstanceStatus.Stopped;
+                    hc.StartedAt = null;
+                    activity?.AddEvent(new ActivityEvent("instance.headless_client_stopped"));
+                }
+                else
                 {
                     hc.Status = ServerInstanceStatus.Running;
-                    stopFailures.Add(ex);
-                    continue;
                 }
             }
 
-            hc.ProcessId = null;
-            hc.Status = ServerInstanceStatus.Stopped;
-            activity?.AddEvent(new ActivityEvent("instance.headless_client_stopped"));
-        }
+            if (instance.ProcessId is { } serverPid)
+                serverStillRunning = !await TryStopProcessAsync(serverPid, "server", id, stopFailures);
 
-        var serverStillRunning = false;
-        if (instance.ProcessId.HasValue)
+            // Process hunting: anything else tagged for this instance (a lost
+            // PID, a duplicate launch) would keep the port busy.
+            var tracked = new HashSet<int>(instance.HeadlessClients.Where(h => h.ProcessId.HasValue).Select(h => h.ProcessId!.Value));
+            if (instance.ProcessId is { } trackedPid)
+                tracked.Add(trackedPid);
+            await KillStrayProcessesAsync(instance, tracked, "during stop");
+        }
+        finally
         {
-            var pid = instance.ProcessId.Value;
-            try
+            if (!serverStillRunning)
             {
-                await processManager.StopProcessAsync(pid, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogWarning(ex, "Failed to stop server process {Pid} for instance {Id}", pid, id);
-                serverStillRunning = processManager.IsProcessRunning(pid);
-                if (serverStillRunning)
-                    stopFailures.Add(ex);
-            }
-        }
+                if (instance.ProcessId.HasValue)
+                    await CloseProcessHistoryEntryAsync(db, id, instance.ProcessId.Value, "Stopped", ct: CancellationToken.None);
 
-        if (!serverStillRunning)
-        {
-            if (instance.ProcessId.HasValue)
+                instance.ProcessId = null;
+                instance.Status = ServerInstanceStatus.Stopped;
+                instance.StartedAt = null;
+                if (consoleLogTailer is not null)
+                {
+                    try { await consoleLogTailer.StopFollowingAsync(id); }
+                    catch (Exception ex) { logger.LogDebug(ex, "Failed to stop RPT tailer for instance {Id}", id); }
+                }
+            }
+            else
             {
-                await CloseProcessHistoryEntryAsync(id, instance.ProcessId.Value, "Killed", ct: ct);
+                instance.Status = ServerInstanceStatus.Running;
             }
 
-            instance.ProcessId = null;
-            instance.Status = ServerInstanceStatus.Stopped;
-            instance.StartedAt = null;
-            if (consoleLogTailer is not null)
-                await consoleLogTailer.StopFollowingAsync(id);
+            await PersistFinalStateAsync(db, instance);
         }
-        else
-        {
-            instance.Status = ServerInstanceStatus.Running;
-        }
-
-        await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
 
         if (stopFailures.Count > 0)
             throw new InvalidOperationException(
@@ -632,39 +746,338 @@ public class ServerInstanceService(
                 stopFailures[0]);
     }
 
+    /// <summary>Stops one process. Returns true when it is gone afterwards.</summary>
+    private async Task<bool> TryStopProcessAsync(int pid, string kind, int instanceId, List<Exception> failures)
+    {
+        try
+        {
+            await processManager.StopProcessAsync(pid, CancellationToken.None);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to stop {Kind} process {Pid} for instance {Id}", kind, pid, instanceId);
+            if (!processManager.IsProcessRunning(pid))
+                return true;
+
+            failures.Add(ex);
+            return false;
+        }
+    }
+
+    // ── Restart ──────────────────────────────────────────────────────────────
+
     public async Task RestartInstanceAsync(int id, CancellationToken ct = default)
     {
-        var instance = await db.ServerInstances.FindAsync([id], ct)
-            ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {id} not found");
+        using var gate = await InstanceLifecycleLocks.EnterAsync(id, ct);
 
         using var activity = KastActivitySources.Instances.StartActivity(
             "kast.instance.restart", ActivityKind.Internal);
         activity?.SetTag("instance.id", id);
-        activity?.SetTag("instance.name", instance.Name);
 
-        instance.Status = ServerInstanceStatus.Restarting;
-        await db.SaveChangesAsync(ct);
-        await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(instance.Id, instance.Status));
+        await using (var lease = OpenDb())
+        {
+            var instance = await lease.Db.ServerInstances.FirstOrDefaultAsync(s => s.Id == id, ct)
+                ?? throw new KAST.Core.Exceptions.NotFoundException($"Server instance {id} not found");
+            activity?.SetTag("instance.name", instance.Name);
+
+            instance.Status = ServerInstanceStatus.Restarting;
+            await lease.Db.SaveChangesAsync(ct);
+        }
+        await BroadcastStatusAsync(id, ServerInstanceStatus.Restarting);
 
         try
         {
-            await StopInstanceAsync(id, ct);
-            await StartInstanceAsync(id, ct);
+            await StopInstanceCoreAsync(id, CancellationToken.None);
+            await StartInstanceCoreAsync(id, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, sanitizer.Sanitize(ex.Message));
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-            {
-                ["exception.type"]    = ex.GetType().Name,
-                ["exception.message"] = sanitizer.Sanitize(ex.Message)
-            }));
+            RecordException(activity, ex);
+            await HealTransitionalStateAsync(id);
             throw;
         }
     }
 
+    /// <summary>
+    /// Last-resort repair after a failed lifecycle operation: a row left in
+    /// Starting/Stopping/Restarting is resolved against the real process.
+    /// Caller must hold the instance's lifecycle lock.
+    /// </summary>
+    private async Task HealTransitionalStateAsync(int id)
+    {
+        try
+        {
+            await using var lease = OpenDb();
+            var instance = await lease.Db.ServerInstances.FirstOrDefaultAsync(s => s.Id == id, CancellationToken.None);
+            if (instance is null || instance.Status is not (ServerInstanceStatus.Starting
+                    or ServerInstanceStatus.Stopping or ServerInstanceStatus.Restarting))
+                return;
+
+            var alive = instance.ProcessId is { } pid && processManager.IsProcessRunning(pid);
+            instance.Status = alive ? ServerInstanceStatus.Running : ServerInstanceStatus.Stopped;
+            if (!alive)
+            {
+                instance.ProcessId = null;
+                instance.StartedAt = null;
+            }
+
+            await lease.Db.SaveChangesAsync(CancellationToken.None);
+            await BroadcastStatusAsync(id, instance.Status);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to repair the state of instance {Id}", id);
+        }
+    }
+
+    // ── Process hunting ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Finds Arma processes on the host that carry a KAST instance tag but are
+    /// not tracked by their instance, and resolves them: a server whose row
+    /// claims to be running but lost its PID is adopted; everything else is
+    /// killed. Returns the number of processes acted on.
+    /// </summary>
+    public async Task<int> ReapOrphanedProcessesAsync(CancellationToken ct = default)
+    {
+        var tagged = processManager.FindKastServerProcesses() ?? [];
+        if (tagged.Count == 0)
+            return 0;
+
+        var handled = 0;
+        foreach (var group in tagged.GroupBy(p => p.InstanceId))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Never interfere with an operation in flight; next sweep will see it.
+            using var gate = await InstanceLifecycleLocks.TryEnterAsync(group.Key, TimeSpan.Zero, ct);
+            if (gate is null)
+                continue;
+
+            await using var lease = OpenDb();
+            var db = lease.Db;
+            var instance = await db.ServerInstances
+                .Include(s => s.HeadlessClients)
+                .FirstOrDefaultAsync(s => s.Id == group.Key, ct);
+            if (instance is null)
+            {
+                foreach (var p in group)
+                    logger.LogWarning("Arma process {Pid} is tagged for unknown instance {Id}; leaving it alone", p.Pid, group.Key);
+                continue;
+            }
+
+            if (contextFactory is null)
+                await db.Entry(instance).ReloadAsync(ct); // shared context: make sure we see the latest row
+
+            var tracked = new HashSet<int>(instance.HeadlessClients.Where(h => h.ProcessId.HasValue).Select(h => h.ProcessId!.Value));
+            var trackedServerAlive = instance.ProcessId is { } trackedPid && processManager.IsProcessRunning(trackedPid);
+            if (instance.ProcessId is { } serverPid)
+                tracked.Add(serverPid);
+
+            var strays = group.Where(p => !tracked.Contains(p.Pid) && IsOwnedByInstance(p, instance)).ToList();
+            if (strays.Count == 0)
+                continue;
+
+            // The row says the server is up but its PID is gone — this is the
+            // real server (e.g. PID lost by an aborted write). Adopt it instead
+            // of killing a live game.
+            var adoptable = instance.Status is ServerInstanceStatus.Running or ServerInstanceStatus.Starting
+                && !trackedServerAlive
+                ? strays.Where(p => !p.IsHeadlessClient).OrderBy(p => p.Pid).FirstOrDefault()
+                : null;
+
+            if (adoptable is not null)
+            {
+                logger.LogWarning("Adopting untracked server process {Pid} for instance {Name}", adoptable.Pid, instance.Name);
+                if (instance.ProcessId is { } lostPid)
+                    await CloseProcessHistoryEntryAsync(db, instance.Id, lostPid, "Lost", ct: ct);
+                instance.ProcessId = adoptable.Pid;
+                instance.Status = ServerInstanceStatus.Running;
+                instance.StartedAt ??= DateTime.UtcNow;
+                db.ServerInstanceProcessHistories.Add(new ServerInstanceProcessHistory
+                {
+                    ServerInstanceId = instance.Id,
+                    ProcessId = adoptable.Pid,
+                    StartedAt = DateTime.UtcNow
+                });
+                await db.SaveChangesAsync(ct);
+                await BroadcastStatusAsync(instance.Id, instance.Status);
+                strays.Remove(adoptable);
+                handled++;
+            }
+
+            foreach (var stray in strays)
+            {
+                logger.LogWarning(
+                    "Killing orphaned {Kind} process {Pid} of instance {Name} (status {Status})",
+                    stray.IsHeadlessClient ? "headless client" : "server", stray.Pid, instance.Name, instance.Status);
+                try
+                {
+                    if (await processManager.KillProcessAsync(stray.Pid, CancellationToken.None))
+                        handled++;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to kill orphaned process {Pid}", stray.Pid);
+                }
+            }
+        }
+
+        return handled;
+    }
+
+    /// <summary>Kills tagged processes of <paramref name="instance"/> that are not in <paramref name="trackedPids"/>.</summary>
+    private async Task KillStrayProcessesAsync(ServerInstance instance, IReadOnlySet<int> trackedPids, string context)
+    {
+        IReadOnlyList<KastProcessInfo> tagged;
+        try
+        {
+            tagged = processManager.FindKastServerProcesses() ?? [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Process scan failed for instance {Id}", instance.Id);
+            return;
+        }
+
+        foreach (var stray in tagged.Where(p => p.InstanceId == instance.Id
+                     && !trackedPids.Contains(p.Pid)
+                     && IsOwnedByInstance(p, instance)))
+        {
+            logger.LogWarning("Killing leftover {Kind} process {Pid} of instance {Name} {Context}",
+                stray.IsHeadlessClient ? "headless client" : "server", stray.Pid, instance.Name, context);
+            try
+            {
+                await processManager.KillProcessAsync(stray.Pid, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to kill leftover process {Pid}", stray.Pid);
+            }
+        }
+    }
+
+    /// <summary>Kills headless clients still recorded from a previous run before a fresh start.</summary>
+    private async Task StopLeftoverHeadlessClientsAsync(ServerInstance instance)
+    {
+        foreach (var hc in instance.HeadlessClients.Where(h => h.ProcessId.HasValue))
+        {
+            try
+            {
+                if (processManager.IsProcessRunning(hc.ProcessId!.Value))
+                {
+                    logger.LogWarning("Killing leftover headless client {Pid} of instance {Name} before start", hc.ProcessId, instance.Name);
+                    await processManager.KillProcessAsync(hc.ProcessId.Value, CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to kill leftover headless client {Pid}", hc.ProcessId);
+            }
+
+            hc.ProcessId = null;
+            hc.Status = ServerInstanceStatus.Stopped;
+            hc.StartedAt = null;
+        }
+    }
+
+    /// <summary>
+    /// A tagged process only belongs to this panel's instance when its
+    /// executable lives in the instance's install directory. Unknown paths are
+    /// treated as foreign — another panel on the same host may use the same tags.
+    /// </summary>
+    private bool IsOwnedByInstance(KastProcessInfo process, ServerInstance instance)
+    {
+        if (string.IsNullOrWhiteSpace(process.ExecutablePath) || string.IsNullOrWhiteSpace(instance.InstallPath))
+            return false;
+
+        try
+        {
+            var exeDir = Path.GetDirectoryName(Path.GetFullPath(process.ExecutablePath));
+            if (exeDir is null)
+                return false;
+
+            var installDir = GetInstanceInstallDirectory(instance);
+            var candidates = new List<string> { installDir };
+            try
+            {
+                if (Directory.ResolveLinkTarget(installDir, returnFinalTarget: true) is { } target)
+                    candidates.Add(target.FullName);
+            }
+            catch (IOException) { }
+
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            return candidates.Any(dir => string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(dir)),
+                Path.TrimEndingDirectorySeparator(exeDir),
+                comparison));
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    // ── Persistence helpers ──────────────────────────────────────────────────
+
+    private async Task PersistFinalStateAsync(KastDbContext db, ServerInstance instance)
+    {
+        await TrySaveAsync(db, $"persist final state for instance {instance.Id}");
+        await BroadcastStatusAsync(instance.Id, instance.Status);
+    }
+
+    /// <summary>Saves with retries; lifecycle outcomes must reach the database.</summary>
+    private async Task TrySaveAsync(KastDbContext db, string what)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await db.SaveChangesAsync(CancellationToken.None);
+                return;
+            }
+            catch (Exception ex) when (attempt < 3 && ex is not DbUpdateConcurrencyException)
+            {
+                logger.LogWarning(ex, "Failed to {What} (attempt {Attempt}); retrying", what, attempt);
+                await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt));
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to {What}", what);
+                return;
+            }
+        }
+    }
+
+    private async Task BroadcastStatusAsync(int id, ServerInstanceStatus status)
+    {
+        try
+        {
+            await broadcaster.BroadcastServerStatusChangedAsync(new ServerStatusChangedEvent(id, status));
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to broadcast status {Status} for instance {Id}", status, id);
+        }
+    }
+
+    private void RecordException(Activity? activity, Exception ex)
+    {
+        activity?.SetStatus(ActivityStatusCode.Error, sanitizer.Sanitize(ex.Message));
+        activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+        {
+            ["exception.type"] = ex.GetType().Name,
+            ["exception.message"] = sanitizer.Sanitize(ex.Message)
+        }));
+    }
+
+    // ── Mods ─────────────────────────────────────────────────────────────────
+
     public async Task AddModToInstanceAsync(int instanceId, int modId, int loadOrder = 0, bool isClientSide = false, bool isServerSide = false, CancellationToken ct = default)
     {
+        await using var lease = OpenDb();
+        var db = lease.Db;
         var exists = await db.ServerInstanceMods
             .AnyAsync(m => m.ServerInstanceId == instanceId && m.SteamModId == modId, ct);
 
@@ -684,43 +1097,52 @@ public class ServerInstanceService(
 
     public async Task UpdateModFlagsAsync(int instanceId, int modId, bool isClientSide, bool isServerSide, CancellationToken ct = default)
     {
-        var link = await db.ServerInstanceMods
+        await using var lease = OpenDb();
+        var link = await lease.Db.ServerInstanceMods
             .FirstOrDefaultAsync(m => m.ServerInstanceId == instanceId && m.SteamModId == modId, ct);
         if (link != null)
         {
             link.IsClientSide = isClientSide;
             link.IsServerSide = isServerSide;
-            await db.SaveChangesAsync(ct);
+            await lease.Db.SaveChangesAsync(ct);
         }
     }
 
     public async Task RemoveModFromInstanceAsync(int instanceId, int modId, CancellationToken ct = default)
     {
-        var link = await db.ServerInstanceMods
+        await using var lease = OpenDb();
+        var link = await lease.Db.ServerInstanceMods
             .OrderBy(m => m.ServerInstanceId)
             .FirstOrDefaultAsync(m => m.ServerInstanceId == instanceId && m.SteamModId == modId, ct);
 
         if (link != null)
         {
-            db.ServerInstanceMods.Remove(link);
-            await db.SaveChangesAsync(ct);
+            lease.Db.ServerInstanceMods.Remove(link);
+            await lease.Db.SaveChangesAsync(ct);
         }
     }
 
     public async Task UpdateModLoadOrderAsync(int instanceId, int modId, int newOrder, CancellationToken ct = default)
     {
-        var link = await db.ServerInstanceMods
+        await using var lease = OpenDb();
+        var link = await lease.Db.ServerInstanceMods
             .OrderBy(m => m.ServerInstanceId)
             .FirstOrDefaultAsync(m => m.ServerInstanceId == instanceId && m.SteamModId == modId, ct);
 
         if (link != null)
         {
             link.LoadOrder = newOrder;
-            await db.SaveChangesAsync(ct);
+            await lease.Db.SaveChangesAsync(ct);
         }
     }
 
     public async Task LinkModsAsync(int instanceId, CancellationToken ct = default)
+    {
+        await using var lease = OpenDb();
+        await LinkModsAsync(lease.Db, instanceId, ct);
+    }
+
+    private async Task LinkModsAsync(KastDbContext db, int instanceId, CancellationToken ct)
     {
         var instance = await db.ServerInstances
             .Include(s => s.Mods).ThenInclude(m => m.SteamMod)
@@ -1059,7 +1481,7 @@ public class ServerInstanceService(
         }
     }
 
-    private async Task CloseProcessHistoryEntryAsync(int instanceId, int processId, string reason, int? exitCode = null, CancellationToken ct = default)
+    private static async Task CloseProcessHistoryEntryAsync(KastDbContext db, int instanceId, int processId, string reason, int? exitCode = null, CancellationToken ct = default)
     {
         var history = await db.ServerInstanceProcessHistories
             .Where(h => h.ServerInstanceId == instanceId && h.ProcessId == processId && h.EndedAt == null)

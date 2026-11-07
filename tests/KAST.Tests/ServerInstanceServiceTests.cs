@@ -203,7 +203,8 @@ public class ServerInstanceServiceTests : IDisposable
     [Fact]
     public async Task StartInstance_AlreadyRunning_NoOp()
     {
-        var instance = await SeedInstanceAsync(status: ServerInstanceStatus.Running);
+        var instance = await SeedInstanceAsync(status: ServerInstanceStatus.Running, processId: 42);
+        _processManager.IsProcessRunning(42).Returns(true);
 
         await _sut.StartInstanceAsync(instance.Id);
 

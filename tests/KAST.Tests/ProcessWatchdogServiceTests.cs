@@ -43,6 +43,9 @@ public class ProcessWatchdogServiceTests : IDisposable
                 await _db.SaveChangesAsync();
             });
 
+        _serverService.GetInstanceByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult<ServerInstance?>(_db.ServerInstances.FirstOrDefault(i => i.Id == call.Arg<int>())));
+
         var services = new ServiceCollection();
         services.AddSingleton(_db);
         services.AddSingleton<IProcessManagerService>(_processManager);
@@ -165,5 +168,134 @@ public class ProcessWatchdogServiceTests : IDisposable
 
         Assert.Equal(ServerInstanceStatus.Running, instance.Status);
         Assert.Equal(7777, instance.ProcessId);
+    }
+
+    [Theory]
+    [InlineData(ServerInstanceStatus.Starting, ServerInstanceStatus.Stopped)]
+    [InlineData(ServerInstanceStatus.Stopping, ServerInstanceStatus.Stopped)]
+    [InlineData(ServerInstanceStatus.Restarting, ServerInstanceStatus.Crashed)]
+    public async Task StrandedTransitionalState_WithDeadProcess_IsResolved(ServerInstanceStatus stuck, ServerInstanceStatus expected)
+    {
+        var instance = await SeedRunningInstanceAsync(processId: 999);
+        instance.Status = stuck;
+        await _db.SaveChangesAsync();
+        _processManager.IsProcessRunning(999).Returns(false);
+
+        await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        Assert.Equal(expected, instance.Status);
+        Assert.Null(instance.ProcessId);
+    }
+
+    [Fact]
+    public async Task StrandedStopping_WithLiveProcess_ResolvesToRunning()
+    {
+        var instance = await SeedRunningInstanceAsync(processId: 999);
+        instance.Status = ServerInstanceStatus.Stopping;
+        await _db.SaveChangesAsync();
+        _processManager.IsProcessRunning(999).Returns(true);
+
+        await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        Assert.Equal(ServerInstanceStatus.Running, instance.Status);
+        Assert.Equal(999, instance.ProcessId);
+    }
+
+    [Fact]
+    public async Task TransitionalState_WithOperationInFlight_IsLeftAlone()
+    {
+        var instance = await SeedRunningInstanceAsync(processId: 999);
+        instance.Status = ServerInstanceStatus.Stopping;
+        await _db.SaveChangesAsync();
+        _processManager.IsProcessRunning(999).Returns(false);
+
+        using (await KAST.Infrastructure.Services.InstanceLifecycleLocks.EnterAsync(instance.Id))
+            await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        Assert.Equal(ServerInstanceStatus.Stopping, instance.Status);
+    }
+
+    [Fact]
+    public async Task CrashRecordedByExitHandler_TriggersRestartPolicy()
+    {
+        // The exit handler marks the row Crashed before the watchdog runs, so
+        // the old "Running with dead PID" check never saw it and OnCrash never fired.
+        var instance = await SeedRunningInstanceAsync(processId: 999, policy: RestartPolicy.OnCrash);
+        instance.Status = ServerInstanceStatus.Crashed;
+        instance.ProcessId = null;
+        _db.ServerInstanceProcessHistories.Add(new ServerInstanceProcessHistory
+        {
+            ServerInstanceId = instance.Id,
+            ProcessId = 999,
+            StartedAt = DateTime.UtcNow.AddMinutes(-1),
+            EndedAt = DateTime.UtcNow,
+            ExitCode = 3,
+            TerminationReason = "Crashed"
+        });
+        await _db.SaveChangesAsync();
+
+        await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        await _serverService.Received(1).StartInstanceAsync(instance.Id, Arg.Any<CancellationToken>());
+        Assert.Equal(ServerInstanceStatus.Running, instance.Status);
+    }
+
+    [Fact]
+    public async Task IntentionalStop_IsNotRestarted()
+    {
+        var instance = await SeedRunningInstanceAsync(processId: 999, policy: RestartPolicy.Always);
+        instance.Status = ServerInstanceStatus.Stopped;
+        instance.ProcessId = null;
+        _db.ServerInstanceProcessHistories.Add(new ServerInstanceProcessHistory
+        {
+            ServerInstanceId = instance.Id,
+            ProcessId = 999,
+            StartedAt = DateTime.UtcNow.AddMinutes(-1),
+            EndedAt = DateTime.UtcNow,
+            TerminationReason = "Stopped"
+        });
+        await _db.SaveChangesAsync();
+
+        await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        await _serverService.DidNotReceive().StartInstanceAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CrashLoop_IsBoundedByMaxRestartAttempts()
+    {
+        // Each auto-restart "succeeds" but the server dies again. The counter
+        // used to reset on every successful start, so this looped forever.
+        var instance = await SeedRunningInstanceAsync(processId: 999, policy: RestartPolicy.OnCrash, maxAttempts: 2);
+        _processManager.IsProcessRunning(Arg.Any<int>()).Returns(false);
+
+        for (var sweep = 0; sweep < 6; sweep++)
+            await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        await _serverService.Received(2).StartInstanceAsync(instance.Id, Arg.Any<CancellationToken>());
+        Assert.Equal(ServerInstanceStatus.Crashed, instance.Status);
+    }
+
+    [Fact]
+    public async Task Sweep_HuntsOrphanedProcesses()
+    {
+        await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        await _serverService.Received(1).ReapOrphanedProcessesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CrashedServer_TakesItsHeadlessClientsDown()
+    {
+        var instance = await SeedRunningInstanceAsync(processId: 999);
+        _db.HeadlessClients.Add(new HeadlessClient { ServerInstanceId = instance.Id, ProcessId = 1001, Status = ServerInstanceStatus.Running });
+        await _db.SaveChangesAsync();
+        _processManager.IsProcessRunning(999).Returns(false);
+        _processManager.IsProcessRunning(1001).Returns(true);
+
+        await _sut.CheckRunningInstancesAsync(CancellationToken.None);
+
+        await _processManager.Received(1).KillProcessAsync(1001, Arg.Any<CancellationToken>());
+        Assert.All(_db.HeadlessClients, hc => Assert.Null(hc.ProcessId));
     }
 }

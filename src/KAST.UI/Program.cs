@@ -319,67 +319,10 @@ app.Lifetime.ApplicationStopping.Register(() =>
         Environment.ProcessId,
         Environment.WorkingSet / 1_048_576.0);
 
-    // Stop all managed Arma server processes so they don't become orphans.
-    // Use force-kill (not the graceful-then-force StopProcessAsync) to ensure
-    // fast shutdown — Windows services have a ~30s stop timeout, and the update
-    // system's apply script needs KAST to exit promptly.
-    var shutdownScope = app.Services.CreateScope();
-    try
-    {
-        var shutdownDb = shutdownScope.ServiceProvider.GetRequiredService<KastDbContext>();
-        var shutdownProcessManager = shutdownScope.ServiceProvider.GetRequiredService<IProcessManagerService>();
-
-        var running = shutdownDb.ServerInstances
-            .Where(s => s.Status == ServerInstanceStatus.Running && s.ProcessId != null)
-            .ToList();
-
-        foreach (var instance in running)
-        {
-            try
-            {
-                var killTask = shutdownProcessManager.KillProcessAsync(instance.ProcessId!.Value, CancellationToken.None);
-                var completed = killTask.Wait(TimeSpan.FromSeconds(10));
-                var killed = completed && killTask.Result;
-                if (!killed)
-                {
-                    lifecycleLogger.LogWarning("Failed to kill instance {Id} (PID {Pid}) during shutdown; leaving as Running",
-                        instance.Id, instance.ProcessId);
-                    continue;
-                }
-
-                var history = shutdownDb.ServerInstanceProcessHistories
-                    .Where(h => h.ServerInstanceId == instance.Id
-                             && h.ProcessId == instance.ProcessId!.Value
-                             && h.EndedAt == null)
-                    .OrderByDescending(h => h.StartedAt)
-                    .FirstOrDefault();
-                if (history is not null)
-                {
-                    history.EndedAt = DateTime.UtcNow;
-                    history.TerminationReason = "Shutdown";
-                }
-
-                instance.ProcessId = null;
-                instance.Status = ServerInstanceStatus.Stopped;
-                instance.StartedAt = null;
-            }
-            catch (Exception ex)
-            {
-                lifecycleLogger.LogWarning(ex, "Failed to stop instance {Id} during shutdown", instance.Id);
-            }
-        }
-
-        if (running.Count > 0)
-            shutdownDb.SaveChanges();
-    }
-    catch (Exception ex)
-    {
-        lifecycleLogger.LogError(ex, "Error during shutdown process cleanup");
-    }
-    finally
-    {
-        shutdownScope.Dispose();
-    }
+    // Kill every managed Arma process (servers and headless clients) so none
+    // outlives the panel as an orphan. Force-kill, in parallel, with a hard
+    // budget: Windows services get ~30 s to stop and the updater waits on us.
+    ServerProcessHousekeeping.KillAllOnShutdown(app.Services, lifecycleLogger);
 });
 app.Lifetime.ApplicationStopped.Register(() =>
 {
@@ -452,60 +395,8 @@ using (var scope = app.Services.CreateScope())
     if (stuckMods.Count > 0)
         await db.SaveChangesAsync();
 
-    // Reset any server instances stuck in transitional states from a previous crash.
-    // Orphaned Arma processes that survived the crash are killed; their PIDs are
-    // logged as Orphaned in the process history before the status is reset to Stopped.
-    var processManager = scope.ServiceProvider.GetRequiredService<IProcessManagerService>();
-    var stuckInstances = await db.ServerInstances
-        .Where(s => s.Status == ServerInstanceStatus.Running
-                 || s.Status == ServerInstanceStatus.Starting
-                 || s.Status == ServerInstanceStatus.Stopping
-                 || s.Status == ServerInstanceStatus.Restarting)
-        .ToListAsync();
-
-    foreach (var instance in stuckInstances)
-    {
-        if (instance.ProcessId.HasValue)
-        {
-            try
-            {
-                await processManager.KillProcessAsync(instance.ProcessId.Value, CancellationToken.None);
-            }
-            catch { /* process already dead or inaccessible */ }
-
-            var history = db.ServerInstanceProcessHistories
-                .Where(h => h.ServerInstanceId == instance.Id
-                         && h.ProcessId == instance.ProcessId.Value
-                         && h.EndedAt == null)
-                .OrderByDescending(h => h.StartedAt)
-                .FirstOrDefault();
-            if (history is not null)
-            {
-                history.EndedAt = DateTime.UtcNow;
-                history.TerminationReason = "Orphaned";
-            }
-        }
-
-        instance.ProcessId = null;
-        instance.Status = ServerInstanceStatus.Stopped;
-        instance.StartedAt = null;
-    }
-
-    // Also reset orphaned headless clients
-    var stuckHCs = await db.HeadlessClients
-        .Where(h => h.Status == ServerInstanceStatus.Running && h.ProcessId != null)
-        .ToListAsync();
-    foreach (var hc in stuckHCs)
-    {
-        try { await processManager.KillProcessAsync(hc.ProcessId!.Value, CancellationToken.None); }
-        catch { }
-
-        hc.ProcessId = null;
-        hc.Status = ServerInstanceStatus.Stopped;
-    }
-
-    if (stuckInstances.Count > 0 || stuckHCs.Count > 0)
-        await db.SaveChangesAsync();
+    // Reset rows left by a previous run and kill/reap any Arma process it left behind.
+    await ServerProcessHousekeeping.ResetOnStartupAsync(scope.ServiceProvider, lifecycleLogger);
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────

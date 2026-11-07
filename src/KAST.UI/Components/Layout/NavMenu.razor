@@ -202,11 +202,21 @@
                 return InvokeAsync(StateHasChanged);
             };
 
-            _hub.On<ServerStatusChangedEvent>("ServerStatusChanged", async _ =>
+            // Hub callbacks arrive on a SignalR thread. Marshal onto the circuit
+            // so the refresh never runs concurrently with page handlers, and
+            // never let a failed refresh escape the callback.
+            _hub.On<ServerStatusChangedEvent>("ServerStatusChanged", _ => InvokeAsync(async () =>
             {
-                await RefreshAsync();
-                await InvokeAsync(StateHasChanged);
-            });
+                try
+                {
+                    await RefreshAsync();
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to refresh navigation after a status change");
+                }
+            }));
 
             await _hub.StartAsync();
             await _hub.InvokeAsync("SubscribeToServerStatus");
@@ -228,8 +238,11 @@
     {
         try
         {
-            await RefreshAsync();
-            await InvokeAsync(StateHasChanged);
+            await InvokeAsync(async () =>
+            {
+                await RefreshAsync();
+                StateHasChanged();
+            });
         }
         catch (Exception ex)
         {

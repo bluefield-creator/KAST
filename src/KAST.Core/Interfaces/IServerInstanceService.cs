@@ -20,6 +20,13 @@ public interface IServerInstanceService
     Task StopInstanceAsync(int id, CancellationToken ct = default);
     Task RestartInstanceAsync(int id, CancellationToken ct = default);
 
+    /// <summary>
+    /// Hunts Arma processes carrying a KAST instance tag that their instance no
+    /// longer tracks: adopts a lost server PID when the row still claims Running,
+    /// kills everything else. Returns the number of processes acted on.
+    /// </summary>
+    Task<int> ReapOrphanedProcessesAsync(CancellationToken ct = default);
+
     Task AddModToInstanceAsync(int instanceId, int modId, int loadOrder = 0, bool isClientSide = false, bool isServerSide = false, CancellationToken ct = default);
     Task RemoveModFromInstanceAsync(int instanceId, int modId, CancellationToken ct = default);
     Task UpdateModLoadOrderAsync(int instanceId, int modId, int newOrder, CancellationToken ct = default);

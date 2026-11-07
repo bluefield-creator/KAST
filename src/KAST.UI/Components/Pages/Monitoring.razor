@@ -6,6 +6,7 @@
 @inject ISnackbar Snackbar
 @inject IProcessManagerService ProcessManager
 @inject ThemeService ThemeService
+@inject ILogger<Monitoring> Logger
 
 <PageTitle>CASTER -- Monitoring</PageTitle>
 
@@ -199,6 +200,7 @@ else
 
 @code {
     private bool _chartsInitialized;
+    private volatile bool _disposed;
     private readonly List<RunningProcessInfo> _extProcesses = [];
     private readonly HashSet<int> _killingPids = [];
 
@@ -213,20 +215,34 @@ else
     {
         // Chart axis chrome is baked in at creation time — rebuild on theme flips
         if (_chartsInitialized)
-            _ = InvokeAsync(InitChartsAsync);
+            Observe(InvokeAsync(InitChartsAsync), "rebuild charts");
+    }
+
+    // Fire-and-forget work from event handlers must be observed: a faulted
+    // task here (JS interop failing after the circuit went away, a disposed
+    // renderer) otherwise surfaces later as an UnobservedTaskException.
+    private void Observe(Task task, string what)
+    {
+        _ = task.ContinueWith(
+            t => Logger.LogDebug(t.Exception, "Monitoring page failed to {What}", what),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private void HandleDataChanged()
     {
         // State.OnDataChanged fires from a background snapshot thread — marshal
         // all collection mutation to the circuit thread.
-        InvokeAsync(() =>
+        if (_disposed) return;
+        Observe(InvokeAsync(async () =>
         {
+            if (_disposed) return;
             _extProcesses.Clear();
             _extProcesses.AddRange(State.ExternalProcesses);
             StateHasChanged();
-            if (_chartsInitialized) _ = UpdateChartsAsync();
-        });
+            if (_chartsInitialized) await UpdateChartsAsync();
+        }), "refresh");
     }
 
     private async Task KillExternalProcess(RunningProcessInfo process)
@@ -327,11 +343,15 @@ else
                 }
             }
         }
-        catch (JSDisconnectedException) { }
+        catch (Exception ex) when (ex is JSDisconnectedException or JSException or TaskCanceledException or ObjectDisposedException)
+        {
+            // Circuit going away or chart not mounted yet — next tick retries.
+        }
     }
 
     public ValueTask DisposeAsync()
     {
+        _disposed = true;
         State.OnDataChanged -= HandleDataChanged;
         ThemeService.OnChange -= HandleThemeChanged;
         return ValueTask.CompletedTask;

@@ -89,6 +89,8 @@ public class MonitoringServiceTests : IDisposable
         public Task<IReadOnlyList<RunningProcessInfo>> GetRunningServerProcessesAsync(CancellationToken ct = default)
             => throw new NotImplementedException();
 
+        public IReadOnlyList<KastProcessInfo> FindKastServerProcesses() => [];
+
         public bool IsProcessRunning(int processId) => true;
     }
 }

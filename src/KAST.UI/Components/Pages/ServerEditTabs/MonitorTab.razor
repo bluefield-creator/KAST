@@ -308,7 +308,9 @@
                 }
             });
 
-            _hubConnection.On<ServerStatusChangedEvent>("ServerStatusChanged", async evt =>
+            // Marshal onto the circuit: Instance is shared with the parent page
+            // and the EventCallback renders it, both of which require the dispatcher.
+            _hubConnection.On<ServerStatusChangedEvent>("ServerStatusChanged", evt => InvokeAsync(async () =>
             {
                 try
                 {
@@ -323,13 +325,13 @@
                         _monitorPlayerCount = 0;
                     }
                     await OnStatusChanged.InvokeAsync();
-                    await InvokeAsync(StateHasChanged);
+                    StateHasChanged();
                 }
                 catch (Exception ex)
                 {
                     Logger.LogWarning(ex, "Failed to handle server status event for instance {InstanceId}", Instance.Id);
                 }
-            });
+            }));
 
             _hubConnection.On<InstanceMetricsUpdatedEvent>("InstanceMetricsUpdated", async evt =>
             {

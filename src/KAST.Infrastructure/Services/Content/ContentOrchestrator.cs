@@ -4,6 +4,7 @@ using KAST.Core.Enums;
 using KAST.Core.Interfaces;
 using KAST.Core.Models;
 using KAST.Infrastructure.Data;
+using KAST.Infrastructure.Services;
 using KAST.Infrastructure.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -275,10 +276,14 @@ public class ContentOrchestrator(
         if (request.Type == ContentType.Server)
             activity?.SetTag("content.instance_id", request.ServerInstanceId);
 
+        var serverMarkedDownloading = false;
         try
         {
             if (request.Type == ContentType.Server)
-                await UpdateServerStatusAsync(request.ServerInstanceId, ServerInstanceStatus.Downloading, CancellationToken.None);
+            {
+                await MarkServerDownloadingAsync(request.ServerInstanceId);
+                serverMarkedDownloading = true;
+            }
 
             var installer = _installers[request.Type];
             await RunInstallerAsync(installer, request, state, ct, onStarted);
@@ -297,7 +302,7 @@ public class ContentOrchestrator(
             // The user explicitly cancelled via Cancel(key) — expected path
             activity?.SetStatus(ActivityStatusCode.Error, "Cancelled by user");
             activity?.AddEvent(new ActivityEvent("install.cancelled"));
-            await HandleCancellationAsync(key, request, state, onError);
+            await HandleCancellationAsync(key, request, state, onError, serverMarkedDownloading);
         }
         catch (OperationCanceledException oce)
         {
@@ -312,7 +317,7 @@ public class ContentOrchestrator(
             }));
             await HandleErrorAsync(key, request, state,
                 new IOException($"Network timeout or transient failure during download. Details: {safeMessage}", oce),
-                onError);
+                onError, serverMarkedDownloading);
         }
         catch (Exception ex)
         {
@@ -323,7 +328,7 @@ public class ContentOrchestrator(
                 ["exception.type"]    = ex.GetType().FullName ?? ex.GetType().Name,
                 ["exception.message"] = safeMessage
             }));
-            await HandleErrorAsync(key, request, state, ex, onError);
+            await HandleErrorAsync(key, request, state, ex, onError, serverMarkedDownloading);
         }
         finally
         {
@@ -502,7 +507,7 @@ public class ContentOrchestrator(
     }
 
     private async Task HandleCancellationAsync(string key, ContentInstallRequest request, ContentInstallState state,
-        Func<IServiceProvider, ContentInstallState, Exception, Task>? onError)
+        Func<IServiceProvider, ContentInstallState, Exception, Task>? onError, bool restoreServerStatus)
     {
         logger.LogInformation("Content install cancelled by user: {Key}", key);
         state.AddLog("Cancelled.");
@@ -521,12 +526,14 @@ public class ContentOrchestrator(
         await HandleErrorCallbackAsync(onError, state, new OperationCanceledException());
         state.NotifyChanged();
 
-        if (request.Type == ContentType.Server)
+        // Only undo our own Downloading mark — never overwrite the status of a
+        // server we refused to touch because it was running.
+        if (request.Type == ContentType.Server && restoreServerStatus)
             await UpdateServerStatusAsync(request.ServerInstanceId, ServerInstanceStatus.Stopped, CancellationToken.None);
     }
 
     private async Task HandleErrorAsync(string key, ContentInstallRequest request, ContentInstallState state, Exception ex,
-        Func<IServiceProvider, ContentInstallState, Exception, Task>? onError)
+        Func<IServiceProvider, ContentInstallState, Exception, Task>? onError, bool restoreServerStatus)
     {
         var safeMessage = sanitizer.Sanitize(ex.Message);
         logger.LogError(ex, "Content install failed: {Key}", key);
@@ -547,7 +554,9 @@ public class ContentOrchestrator(
         await HandleErrorCallbackAsync(onError, state, ex);
         state.NotifyChanged();
 
-        if (request.Type == ContentType.Server)
+        // Only undo our own Downloading mark — never overwrite the status of a
+        // server we refused to touch because it was running.
+        if (request.Type == ContentType.Server && restoreServerStatus)
             await UpdateServerStatusAsync(request.ServerInstanceId, ServerInstanceStatus.Stopped, CancellationToken.None);
     }
 
@@ -558,6 +567,36 @@ public class ContentOrchestrator(
             using var scope = scopeFactory.CreateScope();
             await onError(scope.ServiceProvider, state, ex);
         }
+    }
+
+    /// <summary>
+    /// Marks the instance Downloading, refusing when it owns a live process or
+    /// a lifecycle operation is in flight. Installing over a running server
+    /// used to flip its row to Downloading and then Stopped while the game kept
+    /// running — the panel lost the process and the next start launched a
+    /// second server on the same port.
+    /// </summary>
+    private async Task MarkServerDownloadingAsync(int instanceId)
+    {
+        using var gate = await InstanceLifecycleLocks.TryEnterAsync(instanceId, TimeSpan.FromSeconds(5))
+            ?? throw new InvalidOperationException("The server is starting, stopping or restarting. Try the install again once it has settled.");
+
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<KastDbContext>();
+        var instance = await db.ServerInstances.FindAsync([instanceId], CancellationToken.None);
+        if (instance is null)
+            return;
+
+        if (instance.ProcessId is not null
+            || instance.Status is ServerInstanceStatus.Running or ServerInstanceStatus.Starting
+                or ServerInstanceStatus.Stopping or ServerInstanceStatus.Restarting)
+            throw new InvalidOperationException("Stop the server before installing or updating it.");
+
+        if (instance.Status == ServerInstanceStatus.Downloading)
+            throw new InvalidOperationException("An install is already running for this server.");
+
+        instance.Status = ServerInstanceStatus.Downloading;
+        await db.SaveChangesAsync(CancellationToken.None);
     }
 
     private async Task UpdateServerStatusAsync(int instanceId, ServerInstanceStatus status, CancellationToken ct)

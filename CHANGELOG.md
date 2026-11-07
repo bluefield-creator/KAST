@@ -1,3 +1,14 @@
+## [2.0.3] - 2026-11-07
+### Bug Fixes
+- Stop stranding instances in Running/Stopping and hunt orphaned Arma processes
+
+### Documentation
+- Consolidate contributor and release docs, remove CASTER v1 plan
+
+### Maintenance
+- Update changelog for v2.0.2 [skip ci]
+- Remove dead workshop search stub and commented-out startup code
+
 ## [2.0.2] - 2026-09-05
 ### Bug Fixes
 - Re-link servers and mods whose folder moved - re-base missing paths into the current directories on startup and via Settings, follow the directory on change and migration

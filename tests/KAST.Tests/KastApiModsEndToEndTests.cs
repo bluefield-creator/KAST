@@ -289,9 +289,6 @@ public class KastApiModsEndToEndTests
                 LastUpdated = DateTime.UtcNow
             });
 
-        public Task<IReadOnlyList<WorkshopItemInfo>> SearchWorkshopAsync(string query, int count = 20, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<WorkshopItemInfo>>(Array.Empty<WorkshopItemInfo>());
-
         public Task<IReadOnlyList<BenchmarkResult>> BenchmarkDownloadAsync(IProgress<string>? log = null, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<BenchmarkResult>>(Array.Empty<BenchmarkResult>());
     }

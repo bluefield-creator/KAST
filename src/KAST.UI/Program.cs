@@ -479,35 +479,6 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// ── Steam startup ─────────────────────────────────────────────────────────────
-/*_ = Task.Run(async () =>
-{
-    var steam = app.Services.GetRequiredService<ISteamService>();
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    try
-    {
-        var cache = SteamClientService.PeekTokenCache();
-        if (cache is { } c)
-        {
-            logger.LogInformation("Restoring Steam session for {Username}", c.Username);
-            var ok = await steam.LoginWithTokenAsync(c.Username, c.RefreshToken);
-            if (ok)
-            {
-                logger.LogInformation("Steam session restored: {Username}", c.Username);
-                return;
-            }
-            logger.LogWarning("Cached Steam token invalid — falling back to anonymous");
-        }
-
-        var anon = await steam.LoginAnonymousAsync();
-        logger.LogInformation("Steam connected: {Result}", anon ? "anonymous" : "failed");
-    }
-    catch (Exception ex)
-    {
-        logger.LogWarning(ex, "Steam startup connection failed");
-    }
-});*/
-
 app.Run();
 
 static string? FirstClaimValue(ClaimsPrincipal principal, params string[] claimTypes)

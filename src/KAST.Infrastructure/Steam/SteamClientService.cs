@@ -712,12 +712,6 @@ public class SteamClientService : ISteamService, IDisposable
         }
     }
 
-    public Task<IReadOnlyList<WorkshopItemInfo>> SearchWorkshopAsync(string query, int count = 20, CancellationToken ct = default)
-    {
-        _logger.LogWarning("Workshop search not yet implemented");
-        return Task.FromResult<IReadOnlyList<WorkshopItemInfo>>([]);
-    }
-
     // ───── Workshop Download (via SteamKit2 CDN.Client) ─────
 
     // Arma 3 AppID — used as both appId and depotId for workshop items (same as FASTER & BytexDigital)

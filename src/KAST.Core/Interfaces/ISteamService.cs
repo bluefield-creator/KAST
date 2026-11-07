@@ -25,7 +25,6 @@ public interface ISteamService
     Task<ulong> DownloadWorkshopItemAsync(long workshopId, string destinationPath, IProgress<double>? progress = null, IProgress<DownloadFileProgress>? fileProgress = null, IProgress<string>? statusProgress = null, int maxParallelDownloads = 4, CancellationToken ct = default);
     Task DownloadAppAsync(uint appId, string destinationPath, IProgress<double>? progress = null, IProgress<string>? logProgress = null, bool ignorePlatformFilter = false, string branch = "public", uint[]? depotFilter = null, int maxParallelDownloads = 4, CancellationToken ct = default);
     Task<WorkshopItemInfo?> GetWorkshopItemInfoAsync(long workshopId, CancellationToken ct = default);
-    Task<IReadOnlyList<WorkshopItemInfo>> SearchWorkshopAsync(string query, int count = 20, CancellationToken ct = default);
 
     /// <summary>
     /// Downloads a sample of chunks from the Arma 3 DS depot at varying parallelism levels

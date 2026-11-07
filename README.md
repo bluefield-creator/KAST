@@ -205,7 +205,6 @@ In this repository:
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commits, development setup, release process |
 | [CHANGELOG.md](CHANGELOG.md) | Generated release notes |
 | [SECURITY.md](SECURITY.md) | Reporting vulnerabilities |
-| [docs/DESIGN.md](docs/DESIGN.md) | Artoria / Blue Kepi UI design system |
 
 ## Installation
 

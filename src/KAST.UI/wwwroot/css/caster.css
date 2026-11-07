@@ -170,6 +170,7 @@ h1:focus-visible {
 .mud-tab:hover { color: var(--k-foreground); }
 .mud-tab.mud-tab-active { color: var(--k-foreground); }
 .mud-tab-slider { background: var(--k-primary) !important; height: 2px !important; }
+.mud-tabs-panels { padding-top: 16px; }
 
 /* Red as text (links, text/outlined buttons, active tab) follows --k-primary-text. */
 .caster-root .mud-primary-text:not(.mud-tab),

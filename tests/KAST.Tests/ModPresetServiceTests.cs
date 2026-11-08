@@ -414,7 +414,7 @@ public class ModPresetServiceTests : IDisposable
         var mods = _db.ServerInstanceMods.Where(m => m.ServerInstanceId == instance.Id).ToList();
         Assert.Equal(4, mods.Count);
         Assert.Equal(2, mods.Count(m => m.IsClientSide));
-        Assert.Single(mods.Where(m => m.IsServerSide));
-        Assert.Single(mods.Where(m => !m.IsClientSide && !m.IsServerSide));
+        Assert.Single(mods, m => m.IsServerSide);
+        Assert.Single(mods, m => !m.IsClientSide && !m.IsServerSide);
     }
 }

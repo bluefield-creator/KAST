@@ -228,11 +228,14 @@ public class KastApiModsEndToEndTests
         }
     }
 
+    // Events are part of IAppEventBroadcaster; fakes never raise them.
+#pragma warning disable CS0067
     private sealed class NoopAppEventBroadcaster : IAppEventBroadcaster
     {
         public event Action<ModDownloadProgressEvent>? OnModDownloadProgress;
         public event Action<ModStatusChangedEvent>? OnModStatusChanged;
         public event Action<ServerStatusChangedEvent>? OnServerStatusChanged;
+#pragma warning restore CS0067
         public Task BroadcastDownloadProgressAsync(ModDownloadProgressEvent progress) => Task.CompletedTask;
         public Task BroadcastModStatusChangedAsync(ModStatusChangedEvent status) => Task.CompletedTask;
         public Task BroadcastServerStatusChangedAsync(ServerStatusChangedEvent status) => Task.CompletedTask;

@@ -153,10 +153,12 @@
         Nav.LocationChanged += OnLocationChanged;
         Snapshots.Changed += OnSnapshotChanged;
 
+        Uri? hubUri = null;
         try
         {
+            hubUri = InternalUrls.GetMonitoringHubUri();
             _hub = new HubConnectionBuilder()
-                .WithUrl(InternalUrls.GetMonitoringHubUri(), options =>
+                .WithUrl(hubUri, options =>
                     options.Headers.Add(KAST.UI.Services.InternalHubAuthenticationDefaults.HeaderName, HubToken.Token))
                 .WithAutomaticReconnect()
                 .Build();
@@ -206,7 +208,9 @@
         catch (Exception ex)
         {
             _monitoringUnavailable = true;
-            Logger.LogWarning(ex, "Failed to connect to monitoring SignalR hub.");
+            Logger.LogWarning(ex,
+                "Failed to connect to monitoring SignalR hub at {HubUri}. If this URL goes through a proxy or auth gateway, set KAST:InternalBaseUrl to the app's local address.",
+                hubUri);
             if (_hub is not null)
             {
                 await _hub.DisposeAsync();

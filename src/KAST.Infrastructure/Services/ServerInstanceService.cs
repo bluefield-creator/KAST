@@ -1421,10 +1421,16 @@ public class ServerInstanceService(
     /// </summary>
     private void EnsureLinuxProfileSymlink(ServerInstance instance, string configDir)
     {
+        if (!TryGetLinuxProfilesDirectory(out var armaProfilesDir))
+        {
+            logger.LogWarning(
+                "Cannot create Linux profile symlink for instance {Id}: the user running CASTER has no home directory. " +
+                "Give the service user a writable home (or set HOME) so Arma 3 profile and difficulty settings are applied.",
+                instance.Id);
+            return;
+        }
+
         var profileName = $"server_{instance.Id}";
-        var armaProfilesDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Arma 3 - Other Profiles");
         var symlinkPath = Path.Combine(armaProfilesDir, profileName);
 
         try
@@ -1456,12 +1462,32 @@ public class ServerInstanceService(
         }
     }
 
+    /// <summary>
+    /// Resolves ~/.local/share/Arma 3 - Other Profiles. Fails when the process
+    /// has no home directory: .NET then returns an empty folder path, and the
+    /// combined path would silently become relative to the working directory.
+    /// </summary>
+    private static bool TryGetLinuxProfilesDirectory(out string armaProfilesDir)
+    {
+        var dataHome = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(dataHome) || !Path.IsPathRooted(dataHome))
+        {
+            armaProfilesDir = string.Empty;
+            return false;
+        }
+
+        armaProfilesDir = Path.Combine(dataHome, "Arma 3 - Other Profiles");
+        return true;
+    }
+
     private void CleanupLinuxProfileSymlink(ServerInstance instance)
     {
+        // Nothing could have been created without a home directory; never
+        // delete a path relative to the working directory.
+        if (!TryGetLinuxProfilesDirectory(out var armaProfilesDir))
+            return;
+
         var profileName = $"server_{instance.Id}";
-        var armaProfilesDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Arma 3 - Other Profiles");
         var symlinkPath = Path.Combine(armaProfilesDir, profileName);
 
         try

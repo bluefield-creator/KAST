@@ -97,11 +97,19 @@
   kast:
     image: ghcr.io/bluefield-creator/kast:latest
     ports:
-      - "8080:8080"
+      - "8080:5000"                   # CASTER panel
+      - "2302-2322:2302-2322/udp"     # Arma 3 game + Steam query
+      - "2302-2322:2302-2322/tcp"     # BattlEye RCON
     volumes:
       - kast-data:/app/data
+      - kast-mods:/app/mods
+      - kast-servers:/app/servers
+    restart: unless-stopped
 volumes:
-  kast-data:</code></pre>
+  kast-data:
+  kast-mods:
+  kast-servers:</code></pre>
+      <p class="fine">CASTER listens on port 5000 inside the container; this example serves the panel at <code>http://&lt;host&gt;:8080</code>.</p>
       <p class="fine">Nightly builds are published from the <code>caster</code> branch. See the README for details.</p>
     </section>
 

@@ -180,10 +180,12 @@
 
     private async Task InitializeSignalR()
     {
+        Uri? hubUri = null;
         try
         {
+            hubUri = InternalUrls.GetMonitoringHubUri();
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(InternalUrls.GetMonitoringHubUri(), options =>
+                .WithUrl(hubUri, options =>
                     options.Headers.Add(KAST.UI.Services.InternalHubAuthenticationDefaults.HeaderName, HubToken.Token))
                 .WithAutomaticReconnect()
                 .Build();
@@ -322,22 +324,15 @@
             await _hubConnection.InvokeAsync("SubscribeToInstance", Instance.Id);
             await _hubConnection.InvokeAsync("SubscribeToServerStatus");
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
+            // Catch everything: an escaping exception (e.g. InvalidDataException for
+            // "Invalid negotiation response") would crash the whole Blazor circuit.
             _monitoringConnected = false;
             _monitoringError = ex.Message;
-            Logger.LogWarning(ex, "Failed to connect to monitoring SignalR hub.");
-            if (_hubConnection is not null)
-            {
-                await _hubConnection.DisposeAsync();
-                _hubConnection = null;
-            }
-        }
-        catch (HttpRequestException ex)
-        {
-            _monitoringConnected = false;
-            _monitoringError = ex.Message;
-            Logger.LogWarning(ex, "Failed to connect to monitoring SignalR hub.");
+            Logger.LogWarning(ex,
+                "Failed to connect to monitoring SignalR hub at {HubUri}. If this URL goes through a proxy or auth gateway, set KAST:InternalBaseUrl to the app's local address.",
+                hubUri);
             if (_hubConnection is not null)
             {
                 await _hubConnection.DisposeAsync();

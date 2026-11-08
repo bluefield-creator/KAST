@@ -247,17 +247,28 @@ Automated builds from the `caster` branch are published as a rolling pre-release
 
 ### Docker (Compose)
 
+CASTER listens on port **5000** inside the container. This example publishes it on host port 8080 (open `http://<host>:8080`), plus the Arma 3 game ports.
+
 ```yaml
 services:
   kast:
     image: ghcr.io/bluefield-creator/kast:latest
     ports:
-      - "8080:8080"
+      - "8080:5000"                   # CASTER panel
+      - "2302-2322:2302-2322/udp"     # Arma 3 game + Steam query
+      - "2302-2322:2302-2322/tcp"     # BattlEye RCON
     volumes:
       - kast-data:/app/data
+      - kast-mods:/app/mods
+      - kast-servers:/app/servers
+    restart: unless-stopped
 volumes:
   kast-data:
+  kast-mods:
+  kast-servers:
 ```
+
+For a full setup with nginx in front, see [`docker-compose.yml`](docker-compose.yml) and [`nginx.conf`](nginx.conf).
 
 ---
 
@@ -321,6 +332,19 @@ panel.3rdshock.army {
 }
 ```
 
+### Internal hub URL
+
+The panel's server side connects to its own SignalR hubs for live status and monitoring. By default it uses CASTER's own local HTTP listener (for example `http://127.0.0.1:5000`), so the connection never passes through your proxy or auth gateway. If CASTER only listens on HTTPS, it falls back to the URL in the browser.
+
+Set `KAST:InternalBaseUrl` to override the address:
+
+```yaml
+environment:
+  - KAST__InternalBaseUrl=http://127.0.0.1:5000
+```
+
+> If the logs show `Failed to connect to monitoring SignalR hub` with `Invalid negotiation response received`, the hub URL is returning a web page instead of CASTER (typically a login page from an auth gateway). The log line includes the URL that was tried. Point `KAST:InternalBaseUrl` at CASTER's local address.
+
 ---
 
 ## Operations
@@ -329,6 +353,7 @@ panel.3rdshock.army {
 - **Downloads:** bulk mod downloads are queued durably. If CASTER exits mid-download, it reconciles interrupted records on startup and resets mods left in `Downloading` or `Updating` so they can be retried safely.
 - **Windows Service:** the **Settings → Service** tab installs CASTER as a service, sets startup mode, configures crash restart actions, and shows recent crash reports. Service changes require running CASTER as Administrator.
 - **Other platforms:** use your supervisor for restarts, such as `systemd`, Docker restart policies, or your hosting platform's restart policy.
+- **Linux service user:** Arma 3 on Linux always reads profiles from `~/.local/share/Arma 3 - Other Profiles`, so the user running CASTER needs a writable home directory. Without one, profile and difficulty settings are not applied and the log warns `Cannot create Linux profile symlink`.
 
 ---
 

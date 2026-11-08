@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CASTER · Arma 3 server management</title>
+  <meta name="description" content="CASTER is a self-hosted web panel for installing, configuring, running and monitoring Arma 3 dedicated servers and mods." />
+  <meta name="theme-color" content="#0e0f12" />
+  <meta property="og:title" content="CASTER · Arma 3 server management" />
+  <meta property="og:description" content="Install servers and mods from Steam, configure instances, and run and monitor them from one web panel." />
+  <meta property="og:image" content="assets/logo.png" />
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="CASTER home">
+      <img src="assets/logo.png" alt="" width="32" height="32" />
+      <span>CASTER</span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#install">Install</a>
+      <a href="#community">Community</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <img class="hero-logo" src="assets/logo.png" alt="CASTER logo" width="128" height="128" />
+      <h1>CASTER</h1>
+      <p class="lead">Arma 3 server management from one web panel.</p>
+      <p class="sub">Install servers and mods from Steam, configure instances, and run and monitor them from the browser.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/bluefield-creator/KAST/releases/latest">Download latest</a>
+        <a class="btn" href="https://github.com/bluefield-creator/KAST">View on GitHub</a>
+      </div>
+      <p class="fine">Self-hosted. Runs on Windows, Linux, or Docker. No client install needed.</p>
+    </section>
+
+    <section id="features" class="section">
+      <h2>Everything for your Arma 3 community</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>Server profiles</h3>
+          <p>Create multiple instances with their own configs, headless clients, restart policies and scheduled start/stop.</p>
+        </article>
+        <article class="card">
+          <h3>Steam downloads</h3>
+          <p>Install and update the Arma 3 server and Workshop mods with a durable queue that survives restarts.</p>
+        </article>
+        <article class="card">
+          <h3>Mod library</h3>
+          <p>One shared library with per-instance load order, presets, local mods and batch updates.</p>
+        </article>
+        <article class="card">
+          <h3>Missions</h3>
+          <p>Upload PBOs, tag and search them, group them into campaigns, and serve them over fast HTTP downloads.</p>
+        </article>
+        <article class="card">
+          <h3>Live monitoring</h3>
+          <p>Host and per-instance metrics, live console tailing, RPT event detection and crash alerts.</p>
+        </article>
+        <article class="card">
+          <h3>Secure access</h3>
+          <p>Local accounts, OIDC (Authentik and others), Windows and Linux system accounts, and API keys.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="screenshots" class="section">
+      <h2>Screenshots</h2>
+      <div class="shots">
+        <a href="assets/dashboard.png"><img src="assets/dashboard.png" alt="CASTER dashboard showing servers, players and host health" loading="lazy" /></a>
+        <a href="assets/mods.png"><img src="assets/mods.png" alt="CASTER mod library" loading="lazy" /></a>
+        <a href="assets/server.png"><img src="assets/server.png" alt="CASTER Settings service page" loading="lazy" /></a>
+      </div>
+    </section>
+
+    <section id="install" class="section">
+      <h2>Install</h2>
+      <p>CASTER ships as a self-contained executable. No .NET installation needed on the host.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Platform</th><th>Get it</th></tr></thead>
+          <tbody>
+            <tr><td>Windows x64</td><td><code>kast-win-x64-v*.zip</code></td></tr>
+            <tr><td>Linux x64</td><td><code>kast-linux-x64-v*.tar.gz</code></td></tr>
+            <tr><td>Linux arm64</td><td><code>kast-linux-arm64-v*.tar.gz</code></td></tr>
+            <tr><td>Docker</td><td><code>ghcr.io/bluefield-creator/kast:latest</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><a href="https://github.com/bluefield-creator/KAST/releases/latest">Download from GitHub Releases →</a></p>
+      <pre><code>services:
+  kast:
+    image: ghcr.io/bluefield-creator/kast:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - kast-data:/app/data
+volumes:
+  kast-data:</code></pre>
+      <p class="fine">Nightly builds are published from the <code>caster</code> branch. See the README for details.</p>
+    </section>
+
+    <section id="community" class="section">
+      <h2>Community &amp; support</h2>
+      <div class="grid three">
+        <a class="card link" href="https://discord.gg/kWScy7rDm8">
+          <h3>3rd Shock Army Discord</h3>
+          <p>Questions, feedback and help from the community.</p>
+        </a>
+        <a class="card link" href="https://github.com/bluefield-creator/KAST/issues">
+          <h3>Issues</h3>
+          <p>Report bugs and request features on GitHub.</p>
+        </a>
+        <a class="card link" href="https://github.com/bluefield-creator/KAST/blob/caster/SECURITY.md">
+          <h3>Security</h3>
+          <p>Report vulnerabilities privately. See our policy.</p>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>
+      CASTER is a fork of <a href="https://github.com/Foxlider/KAST">KAST</a>.
+      <a href="https://github.com/bluefield-creator/KAST/blob/caster/LICENSE.md">License</a> ·
+      <a href="https://github.com/bluefield-creator/KAST/blob/caster/CONTRIBUTING.md">Contributing</a> ·
+      <a href="https://github.com/bluefield-creator/KAST/blob/caster/CODE_OF_CONDUCT.md">Code of Conduct</a>
+    </p>
+    <p class="fine">Arma 3 is a trademark of Bohemia Interactive. CASTER is an unofficial, community project.</p>
+  </footer>
+</body>
+</html>

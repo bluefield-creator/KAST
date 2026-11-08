@@ -57,6 +57,11 @@ public class MissionService(
             .ToListAsync(ct);
     }
 
+    // Unlike GetMissionsForInstanceAsync, this never touches the mpmissions directory,
+    // so it is safe to call on page load.
+    public Task<int> CountMissionsForInstanceAsync(int instanceId, CancellationToken ct = default)
+        => db.Missions.CountAsync(m => m.ServerInstanceId == instanceId, ct);
+
     public async Task<Mission?> GetMissionByIdAsync(int id, CancellationToken ct = default)
         => await db.Missions
             .Include(m => m.TagAssignments).ThenInclude(a => a.Tag)

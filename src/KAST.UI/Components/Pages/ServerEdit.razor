@@ -9,6 +9,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject IServerInstanceService ServerService
+@inject IMissionService MissionService
 @inject IDialogService Dialogs
 @implements IDisposable
 
@@ -243,6 +244,7 @@
             var instance = await WithServerServiceAsync(s => s.GetInstanceByIdAsync(Id!.Value));
             if (instance == null) { Nav.NavigateTo("/servers"); return; }
             _instance = instance;
+            _missionCount = await MissionService.CountMissionsForInstanceAsync(instance.Id);
 
             if (!string.IsNullOrEmpty(_instance.ServerCfgContent))
             { _serverConfig = ConfigService.ParseServerConfig(_instance.ServerCfgContent); _serverCfgRaw = _instance.ServerCfgContent; }

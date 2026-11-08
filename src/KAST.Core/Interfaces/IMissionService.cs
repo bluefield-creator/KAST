@@ -6,6 +6,8 @@ public interface IMissionService
 {
     // Missions
     Task<IReadOnlyList<Mission>> GetMissionsForInstanceAsync(int instanceId, CancellationToken ct = default);
+    /// <summary>Counts missions stored for an instance. Read-only: does not reconcile mission files on disk.</summary>
+    Task<int> CountMissionsForInstanceAsync(int instanceId, CancellationToken ct = default);
     Task<Mission?> GetMissionByIdAsync(int id, CancellationToken ct = default);
     Task<Mission> UploadMissionAsync(int instanceId, string fileName, Stream pboStream, CancellationToken ct = default);
     Task<Mission> UpdateMissionAsync(Mission mission, CancellationToken ct = default);

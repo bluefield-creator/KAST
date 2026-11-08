@@ -126,6 +126,37 @@ public class MissionServiceTests : IDisposable
         Assert.Equal("m1.pbo", result[0].FileName);
     }
 
+    // ── CountMissionsForInstanceAsync ──
+
+    [Fact]
+    public async Task CountMissions_OnlyCountsSpecifiedInstance()
+    {
+        var inst1 = await SeedInstance("Server 1");
+        var inst2 = await SeedInstance("Server 2");
+        await SeedMission(inst1.Id, "m1.pbo");
+        await SeedMission(inst1.Id, "m2.pbo");
+        await SeedMission(inst2.Id, "m3.pbo");
+
+        Assert.Equal(2, await _sut.CountMissionsForInstanceAsync(inst1.Id));
+        Assert.Equal(1, await _sut.CountMissionsForInstanceAsync(inst2.Id));
+    }
+
+    [Fact]
+    public async Task CountMissions_DoesNotReconcileFilesOnDisk()
+    {
+        var instance = await SeedInstance();
+        await SeedMission(instance.Id, "known.pbo");
+        // A PBO on disk with no DB row: listing would import it, counting must not.
+        await File.WriteAllBytesAsync(
+            Path.Join(instance.InstallPath, "mpmissions", "untracked.pbo"), [0x00, 0x50, 0x42, 0x4F]);
+
+        var count = await _sut.CountMissionsForInstanceAsync(instance.Id);
+
+        Assert.Equal(1, count);
+        Assert.Equal(1, _db.Missions.Count(m => m.ServerInstanceId == instance.Id));
+        await _hashService.DidNotReceiveWithAnyArgs().ComputeHashAsync(default!, default);
+    }
+
     // ── UploadMissionAsync ──
 
     [Fact]
